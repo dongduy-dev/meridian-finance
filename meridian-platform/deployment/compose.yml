@@ -24,9 +24,11 @@ services:
         max-file: "3"
 
   meridian-platform:
-    build:
-      context: ..
-      dockerfile: Dockerfile
+    # Exact locally built image ID; use release.mjs to build and verify it.
+    image: ${MERIDIAN_BACKEND_IMAGE:?Set the approved immutable backend image ID}
+    user: "10001:10001"
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
     restart: unless-stopped
     depends_on:
       postgres:
@@ -34,6 +36,7 @@ services:
       clamav:
         condition: service_healthy
     environment:
+      SPRING_PROFILES_ACTIVE: deployment
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/meridian_db
       SPRING_DATASOURCE_USERNAME: meridian_user
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:?Set the private deployment database password}
@@ -56,15 +59,27 @@ services:
       MERIDIAN_REFRESH_TOKEN_COOKIE_SECURE: "true"
       MERIDIAN_AUTH_CLIENT_ADDRESS_MODE: CLOUDFLARE
       SERVER_FORWARD_HEADERS_STRATEGY: none
-      MERIDIAN_ADMIN_BOOTSTRAP_ENABLED: "false"
-      # SMTP activation and onboarding belong to CP4. No local Mailpit fallback.
-      MERIDIAN_SMTP_HOST: 127.0.0.1
-      MERIDIAN_SMTP_PORT: "1025"
+      MERIDIAN_ADMIN_BOOTSTRAP_ENABLED: ${MERIDIAN_ADMIN_BOOTSTRAP_ENABLED:-false}
+      MERIDIAN_ADMIN_BOOTSTRAP_EMAIL: ${MERIDIAN_ADMIN_BOOTSTRAP_EMAIL:-}
+      MERIDIAN_ADMIN_BOOTSTRAP_DISPLAY_NAME: ${MERIDIAN_ADMIN_BOOTSTRAP_DISPLAY_NAME:-}
+      MERIDIAN_SMTP_HOST: smtp.resend.com
+      MERIDIAN_SMTP_PORT: "587"
+      MERIDIAN_SMTP_USERNAME: resend
+      MERIDIAN_SMTP_PASSWORD: ${MERIDIAN_SMTP_PASSWORD:?Set the private Resend SMTP credential}
+      MERIDIAN_SMTP_AUTH: "true"
+      MERIDIAN_SMTP_STARTTLS: "true"
+      MERIDIAN_SMTP_STARTTLS_REQUIRED: "true"
       MERIDIAN_NOTIFICATION_FROM_ADDRESS: notifications@meridianfinance.dev
       JAVA_TOOL_OPTIONS: -Xms128m -Xmx768m
     volumes:
       - document_data:/var/lib/meridian/documents
     networks: [database, tunnel, scanning]
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "--show-error", "--max-time", "8", "http://127.0.0.1:9090/actuator/health/readiness"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
     logging: *bounded-logs
 
   clamav:
@@ -97,7 +112,7 @@ services:
     command: ["tunnel", "--no-autoupdate", "run", "--token-file", "/run/secrets/tunnel_token"]
     depends_on:
       meridian-platform:
-        condition: service_started
+        condition: service_healthy
     secrets: [tunnel_token]
     networks: [tunnel]
     logging: *bounded-logs
@@ -110,7 +125,7 @@ networks:
   # Isolated outbound bridge for FreshClam DNS/HTTPS. No published ports;
   # the scanner never joins the Tunnel network.
   signature_updates:
-  # Outbound access supports Tunnel and later backend SMTP. No host ports are published.
+  # Outbound access supports Tunnel and backend SMTP. No host ports are published.
   tunnel:
 
 volumes:

@@ -21,6 +21,8 @@ const required = {
   MERIDIAN_JWT_PRIVATE_KEY: 'PLACEHOLDER_NOT_A_PRIVATE_KEY',
   MERIDIAN_JWT_PUBLIC_KEY: 'PLACEHOLDER_NOT_A_PUBLIC_KEY',
   MERIDIAN_TUNNEL_TOKEN_FILE: token,
+  MERIDIAN_SMTP_PASSWORD: 'PLACEHOLDER_NOT_A_SMTP_CREDENTIAL',
+  MERIDIAN_BACKEND_IMAGE: `sha256:${'a'.repeat(64)}`,
 }
 const baseEnv = Object.fromEntries(Object.entries(process.env).filter(([key]) =>
   !/^(MERIDIAN_|POSTGRES_|SPRING_|COMPOSE_)/i.test(key)))
@@ -59,6 +61,26 @@ try {
   assert.ok(config.services.clamav.healthcheck.test.join(' ').includes('clamdscan --stream'))
   assert.equal(config.services['meridian-platform'].depends_on.clamav.condition, 'service_healthy')
   const env = config.services['meridian-platform'].environment
+  const backend = config.services['meridian-platform']
+  assert.equal(backend.image, required.MERIDIAN_BACKEND_IMAGE)
+  assert.ok(!backend.build, 'Production must deploy an inspected image, not rebuild implicitly')
+  assert.equal(backend.user, '10001:10001')
+  assert.deepEqual(backend.cap_drop, ['ALL'])
+  assert.ok(backend.security_opt.includes('no-new-privileges:true'))
+  assert.ok(backend.healthcheck.test.includes('http://127.0.0.1:9090/actuator/health/readiness'))
+  assert.equal(config.services.cloudflared.depends_on['meridian-platform'].condition, 'service_healthy')
+  assert.equal(env.SPRING_PROFILES_ACTIVE, 'deployment')
+  assert.equal(env.MERIDIAN_SMTP_HOST, 'smtp.resend.com')
+  assert.equal(env.MERIDIAN_SMTP_PORT, '587')
+  assert.equal(env.MERIDIAN_SMTP_USERNAME, 'resend')
+  assert.equal(env.MERIDIAN_SMTP_PASSWORD, required.MERIDIAN_SMTP_PASSWORD)
+  assert.equal(env.MERIDIAN_SMTP_AUTH, 'true')
+  assert.equal(env.MERIDIAN_SMTP_STARTTLS, 'true')
+  assert.equal(env.MERIDIAN_SMTP_STARTTLS_REQUIRED, 'true')
+  const properties = readFileSync(join(root, 'meridian-platform/src/main/resources/application-deployment.properties'), 'utf8')
+  assert.ok(properties.includes('management.server.address=127.0.0.1'))
+  assert.ok(properties.includes('management.server.port=9090'))
+  assert.ok(properties.includes('readinessState,database,documentStorage'))
   assert.equal(env.MERIDIAN_FRONTEND_ALLOWED_ORIGINS, 'https://meridianfinance.dev,https://internal.meridianfinance.dev')
   assert.equal(env.MERIDIAN_FRONTEND_BASE_URL, 'https://meridianfinance.dev')
   assert.equal(env.MERIDIAN_INTERNAL_FRONTEND_BASE_URL, 'https://internal.meridianfinance.dev')
@@ -70,6 +92,10 @@ try {
   assert.equal(env.MERIDIAN_DOCUMENT_SCANNER_OPERATION_TIMEOUT_MS, '15000')
   assert.equal(env.MERIDIAN_OCR_RESULT_ENCRYPTION_KEY, '')
   assert.equal(env.MERIDIAN_ADMIN_BOOTSTRAP_ENABLED, 'false')
+  const bootstrap = JSON.parse(compose({ ...required, MERIDIAN_ADMIN_BOOTSTRAP_ENABLED: 'true',
+    MERIDIAN_ADMIN_BOOTSTRAP_EMAIL: 'operator@example.invalid',
+    MERIDIAN_ADMIN_BOOTSTRAP_DISPLAY_NAME: 'Fictional Operator' }).stdout)
+  assert.equal(bootstrap.services['meridian-platform'].environment.MERIDIAN_ADMIN_BOOTSTRAP_ENABLED, 'true')
   assert.ok(config.services.cloudflared.command.includes('--token-file'))
   assert.ok(!config.services.cloudflared.environment?.TUNNEL_TOKEN)
   for (const key of Object.keys(required)) {

@@ -3,6 +3,7 @@ package com.meridian.platform.identity.infrastructure.security;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
@@ -23,6 +24,23 @@ import java.util.List;
 @Configuration
 @EnableMethodSecurity
 public class SecurityConfig {
+
+    @Bean
+    @Order(0)
+    public SecurityFilterChain privateReadinessSecurityFilterChain(HttpSecurity http) throws Exception {
+        return http
+                .securityMatcher(request -> request.getLocalPort() == 9090
+                        && "127.0.0.1".equals(request.getLocalAddr())
+                        && "127.0.0.1".equals(request.getRemoteAddr()))
+                .csrf(csrf -> csrf.disable())
+                .httpBasic(basic -> basic.disable())
+                .formLogin(form -> form.disable())
+                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .authorizeHttpRequests(auth -> auth
+                        .requestMatchers(HttpMethod.GET, "/actuator/health/readiness").permitAll()
+                        .anyRequest().denyAll())
+                .build();
+    }
 
     @Bean
     public PasswordEncoder passwordEncoder() {
@@ -56,6 +74,7 @@ public class SecurityConfig {
                         .accessDeniedHandler(accessDeniedHandler)
                 )
                 .authorizeHttpRequests(auth -> auth
+                        .requestMatchers("/actuator", "/actuator/**").denyAll()
                         .requestMatchers(
                                 "/error",
                                 "/api/v1/health",

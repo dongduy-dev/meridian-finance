@@ -2,7 +2,7 @@
 
 ## 1. Scope and Ownership
 
-This document defines the single-host portfolio runtime, public routing, frontend hosting, and authentication client-address boundary. [MER-DEP-001](MER-DEP-001-identity-bootstrap-and-demo-boundary.md) owns the public demo policy, historical credential retirement, and Identity bootstrap. Repository configuration does not prove that provider settings or live smoke checks have been completed.
+This document defines the single-host portfolio runtime, public routing, frontend hosting, and authentication client-address boundary. [MER-DEP-001](MER-DEP-001-identity-bootstrap-and-demo-boundary.md) owns the public demo policy, historical credential retirement, and Identity bootstrap. [MER-DEP-003](MER-DEP-003-portfolio-operations-and-recovery.md) owns release identity, readiness probes, ownership cutover, matched backup/recovery, reset, and startup smoke procedures. Repository configuration does not prove that provider settings or live smoke checks have been completed.
 
 The executable runtime contract is [`meridian-platform/deployment/compose.yml`](../../meridian-platform/deployment/compose.yml). It is independent of the local-development `meridian-platform/docker-compose.yml`; never combine the two as Compose overrides. The local stack retains its published ports and Mailpit workflow.
 
@@ -27,15 +27,15 @@ AWS EC2 │ ap-southeast-1
                                                 PostgreSQL
 ```
 
-The AWS baseline is `meridian-prod`, Ubuntu 24.04 x86_64, `t3.small` (2 vCPU, 2 GiB RAM), 2 GiB persistent swap, and 30 GiB encrypted gp3 EBS. IMDSv2, termination protection, Standard CPU credits, and operator-IP-only SSH are host prerequisites. No IAM instance role or Elastic IP is required. The operator maintains the SSH allowlist in the Security Group and UFW without recording transient addresses in Git.
+The operator-supplied CP3 runtime baseline is `meridian-prod`, Ubuntu 24.04 x86_64, `c7i-flex.large` (2 vCPU, 4 GiB RAM), 2 GiB persistent swap, and 30 GiB encrypted gp3 EBS in `ap-southeast-1`. IMDSv2 and termination protection remain host prerequisites. Normal administration uses SSM with `meridian-prod-ssm-role` and `AmazonSSMManagedInstanceCore`; Security Group inbound rules and UFW inbound allow rules are zero. No Elastic IP or inbound management port is required. This baseline supersedes the earlier CP2 `t3.small`/SSH prerequisites; inspect actual runtime state and EBS capacity at the next operator deployment. The intentionally stopped instance must not be started merely for local implementation.
 
 No service publishes a host port. No host listener or inbound rule for 80, 443, 8080, or 5432 belongs to this deployment. Dockerfile `EXPOSE 8080` is image metadata, not a host publication. UFW alone is insufficient protection for Docker-published ports: retain both the no-publication Compose contract and the AWS inbound boundary.
 
-PostgreSQL joins only the `internal: true` database network. Meridian joins that network and the outbound-capable tunnel network; `cloudflared` joins only the tunnel network. Meridian retains outbound connectivity for later SMTP. Docker/host administrators are trusted operators and can reach container networks; do not attach unrelated workloads, host proxies, or a Docker socket mount. There is no alternative public backend route, host-network mode, or frontend server on EC2.
+PostgreSQL joins only the `internal: true` database network. Meridian joins database, private scanning, and outbound-capable tunnel networks; `cloudflared` joins only tunnel. Private ClamAV joins scanning and an outbound signature-update bridge, never tunnel. Meridian retains outbound connectivity for SMTP. Docker/host administrators are trusted operators and can reach container networks; do not attach unrelated workloads, host proxies, or a Docker socket mount. There is no alternative public backend route, host-network mode, or frontend server on EC2.
 
-The fixed Compose project name produces `meridian-prod_postgres_data` and `meridian-prod_document_data`. Their local Docker storage must reside on the encrypted EBS filesystem; verify Docker's data root and volume mountpoints on the host. Restart, `stop`, and ordinary `down` preserve these volumes. Do not use `down --volumes` or volume pruning for routine deployment. These volumes provide persistence, not a backup.
+The fixed Compose project name produces `meridian-prod_postgres_data`, `meridian-prod_document_data`, and `meridian-prod_clamav_signatures`. Their local Docker storage must reside on the encrypted EBS filesystem; verify Docker's data root and volume mountpoints on the host. Restart, `stop`, and ordinary `down` preserve these volumes. Do not use `down --volumes` or volume pruning for routine deployment. These volumes provide persistence, not a backup.
 
-All three services use `restart: unless-stopped` and bounded Docker JSON logs. Meridian starts after PostgreSQL's `pg_isready` check. Tunnel can start before Java finishes startup, so temporary edge failures are possible. `/api/v1/health` is liveness; it does not prove database/storage readiness. The Java heap is bounded at 768 MiB with a 128 MiB initial heap. Native JVM memory, PostgreSQL, Docker, and the OS also consume RAM; measure `docker stats`, swap use, and EBS capacity on the actual host.
+All four services use `restart: unless-stopped` and bounded Docker JSON logs. Meridian starts after PostgreSQL's `pg_isready` and ClamAV's initialized-engine scan checks. `/api/v1/health` remains public liveness. The deployment profile binds management only to container loopback `127.0.0.1:9090`; `GET /actuator/health/readiness` checks completed startup/Flyway, a small PostgreSQL query, and reversible stage/move/read/delete storage operations. It returns only status, with HTTP 503 for a failed required dependency. The public application listener denies Actuator paths; no management host port or Tunnel route exists. Readiness excludes disabled OCR and scanner availability; every upload retains its separate mandatory fail-closed scan. The operator keeps ingress stopped until readiness and startup smoke succeed. The backend runs as UID/GID 10001 with dropped capabilities and no privilege escalation. The Java heap is bounded at 768 MiB with a 128 MiB initial heap. Native JVM memory, PostgreSQL, ClamAV, Docker, and the OS also consume RAM; measure `docker stats`, swap use, and EBS capacity on the actual host.
 
 ## 3. Runtime Configuration
 
@@ -50,12 +50,14 @@ The deployment [environment example](../../meridian-platform/deployment/.env.exa
 | `MERIDIAN_JWT_PRIVATE_KEY` | Required private Base64 PKCS#8 RSA signing key |
 | `MERIDIAN_JWT_PUBLIC_KEY` | Required matching Base64 X.509 RSA public key; public material, operator-owned configuration |
 | `MERIDIAN_TUNNEL_TOKEN_FILE` | Required non-secret absolute path to the private remotely managed Tunnel token file |
+| `MERIDIAN_SMTP_PASSWORD` | Required private Resend SMTP credential/API key; no fallback |
+| `MERIDIAN_BACKEND_IMAGE` | Required approved immutable backend image ID, verified against its release record |
 
 Compose rejects absent or empty required values before starting containers. Meridian's existing crypto/key configuration validates key material at application startup. Do not reuse checked-in test keys, local-development keys, or placeholder values. Do not print resolved `docker compose config`, container environments, keys, or token contents into shared logs. Use `config --quiet` with real configuration; use the placeholder-only verification script for structural evidence.
 
-The existing Loan key-map entry is named `local`; this identifier does not select a development mode or supply key material. The deployment binds it to an operator-generated key and sets the active key ID to `local`. Preserve this key across deployments. Historical-key retention and rotation procedures belong to CP4; do not change the active key or replace the retained key merely to redeploy.
+The existing Loan key-map entry is named `local`; this identifier does not select a development mode or supply key material. The deployment binds it to an operator-generated key and sets the active key ID to `local`. Preserve this key across deployments. MER-DEP-003 owns the active/historical key inventory and matched recovery contract; do not change the active key or replace retained keys merely to redeploy.
 
-The following non-secret values are fixed in deployment Compose so a copied local `.env` cannot override the public contract:
+The following non-secret production settings define the public contract. Bootstrap is the explicit temporary operator override; other listed values are fixed in deployment Compose/profile so a copied local `.env` cannot substitute development settings:
 
 | Setting | Deployment value |
 |---|---|
@@ -66,13 +68,15 @@ The following non-secret values are fixed in deployment Compose so a copied loca
 | `MERIDIAN_AUTH_CLIENT_ADDRESS_MODE` | `CLOUDFLARE` |
 | `SERVER_FORWARD_HEADERS_STRATEGY` | `none` |
 | `MERIDIAN_DOCUMENT_STORAGE_ROOT` | `/var/lib/meridian/documents` |
-| `MERIDIAN_ADMIN_BOOTSTRAP_ENABLED` | `false` until SMTP/onboarding is deliberately activated in CP4 |
+| `MERIDIAN_ADMIN_BOOTSTRAP_ENABLED` | Defaults to `false`; temporary private operator override follows MER-DEP-001 |
+| SMTP transport | `smtp.resend.com:587`, username `resend`, auth and STARTTLS required, certificate/hostname checks, bounded timeouts |
+| Sender | `notifications@meridianfinance.dev` |
 
 CORS permits credentialed requests from the two exact HTTPS frontend origins. Localhost, Pages preview hosts, wildcard origins, and other subdomains are not allowed. CORS is a browser boundary and does not replace API authorization.
 
 Refresh cookies retain `HttpOnly`, `SameSite=Strict`, `/api/v1/auth`, the existing lifetime, and host-only scope on the API. `Secure=true` is explicit even though Tunnel reaches the origin over HTTP. The three HTTPS production hosts are same-site; their different origins still require credentialed CORS. Do not relax SameSite for `pages.dev` previews. Customer verification/reset and Staff setup emails derive their destinations from the two configured frontend base URLs when email delivery is activated.
 
-OCR execution is disabled by omitting its worker, provider credentials, and result-encryption key. Existing OCR APIs are not removed; an authorized job request can remain pending without a worker. Use the manual evidence workflow and do not present OCR as operational. Mailpit and ClamAV are absent. SMTP points to unused container loopback, so CP2 does not deliver email or provide usable account onboarding. It does not disable registration or uploads. CP4 must activate provider SMTP and the existing bootstrap procedure before onboarding/live session proof.
+OCR execution is disabled by omitting its worker, provider credentials, and result-encryption key. Existing OCR APIs are not removed; an authorized job request can remain pending without a worker. Use the manual evidence workflow and do not present OCR as operational. Mailpit is local-development only. Production SMTP uses the existing JavaMail adapter with external Resend credentials; real domain authentication and inbox delivery require operator evidence. ClamAV owns mandatory per-upload scanning with private staging/promotion and fail-closed rejection. Direct scanner proof does not complete authenticated live upload acceptance.
 
 ## 4. Authentication Client Address
 
@@ -122,7 +126,7 @@ After the reviewed code is available to the operator:
 
 1. Create a remotely managed Cloudflare Tunnel for Meridian. Store its token privately as described in section 3. The pinned `cloudflared` image supports `--token-file`; do not paste a dashboard command containing the token into repository files, shared terminals, or logs. See [Tunnel run parameters](https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/configure-tunnels/run-parameters/).
 2. Add only the public API route `api.meridianfinance.dev` to `http://meridian-platform:8080`. Keep the unmatched-route catch-all at HTTP 404. Do not add database, Docker, host-management, readiness, or alternate application routes. The resulting proxied DNS record targets the Tunnel UUID under `cfargotunnel.com`; never create an API A/AAAA record to the EC2 address. No Cloudflare Access application is required.
-3. Permit the connector's required outbound connectivity (Cloudflare Tunnel TCP/UDP 7844 and DNS; package/image retrieval also requires outbound HTTPS). Do not open an inbound application port. Retain the supplied Security Group and UFW SSH boundary.
+3. Permit the connector's required outbound connectivity (Cloudflare Tunnel TCP/UDP 7844 and DNS; package/image retrieval also requires outbound HTTPS). SMTP needs outbound 587 and FreshClam needs DNS/HTTPS. Do not open an inbound application port. Retain zero Security Group inbound rules and zero UFW inbound allow rules; SSM is the normal administration path.
 4. Set **Always Use HTTPS** for the zone and verify edge certificates on all three hosts. Keep TLS minimum 1.2 and Full (strict) zone mode. Tunnel's explicitly configured local HTTP service uses its authenticated connector path; it does not require a public origin TLS listener.
 5. After verifying HTTPS on each host, enable edge HSTS with a six-month maximum age. Leave `includeSubDomains` and preload submission disabled unless all future subdomains are deliberately covered. Verify `Strict-Transport-Security` on both Pages hosts and the API. Do not rely on the HTTP backend to emit HSTS. See [Cloudflare HSTS](https://developers.cloudflare.com/ssl/edge-certificates/additional-options/http-strict-transport-security/).
 6. Create a Cache Rule named `Meridian API bypass` with expression `(http.host eq "api.meridianfinance.dev")` and **Cache eligibility → Bypass cache**. Ensure no later matching rule overrides it. Preserve backend `Cache-Control`, document headers, and `Set-Cookie`; do not add response transformations that weaken them. The rule covers all API paths, including paths resembling static file extensions. See [Cache Rule setup](https://developers.cloudflare.com/cache/how-to/cache-rules/create-dashboard/).
@@ -136,16 +140,17 @@ Use a reviewed source checkout at `/opt/meridian/source` and private configurati
 cd /opt/meridian/source
 docker compose --env-file /opt/meridian/private/runtime.env -f meridian-platform/deployment/compose.yml config --quiet
 docker compose --env-file /opt/meridian/private/runtime.env -f meridian-platform/deployment/compose.yml pull postgres cloudflared
-docker compose --env-file /opt/meridian/private/runtime.env -f meridian-platform/deployment/compose.yml build meridian-platform
-docker compose --env-file /opt/meridian/private/runtime.env -f meridian-platform/deployment/compose.yml up -d
+docker compose --env-file /opt/meridian/private/runtime.env -f meridian-platform/deployment/compose.yml pull clamav
+# Build/retain/verify the approved immutable image and take matched backup through MER-DEP-003.
+docker compose --env-file /opt/meridian/private/runtime.env -f meridian-platform/deployment/compose.yml up -d postgres clamav meridian-platform
 docker compose --env-file /opt/meridian/private/runtime.env -f meridian-platform/deployment/compose.yml ps
 ```
 
-On the small host, watch memory/disk during Maven image builds and avoid concurrent heavyweight work. Tunnel may briefly return an origin error during startup; inspect bounded service logs privately and repeat the liveness check after Flyway/application startup completes. Never publish environment dumps or authentication/evidence content as diagnostic artifacts.
+Watch memory/disk during Maven image builds and avoid concurrent heavyweight work. Keep Tunnel stopped during cutover and inspect bounded service logs privately. Require private readiness and MER-DEP-003 startup smoke before resuming Tunnel. Never publish environment dumps or authentication/evidence content as diagnostic artifacts.
 
 For a deliberate outage, use the same command prefix with `stop`; resume with `up -d`. For recreation with changed configuration, use `up -d --force-recreate meridian-platform` (and `cloudflared` when its token mount/configuration changes). `restart` alone does not load changed environment values. Ordinary `down` removes containers/networks while preserving volumes; avoid it for a simple restart.
 
-For an update, prepare the reviewed source revision, validate configuration, build the backend image, and run `up -d --no-deps meridian-platform`; repeat section 8. Review migration compatibility and preserve state before applying a version with migrations. An older image is not an automatic schema rollback. CP4 owns the complete backup/restore, release-identity, migration recovery, and reset procedures; this start/update sequence does not replace them.
+For an update, use MER-DEP-003's reviewed-source build, retained previous image, matched backup, ownership cutover, and exact artifact verification; then repeat section 8. An older image is not an automatic schema rollback. MER-DEP-003 owns the complete backup/restore, release-identity, migration recovery, and reset procedures; this start/update sequence does not replace them.
 
 ## 8. Verification and Evidence
 
@@ -172,9 +177,9 @@ From the repository root, `node meridian-platform/deployment/verify-contract.mjs
 | Session | With an ordinary usable test identity, login sets Secure + HttpOnly + SameSite=Strict at `/api/v1/auth`; refresh rotates; logout clears the same cookie and revokes the session |
 | Client identity | Independent public network addresses get independent auth capacity; changing spoofed `CF-Connecting-IP`, `X-Forwarded-For`, and `Forwarded` through Cloudflare does not change the visitor bucket |
 | API caching | Repeated health/public/protected requests and a static-looking API path never return a cache HIT or cached personalized body; inspect rule matching and retained backend no-store headers |
-| Origin isolation | Compose/container `PortBindings` empty; host has no 80/443/8080/5432 listeners; SG/UFW still permit only operator SSH; external probes to those EC2 ports fail; API DNS points to Tunnel, not EC2 |
+| Origin isolation | Compose/container `PortBindings` empty; host has no 80/443/8080/5432/9090/3310 listeners; SG/UFW have zero inbound rules; fresh SSM works; external probes fail; API DNS points to Tunnel, not EC2 |
 | Persistence | Docker volume mountpoints/data root are EBS-backed; container recreation preserves the same database/document volumes |
-| URL configuration | Effective Customer and Internal frontend bases match section 3; actual verification/reset/setup email links checked when CP4 activates SMTP |
+| URL configuration | Effective Customer and Internal frontend bases match section 3; operator verifies actual verification/reset/setup inbox delivery through MER-DEP-003 |
 
 Safe unauthenticated probes include:
 
@@ -196,4 +201,4 @@ Record the reviewed revision, provider settings, observed results, and any missi
 
 CP2 repository checks establish the runtime/edge contract; they do not establish live Cloudflare/AWS success or final public-demo readiness. Provider setup and section 8 evidence remain operator work after review.
 
-CP3 owns multipart 10 MiB alignment, private ClamAV, fail-closed malware scanning, and upload quarantine/promotion. CP4 owns Resend/TLS/SMTP activation, account onboarding, private dependency readiness, non-root backend execution, immutable release identity, key preservation/recovery, backup/restore, and reset operations. Do not declare the public upload deployment ready before those approved checkpoints and the final deployed smoke test. `MER-FU-032` remains open for its broader storage lifecycle. OCR activation and real financial production remain outside this runtime contract.
+CP3 owns multipart 10 MiB alignment, private ClamAV, fail-closed malware scanning, and upload quarantine/promotion. Its authenticated deployed upload acceptance remains a distinct operator gate. CP4 repository controls and MER-DEP-003 procedures cover Resend/TLS/SMTP, account onboarding, private dependency readiness, non-root backend execution, immutable release identity, key preservation/recovery, backup/restore, and reset operations. Live provider/runtime proof and independent approval are required before checkpoint acceptance. Do not declare the public upload deployment ready before those approved checkpoints and the final deployed smoke test. `MER-FU-032` remains open for its broader storage lifecycle. OCR activation and real financial production remain outside this runtime contract.
