@@ -1096,6 +1096,27 @@ Define one narrow controlled reassignment command with explicit authority, eligi
 Suggested future branch name:
 `feature/loan-review-reassignment`
 
+### MER-FU-049 - Isolate Customer Web and Internal Web browser sessions
+
+Area: Identity / Customer Web / Internal Web
+
+Type: Deferred session hardening
+
+Priority: P2
+
+Status: Deferred
+
+Blocking: No current MVP or CP4 blocker. Same-browser use of both portals is not a required normal operating workflow.
+
+Problem:
+Both portals use the same API-domain HttpOnly refresh cookie on `/api/v1/auth`. When a Staff session is restored through Customer Web, Customer Web correctly rejects the Staff actor but also calls logout, which revokes the Staff refresh-token family and clears the shared cookie. Internal Web has the corresponding rejection-and-logout path for a Customer actor. Cross-portal access remains denied; the problem is unintended termination of a valid session in the other portal. The Staff-to-Customer sequence was observed during CP4 live acceptance.
+
+Recommendation:
+If simultaneous use of both portals in one browser becomes a supported requirement, isolate their refresh sessions so login, restoration, rejection, rotation, and logout in one portal do not invalidate the other's session. Preserve exact portal-type checks, HttpOnly/Secure/SameSite cookie protections, refresh-token rotation and replay-family revocation, existing logout security, and in-memory access-token handling. Cover both portal directions, session refresh, logout, and concurrent browser activity in focused tests. Until then, use separate browser profiles when accessing both portals. Do not bypass wrong-portal rejection or weaken token replay protection as a workaround.
+
+Suggested future branch name:
+`fix/auth-cross-portal-session-isolation`
+
 ## Roadmap Boundary
 
 `README.md` owns project sequencing and roadmap presentation. This register owns the status, priority, rationale, and recommended action for individual follow-ups.
