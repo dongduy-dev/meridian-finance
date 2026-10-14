@@ -648,7 +648,7 @@ Priority: P1
 
 Status: Open
 
-Blocking: Production deployment.
+Blocking: No current CP4 public portfolio-demo blocker; broader production storage, retention, and recovery hardening remains open.
 
 Problem:
 The MVP local-filesystem adapter validates declared type, file signature, filename,
@@ -666,9 +666,18 @@ failure. Exact successful upload replay resolves before promotion and does not
 require a new scan. The content limit remains 10 MiB; multipart transport permits
 10 MiB files plus request overhead. Local and backend CI verification use ClamAV;
 production Compose keeps it off the Tunnel network with no host port, persists
-signatures, and retains FreshClam updates. Live deployed upload, signature-update,
-cleanup, and EC2 memory/reload stability evidence is still required before accepting
-the public portfolio deployment. This partial delivery does not close MER-FU-032.
+signatures, and retains FreshClam updates.
+
+Authenticated live scanner acceptance on the CP4 public portfolio deployment
+passed on 2026-10-14. Over-limit and EICAR-bearing files were rejected without
+promoted content; an exact 10 MiB clean file was accepted and read back byte for
+byte; a new upload failed closed during a controlled scanner outage; exact
+successful replay worked during that outage; staging/object counts were checked;
+and ClamAV health recovered after service restoration. The deployed backend
+remained available after the acceptance window. FreshClam update continuity,
+long-term resource stability, and storage/retention/recovery lifecycle remain
+operational responsibilities, not results established by that one-time test.
+This partial delivery does not close MER-FU-032.
 
 Recommendation:
 Add a private object-storage adapter, encrypted storage and key rotation,
