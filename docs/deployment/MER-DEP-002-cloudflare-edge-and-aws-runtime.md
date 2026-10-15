@@ -21,13 +21,13 @@ Cloudflare API edge ──────┘
         │ authenticated Tunnel connection initiated outbound
 AWS EC2 │ ap-southeast-1
         └── cloudflared ── tunnel Docker network ── Meridian
-                                                    │
-                                       internal database network
-                                                    │
-                                                PostgreSQL
+                                                    ├── internal database network ── PostgreSQL
+                                                    └── internal scanning network ── ClamAV
+                                                                                       │
+                                                                  outbound signature-update bridge
 ```
 
-The operator-supplied CP3 runtime baseline is `meridian-prod`, Ubuntu 24.04 x86_64, `c7i-flex.large` (2 vCPU, 4 GiB RAM), 2 GiB persistent swap, and 30 GiB encrypted gp3 EBS in `ap-southeast-1`. IMDSv2 and termination protection remain host prerequisites. Normal administration uses SSM with `meridian-prod-ssm-role` and `AmazonSSMManagedInstanceCore`; Security Group inbound rules and UFW inbound allow rules are zero. No Elastic IP or inbound management port is required. This baseline supersedes the earlier CP2 `t3.small`/SSH prerequisites; inspect actual runtime state and EBS capacity at the next operator deployment. The intentionally stopped instance must not be started merely for local implementation.
+The portfolio runtime contract is `meridian-prod`, Ubuntu 24.04 x86_64, `c7i-flex.large` (2 vCPU, 4 GiB RAM), 2 GiB persistent swap, and 30 GiB encrypted gp3 EBS in `ap-southeast-1`. IMDSv2 and termination protection remain host prerequisites. Normal administration uses SSM with `meridian-prod-ssm-role` and `AmazonSSMManagedInstanceCore`; Security Group inbound rules and UFW inbound allow rules are zero. No Elastic IP or inbound management port is required. Before an authorized operator action, inspect actual runtime state and EBS capacity against this contract. Starting, stopping, redeploying, or otherwise mutating AWS requires explicit operator authorization; local coding or documentation work does not authorize these operations.
 
 No service publishes a host port. No host listener or inbound rule for 80, 443, 8080, or 5432 belongs to this deployment. Dockerfile `EXPOSE 8080` is image metadata, not a host publication. UFW alone is insufficient protection for Docker-published ports: retain both the no-publication Compose contract and the AWS inbound boundary.
 
@@ -74,7 +74,7 @@ The following non-secret production settings define the public contract. Bootstr
 
 CORS permits credentialed requests from the two exact HTTPS frontend origins. Localhost, Pages preview hosts, wildcard origins, and other subdomains are not allowed. CORS is a browser boundary and does not replace API authorization.
 
-Refresh cookies retain `HttpOnly`, `SameSite=Strict`, `/api/v1/auth`, the existing lifetime, and host-only scope on the API. `Secure=true` is explicit even though Tunnel reaches the origin over HTTP. The three HTTPS production hosts are same-site; their different origins still require credentialed CORS. Do not relax SameSite for `pages.dev` previews. Customer verification/reset and Staff setup emails derive their destinations from the two configured frontend base URLs when email delivery is activated.
+Refresh cookies retain `HttpOnly`, `SameSite=Strict`, `/api/v1/auth`, the existing lifetime, and host-only scope on the API. `Secure=true` is explicit even though Tunnel reaches the origin over HTTP. The three HTTPS production hosts are same-site; their different origins still require credentialed CORS. Do not relax SameSite for `pages.dev` previews. Customer verification/reset and Staff setup emails derive their destinations from the two configured frontend base URLs.
 
 OCR execution is disabled by omitting its worker, provider credentials, and result-encryption key. Existing OCR APIs are not removed; an authorized job request can remain pending without a worker. Use the manual evidence workflow and do not present OCR as operational. Mailpit is local-development only. Production SMTP uses the existing JavaMail adapter with external Resend credentials; real domain authentication and inbox delivery require operator evidence. ClamAV owns mandatory per-upload scanning with private staging/promotion and fail-closed rejection. Direct scanner proof does not complete authenticated live upload acceptance.
 
@@ -195,10 +195,10 @@ Repeat the preflight for Internal and unrelated origins. For the throttle probe,
 
 On EC2 inspect `docker compose ... ps`, container `NetworkSettings.Ports`/`HostConfig.PortBindings`, `ss -lnt`, `docker volume inspect meridian-prod_postgres_data meridian-prod_document_data`, and `docker info --format '{{.DockerRootDir}}'`. The operator supplies the transient EC2 address privately for external port probes. Do not publish it in the runbook.
 
-Record the reviewed revision, provider settings, observed results, and any missing evidence in the checkpoint review. If SMTP/account onboarding is unavailable, explicitly leave live login/cookie/logout and email-link delivery evidence pending. Automated cookie/CORS/configuration proof does not authorize a temporary password or historical-user reactivation.
+Record the reviewed revision, provider settings, observed results, and any missing evidence in the operator acceptance record. If SMTP/account onboarding is unavailable, explicitly leave live login/cookie/logout and email-link delivery evidence pending. Automated cookie/CORS/configuration proof does not authorize a temporary password or historical-user reactivation.
 
-## 9. Checkpoint Boundaries
+## 9. Acceptance and Remaining Scope
 
-CP2 repository checks establish the runtime/edge contract; they do not establish live Cloudflare/AWS success or final public-demo readiness. Provider setup and section 8 evidence remain operator work after review.
+Repository checks establish the runtime/edge contract; they do not establish live Cloudflare/AWS success or final public-demo readiness. Provider verification and section 8 evidence require authorized operator work and independent review.
 
-CP3 owns multipart 10 MiB alignment, private ClamAV, fail-closed malware scanning, and upload quarantine/promotion. Its authenticated deployed upload acceptance remains a distinct operator gate. CP4 repository controls and MER-DEP-003 procedures cover Resend/TLS/SMTP, account onboarding, private dependency readiness, non-root backend execution, immutable release identity, key preservation/recovery, backup/restore, and reset operations. Live provider/runtime proof and independent approval are required before checkpoint acceptance. Do not declare the public upload deployment ready before those approved checkpoints and the final deployed smoke test. `MER-FU-032` remains open for its broader storage lifecycle. OCR activation and real financial production remain outside this runtime contract.
+The upload contract requires multipart 10 MiB alignment, private ClamAV, fail-closed malware scanning, and upload quarantine/promotion. Authenticated deployed upload acceptance is a distinct operator gate defined in MER-DEP-003. This document owns Resend transport configuration and non-root backend execution; MER-DEP-001 owns account onboarding; MER-DEP-003 owns private dependency readiness, document ownership cutover, immutable release identity, key preservation/recovery, backup/restore, and reset procedures. Public-demo readiness requires live provider/runtime proof, independent approval, and the final deployed smoke test. [MER-FU-032](../project/MER-TRACK-001-follow-up-register.md#mer-fu-032---harden-document-storage-scanning-and-retention) remains open for broader production document hardening. OCR activation and real financial production remain outside this runtime contract.

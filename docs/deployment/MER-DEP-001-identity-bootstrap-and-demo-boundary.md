@@ -36,8 +36,8 @@ The first Back-Office Admin uses `/admin/users` to create normal Loan Officer, A
 
 Customers continue through `register → verification pending → email verification → login`. Registration rate limiting, verification, login protection, refresh rotation, ownership checks, and Customer/Staff portal separation retain their existing behavior. Local developers use the same bootstrap and Mailpit setup/recovery paths; no development profile restores the V13 password.
 
-## 5. Validation and Remaining Deployment Work
+## 5. Validation and Deployment Ownership
 
 PostgreSQL tests exercise clean V1–V73 migration, V72 upgrade, reference preservation, known-password rejection after reactivation, stale access-token rejection, refresh/setup revocation, repeated migration, and concurrent first-admin bootstrap. Bootstrap adapter/service tests verify opt-in configuration and safe delivery-failure instructions. Customer auth tests exercise the public notice links while retaining ordinary registration, validation, and password visibility behavior.
 
-This procedure covers deployment Identity and the public demo boundary only. Cloudflare/AWS deployment, upload/malware hardening, SMTP-provider deployment, readiness, and recovery infrastructure belong to later deployment checkpoints. It does not complete Phase 2 deployment or close `MER-FU-032`.
+This document owns deployment Identity, bootstrap, and the public demo boundary. [MER-DEP-002](MER-DEP-002-cloudflare-edge-and-aws-runtime.md) owns Cloudflare/AWS edge and runtime boundaries, private ClamAV placement, and SMTP-provider configuration. [MER-DEP-003](MER-DEP-003-portfolio-operations-and-recovery.md) owns readiness, release identity, backup/recovery, and reset operations. Broader real-production document hardening remains tracked through [MER-FU-032](../project/MER-TRACK-001-follow-up-register.md#mer-fu-032---harden-document-storage-scanning-and-retention).

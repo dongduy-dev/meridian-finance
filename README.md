@@ -8,6 +8,8 @@ Meridian helps lending teams manage the full journey from application through se
 
 The complete Meridian platform combines a Java and Spring Boot modular monolith, backed by PostgreSQL, with React/Vite client applications and Python/FastAPI OCR processing. Meridian applies Domain-Driven Design and Practical Hexagonal Architecture within clearly defined bounded contexts. This approach enables rapid delivery within a cohesive platform while preserving clear boundaries and an evolutionary path toward selective distributed service extraction when justified by business requirements, scale, or operational ownership.
 
+The deployed portfolio serves [Customer Web](https://meridianfinance.dev) and [Internal Web](https://internal.meridianfinance.dev) through Cloudflare Pages, with the [API](https://api.meridianfinance.dev) routed through an authenticated Cloudflare Tunnel to the AWS backend runtime. Meridian is a fictional public portfolio/demo, not a real financial service. Public Customer registration and uploads are intentional; visitors must use fictional information, and submitted data is still handled as private. Staff operations require Meridian authentication and RBAC, with credentials shared privately only with trusted reviewers. OCR is a platform capability but is intentionally disabled in the deployed portfolio runtime. [MER-DEP-001](docs/deployment/MER-DEP-001-identity-bootstrap-and-demo-boundary.md), [MER-DEP-002](docs/deployment/MER-DEP-002-cloudflare-edge-and-aws-runtime.md), and [MER-DEP-003](docs/deployment/MER-DEP-003-portfolio-operations-and-recovery.md) own the detailed demo policy, edge/runtime contract, and operations/recovery procedures.
+
 ---
 
 ## Key Features
@@ -47,7 +49,7 @@ All three products use Meridian's common application, approval, contract, activa
 
 ## Run Meridian Locally
 
-Meridian local development uses one backend environment and two browser applications. Docker Compose runs the Java backend together with PostgreSQL and Mailpit; an opt-in `ocr` profile adds the Python OCR worker without making Google credentials a prerequisite for the default environment. Customer Web and Internal Web run separately with Vite and call the same backend API at `http://localhost:8080/api/v1`.
+Meridian local development uses one backend environment and two browser applications. Docker Compose runs the Java backend together with PostgreSQL, Mailpit, and ClamAV; an opt-in `ocr` profile adds the Python OCR worker without making Google credentials a prerequisite for the default environment. Customer Web and Internal Web run separately with Vite and call the same backend API at `http://localhost:8080/api/v1`.
 
 ### Repository Layout
 
@@ -85,10 +87,10 @@ Browser
                  Meridian Platform
                  http://localhost:8080
                           │
-              ┌───────────┬────────────┐
-              ▼           ▼            ▼
-         PostgreSQL    Mailpit    OCR worker (opt-in)
-           :5432     SMTP :1025       :8090
+              ┌───────────┼────────────┬─────────────────┐
+              ▼           ▼            ▼                 ▼
+         PostgreSQL    Mailpit      ClamAV      OCR worker (opt-in)
+           :5432     SMTP :1025      :3310              :8090
                       UI   :8025
 ```
 
@@ -96,7 +98,7 @@ Compose does not start the frontend development servers. Both use `VITE_API_BASE
 
 ### Backend Environment
 
-Docker is the only runtime prerequisite for the backend Compose path. Compose builds Meridian with the Maven wrapper, starts PostgreSQL 16 and Mailpit, runs Flyway during normal Spring Boot startup, and persists PostgreSQL and Document filesystem data in named volumes.
+Docker is the only runtime prerequisite for the backend Compose path. Compose builds Meridian with the Maven wrapper, starts PostgreSQL 16, Mailpit, and ClamAV, runs Flyway during normal Spring Boot startup, and persists PostgreSQL and Document filesystem data in named volumes. Meridian startup waits for healthy PostgreSQL and ClamAV.
 
 ```bash
 cd meridian-platform
@@ -310,7 +312,7 @@ Stop the backend environment with `docker compose down`. Named PostgreSQL and Do
 
 | Technology | Purpose                                              |
 |---|------------------------------------------------------|
-| **Docker Compose** | Local application, PostgreSQL, Mailpit SMTP capture, and opt-in OCR worker profile |
+| **Docker Compose** | Local application, PostgreSQL, Mailpit SMTP capture, ClamAV, and opt-in OCR worker profile |
 | **GitHub Actions** | CI pipeline (build, test, architecture verification) |
 | **SLF4J + Logback** | Structured JSON logging                              |
 
@@ -361,7 +363,8 @@ Stop the backend environment with `docker compose down`. Named PostgreSQL and Do
 ### Phase 4 — Operational Maturity
 
 - [x] Customer-level manual identity verification with immutable evidence and new Salary Advance, UCL, and Collateral origination readiness
-- [ ] Production object storage, malware scanning, retention, and recovery controls
+- [x] Public portfolio document controls: mandatory private ClamAV scanning with fail-closed uploads, persistent document storage on encrypted EBS, and matched backup/recovery procedures with isolated restore acceptance
+- [ ] Broader production document hardening: production-grade object storage, formal retention, legal hold, retirement/purge, key lifecycle, and production-grade disaster recovery ([MER-FU-032](docs/project/MER-TRACK-001-follow-up-register.md#mer-fu-032---harden-document-storage-scanning-and-retention))
 - [ ] Evaluate Redis for distributed rate limiting, session controls, and short-lived caching
 - [ ] Prometheus metrics and Grafana dashboards
 - [ ] OpenTelemetry distributed tracing
@@ -424,6 +427,12 @@ Stop the backend environment with `docker compose down`. Named PostgreSQL and Do
 - [Customer Web frontend blueprint](docs/frontend/MER-FE-001-customer-web-blueprint.md)
 - [Staff Web frontend blueprint](docs/frontend/MER-FE-002-staff-web-blueprint.md)
 - [Back-Office Administration frontend blueprint](docs/frontend/MER-FE-003-back-office-administration-blueprint.md)
+
+### Deployment
+
+- [Identity bootstrap and public demo boundary](docs/deployment/MER-DEP-001-identity-bootstrap-and-demo-boundary.md)
+- [Cloudflare edge and AWS runtime](docs/deployment/MER-DEP-002-cloudflare-edge-and-aws-runtime.md)
+- [Portfolio operations and recovery](docs/deployment/MER-DEP-003-portfolio-operations-and-recovery.md)
 
 ### Project
 
