@@ -35,7 +35,9 @@ PostgreSQL joins only the `internal: true` database network. Meridian joins data
 
 The fixed Compose project name produces `meridian-prod_postgres_data`, `meridian-prod_document_data`, and `meridian-prod_clamav_signatures`. Their local Docker storage must reside on the encrypted EBS filesystem; verify Docker's data root and volume mountpoints on the host. Restart, `stop`, and ordinary `down` preserve these volumes. Do not use `down --volumes` or volume pruning for routine deployment. These volumes provide persistence, not a backup.
 
-All four services use `restart: unless-stopped` and bounded Docker JSON logs. Meridian starts after PostgreSQL's `pg_isready` and ClamAV's initialized-engine scan checks. `/api/v1/health` remains public liveness. The deployment profile binds management only to container loopback `127.0.0.1:9090`; `GET /actuator/health/readiness` checks completed startup/Flyway, a small PostgreSQL query, and reversible stage/move/read/delete storage operations. It returns only status, with HTTP 503 for a failed required dependency. The public application listener denies Actuator paths; no management host port or Tunnel route exists. Readiness excludes disabled OCR and scanner availability; every upload retains its separate mandatory fail-closed scan. The operator keeps ingress stopped until readiness and startup smoke succeed. The backend runs as UID/GID 10001 with dropped capabilities and no privilege escalation. The Java heap is bounded at 768 MiB with a 128 MiB initial heap. Native JVM memory, PostgreSQL, ClamAV, Docker, and the OS also consume RAM; measure `docker stats`, swap use, and EBS capacity on the actual host.
+All four services use `restart: unless-stopped` and bounded Docker JSON logs. Meridian starts after PostgreSQL's `pg_isready` and ClamAV's initialized-engine scan checks. `/api/v1/health` remains public liveness. Management binds only to container loopback `127.0.0.1:9090`; the public application listener denies Actuator paths, and no management host port or Tunnel route exists. Keep ingress stopped until private readiness passes, then use only the controlled smoke window in [MER-DEP-003 §9](MER-DEP-003-portfolio-operations-and-recovery.md#9-deterministic-startup-smoke-and-acceptance) before accepting normal traffic. That runbook owns readiness checks and failure handling. Readiness excludes disabled OCR and scanner availability; every upload retains its separate mandatory fail-closed scan.
+
+The backend runs as UID/GID `10001:10001` with all Linux capabilities dropped and `no-new-privileges`. Fresh document volumes receive its owned storage tree; an existing root-owned volume requires the backed-up, stopped-writer [ownership cutover](MER-DEP-003-portfolio-operations-and-recovery.md#6-non-root-document-volume-cutover) before backend startup. The Java heap is bounded at 768 MiB with a 128 MiB initial heap. Native JVM memory, PostgreSQL, ClamAV, Docker, and the OS also consume RAM; measure `docker stats`, swap use, and EBS capacity on the actual host.
 
 ## 3. Runtime Configuration
 
@@ -76,7 +78,22 @@ CORS permits credentialed requests from the two exact HTTPS frontend origins. Lo
 
 Refresh cookies retain `HttpOnly`, `SameSite=Strict`, `/api/v1/auth`, the existing lifetime, and host-only scope on the API. `Secure=true` is explicit even though Tunnel reaches the origin over HTTP. The three HTTPS production hosts are same-site; their different origins still require credentialed CORS. Do not relax SameSite for `pages.dev` previews. Customer verification/reset and Staff setup emails derive their destinations from the two configured frontend base URLs.
 
-OCR execution is disabled by omitting its worker, provider credentials, and result-encryption key. Existing OCR APIs are not removed; an authorized job request can remain pending without a worker. Use the manual evidence workflow and do not present OCR as operational. Mailpit is local-development only. Production SMTP uses the existing JavaMail adapter with external Resend credentials; real domain authentication and inbox delivery require operator evidence. ClamAV owns mandatory per-upload scanning with private staging/promotion and fail-closed rejection. Direct scanner proof does not complete authenticated live upload acceptance.
+OCR execution is disabled by omitting its worker, provider credentials, and result-encryption key. Existing OCR APIs are not removed; an authorized job request can remain pending without a worker. Use the manual evidence workflow and do not present OCR as operational. ClamAV owns mandatory per-upload scanning: uploaded content stays in private staging until a clean scan permits promotion. Malware, scanner outage, and inconclusive scan results fail closed. The accepted file limit is 10 MiB (10,485,760 bytes), with an 11 MiB multipart request allowance for fields/framing and a matching ClamAV stream limit. Direct scanner proof does not complete the [authenticated deployed upload gate](MER-DEP-003-portfolio-operations-and-recovery.md#9-deterministic-startup-smoke-and-acceptance).
+
+### 3.1 SMTP-Provider Configuration
+
+The operator creates the Resend account/key, verifies `meridianfinance.dev`, and applies the provider-prescribed SPF/DKIM records through Cloudflare. Review DMARC policy and alignment without inventing DNS values. [Resend's SMTP contract](https://resend.com/docs/send-with-smtp) specifies `smtp.resend.com`, username `resend`, API key as SMTP password, and STARTTLS on 587. Meridian requires TLS upgrade, certificate/hostname validation, authentication, and 5-second connection/read/write timeouts. Mailpit is local-development only; there is no production fallback.
+
+Place the credential in `MERIDIAN_SMTP_PASSWORD` in the mode-0600 private environment with its parent mode 0700. Production startup validates the required transport, sender, and frontend destinations; missing/empty credentials fail Compose, and invalid transport settings fail startup. Never print the credential or resolved Compose configuration; use `config --quiet`. Maintain ordinary INFO logging, keep JavaMail debug disabled, and inspect provider errors privately.
+
+During an authorized host session, verify TLS without sending an API key in the command:
+
+```bash
+openssl s_client -starttls smtp -connect smtp.resend.com:587 \
+  -servername smtp.resend.com -verify_hostname smtp.resend.com -verify_return_error </dev/null
+```
+
+Require a valid trust chain and hostname. A successful TLS handshake does not prove SMTP authentication or inbox delivery. [MER-DEP-003 §3](MER-DEP-003-portfolio-operations-and-recovery.md#3-resend-and-identity-acceptance) owns real verification/reset/setup delivery acceptance; [MER-DEP-001 §3](MER-DEP-001-identity-bootstrap-and-demo-boundary.md#3-establish-the-first-back-office-admin) owns bootstrap and committed-account delivery recovery.
 
 ## 4. Authentication Client Address
 
@@ -110,7 +127,7 @@ Create two ordinary Pages projects using the repository's Git integration. Autho
 | Build variable `VITE_API_BASE_URL` | `https://api.meridianfinance.dev/api/v1` | `https://api.meridianfinance.dev/api/v1` |
 | Custom domain | `meridianfinance.dev` | `internal.meridianfinance.dev` |
 
-`VITE_API_BASE_URL` is public build configuration, not a secret. Vite substitutes it when building; changing backend environment variables cannot change an already-built frontend. Add custom domains through each Pages project's **Custom domains** screen and let Pages establish the zone records/certificates. Do not point either frontend at EC2. Disable automatic production/preview deployments while checkpoints are under review; deploy the approved revision deliberately. Preview URLs do not receive production CORS authorization.
+`VITE_API_BASE_URL` is public build configuration, not a secret. Vite substitutes it when building; changing backend environment variables cannot change an already-built frontend. Add custom domains through each Pages project's **Custom domains** screen and let Pages establish the zone records/certificates. Do not point either frontend at EC2. Keep automatic production/preview deployments disabled; production deployment requires an approved revision and a deliberate release decision. Preview URLs do not receive production CORS authorization.
 
 Pages' built-in SPA fallback serves `index.html` for deep links when no top-level `404.html` exists. Keep that condition; no Functions, Worker, custom server, or catch-all redirect is required. Meridian's own router continues to handle unsupported application routes. See [Pages routing and caching](https://developers.cloudflare.com/pages/configuration/serving-pages/) and [monorepo build configuration](https://developers.cloudflare.com/pages/configuration/monorepos/).
 
@@ -134,23 +151,21 @@ After the reviewed code is available to the operator:
 
 ## 7. Operator Start, Stop, and Update
 
-Use a reviewed source checkout at `/opt/meridian/source` and private configuration outside it. These commands run on the existing Ubuntu host; they do not provision AWS or Cloudflare. Do not upload local `.env`, test keys, or generated build directories with the source.
+Use a reviewed source checkout at `/opt/meridian/source` and private configuration outside it. Do not upload local `.env`, test keys, or generated build directories with the source. All host/container mutations require explicit operator authorization. Use the privileged SSM shell and prerequisite checks in [MER-DEP-003 §1](MER-DEP-003-portfolio-operations-and-recovery.md#1-operator-boundary); the commands below only validate configuration, retrieve dependency images, and inspect service state. They do not establish a safe release sequence.
 
 ```bash
 cd /opt/meridian/source
 docker compose --env-file /opt/meridian/private/runtime.env -f meridian-platform/deployment/compose.yml config --quiet
 docker compose --env-file /opt/meridian/private/runtime.env -f meridian-platform/deployment/compose.yml pull postgres cloudflared
 docker compose --env-file /opt/meridian/private/runtime.env -f meridian-platform/deployment/compose.yml pull clamav
-# Build/retain/verify the approved immutable image and take matched backup through MER-DEP-003.
-docker compose --env-file /opt/meridian/private/runtime.env -f meridian-platform/deployment/compose.yml up -d postgres clamav meridian-platform
 docker compose --env-file /opt/meridian/private/runtime.env -f meridian-platform/deployment/compose.yml ps
 ```
 
-Watch memory/disk during Maven image builds and avoid concurrent heavyweight work. Keep Tunnel stopped during cutover and inspect bounded service logs privately. Require private readiness and MER-DEP-003 startup smoke before resuming Tunnel. Never publish environment dumps or authentication/evidence content as diagnostic artifacts.
+Start/update execution belongs to [MER-DEP-003 §7](MER-DEP-003-portfolio-operations-and-recovery.md#7-exact-release-and-forward-only-migrations): retain the previous exact artifact/record, verify the matched DB/document/private-key backup and off-host copy for existing state, and complete required ownership cutover before replacing the backend. Keep Tunnel stopped until private readiness passes; admit normal traffic only after controlled startup smoke succeeds. Watch memory/disk during Maven image builds and avoid concurrent heavyweight work. Inspect bounded service logs privately; never publish environment dumps or authentication/evidence content as diagnostic artifacts.
 
-For a deliberate outage, use the same command prefix with `stop`; resume with `up -d`. For recreation with changed configuration, use `up -d --force-recreate meridian-platform` (and `cloudflared` when its token mount/configuration changes). `restart` alone does not load changed environment values. Ordinary `down` removes containers/networks while preserving volumes; avoid it for a simple restart.
+For a deliberate outage, use the same command prefix with `stop`. Resume under MER-DEP-003's readiness/smoke gates. Changed configuration requires recreation with `up -d --force-recreate meridian-platform` (and `cloudflared` when its token mount/configuration changes); `restart` alone does not load changed environment values. Recreating Tunnel must wait for private readiness and the controlled smoke window. Ordinary `down` removes containers/networks while preserving volumes; avoid it for a simple restart. Never use `down --volumes` or routine volume pruning.
 
-For an update, use MER-DEP-003's reviewed-source build, retained previous image, matched backup, ownership cutover, and exact artifact verification; then repeat section 8. An older image is not an automatic schema rollback. MER-DEP-003 owns the complete backup/restore, release-identity, migration recovery, and reset procedures; this start/update sequence does not replace them.
+An older image does not undo schema migrations. Previous-image redeployment requires proven schema compatibility; unknown compatibility requires coordinated recovery under MER-DEP-003. Repeat section 8's edge/runtime checks after an approved change that affects them.
 
 ## 8. Verification and Evidence
 
@@ -197,8 +212,8 @@ On EC2 inspect `docker compose ... ps`, container `NetworkSettings.Ports`/`HostC
 
 Record the reviewed revision, provider settings, observed results, and any missing evidence in the operator acceptance record. If SMTP/account onboarding is unavailable, explicitly leave live login/cookie/logout and email-link delivery evidence pending. Automated cookie/CORS/configuration proof does not authorize a temporary password or historical-user reactivation.
 
-## 9. Acceptance and Remaining Scope
+## 9. Acceptance Boundary
 
 Repository checks establish the runtime/edge contract; they do not establish live Cloudflare/AWS success or final public-demo readiness. Provider verification and section 8 evidence require authorized operator work and independent review.
 
-The upload contract requires multipart 10 MiB alignment, private ClamAV, fail-closed malware scanning, and upload quarantine/promotion. Authenticated deployed upload acceptance is a distinct operator gate defined in MER-DEP-003. This document owns Resend transport configuration and non-root backend execution; MER-DEP-001 owns account onboarding; MER-DEP-003 owns private dependency readiness, document ownership cutover, immutable release identity, key preservation/recovery, backup/restore, and reset procedures. Public-demo readiness requires live provider/runtime proof, independent approval, and the final deployed smoke test. [MER-FU-032](../project/MER-TRACK-001-follow-up-register.md#mer-fu-032---harden-document-storage-scanning-and-retention) remains open for broader production document hardening. OCR activation and real financial production remain outside this runtime contract.
+Public-demo readiness requires live provider/runtime proof, independent approval, and [MER-DEP-003's startup smoke and authenticated upload acceptance](MER-DEP-003-portfolio-operations-and-recovery.md#9-deterministic-startup-smoke-and-acceptance). Persistent encrypted-EBS volumes, mandatory private scanning, and matched recovery controls define the portfolio boundary. Broader production-grade storage lifecycle, retention, legal hold, retirement, and key governance are outside this runtime contract, as are OCR activation and real financial production.
