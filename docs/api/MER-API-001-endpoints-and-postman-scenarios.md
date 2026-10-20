@@ -4,7 +4,7 @@
 
 This document defines Meridian’s client-facing HTTP contract under `/api/v1`: methods, paths, authentication, permissions, request parameters, externally visible responses, pagination, idempotency, ownership concealment, sensitive-data disclosure, and operation-specific errors.
 
-It does not define bounded-context ownership, Java controller structure, persistence rows, transaction lock order, migration history, or delivery progress. A capability not listed in the endpoint catalogue is not part of the v1 HTTP surface.
+It does not define bounded-context ownership, Java controller structure, persistence rows, transaction lock order, migration history, or delivery progress. A capability not listed in the endpoint catalogue is not part of the v1 HTTP surface. [MER-BIZ-001](../business/MER-BIZ-001-business-requirements-and-workflows.md) owns business policy and lifecycle outcomes; [MER-ARCH-006](../architecture/MER-ARCH-006-api-request-flow-and-dependencies.md) owns runtime orchestration, transaction boundaries, and lock mechanics. The sections below retain caller-visible atomicity, replay, version, and recovery guarantees.
 
 ---
 
@@ -47,9 +47,16 @@ Meridian uses stateless Bearer access authentication. Login creates an opaque re
 
 | Failure | Response |
 |---|---|
-| Missing or invalid authentication | `401 AUTHENTICATION_REQUIRED` |
+| No usable Bearer authentication on a protected route, including an unsupported authorization scheme | `401 AUTHENTICATION_REQUIRED` |
+| Malformed/invalid, explicitly revoked, or authorization-stale Bearer access token | `401 INVALID_TOKEN` |
+| Expired Bearer access token | `401 TOKEN_EXPIRED` |
+| Unknown email, wrong password, active temporary password-login lock, or mismatched `expectedUserType` | `401 INVALID_CREDENTIALS` |
+| Correct password for an administratively inactive User | `401 ACCOUNT_SUSPENDED` |
+| Correct Customer password before email verification | `401 EMAIL_VERIFICATION_REQUIRED` |
 | Missing, invalid, expired, revoked, or reused refresh token | `401 INVALID_REFRESH_TOKEN` |
 | Authenticated actor lacks permission | `403 ACCESS_DENIED` |
+
+The JWT filter also validates a supplied Bearer token on public routes, except `/api/v1/auth/refresh` and `/api/v1/auth/logout`, which bypass that filter. A stale Bearer token can therefore reject an otherwise public request; omit it for anonymous registration, recovery, login, and catalogue calls. Logout retains its unconditional `204` contract in Section 3.8. Application-level actor, business-role, and ownership checks may return purpose-specific `403` codes; Section 1.4 and the endpoint sections retain their exceptions. `STAFF` user type alone grants no operational capability.
 
 Customer-facing operations derive `customerId` from the authenticated principal. Staff actor IDs are likewise token-derived and are not accepted in recommendation, decision, review, disbursement, or repayment request bodies.
 
@@ -69,18 +76,30 @@ Customer-facing operations derive `customerId` from the authenticated principal.
 |---|---|
 | `400` | Malformed input or validation failure |
 | `401` | Authentication failure |
-| `403` | Permission, ownership, or maker-checker denial |
+| `403` | Permission, actor, business-role, or non-concealed ownership denial |
 | `404` | Missing or intentionally concealed resource |
 | `409` | State, duplicate, concurrency, or idempotency conflict |
+| `413` | Multipart transport size limit exceeded |
 | `422` | Business-rule violation |
 | `429` | Request-rate limit exceeded |
 | `503` | Required protected capability unavailable |
 
-`MER-ARCH-004-api-error-catalog.md` owns the complete error-code catalogue and safe messages.
+[MER-ARCH-004](../architecture/MER-ARCH-004-api-error-catalog.md) owns the error vocabulary and representative safe messages. Status depends on the endpoint and failure path, not just the identifier: for example, approval `MAKER_CHECKER_VIOLATION` is `422`, while `STAFF_CORRECTION_MAKER_CHECKER_VIOLATION` is `403`. `DOCUMENT_CHECKLIST_NOT_FOUND` can be `404` on reads or `409` during workflow readiness validation. Clients use HTTP status plus `errorCode` and must not parse message text. Messages may differ by executable context; no universal status/message guarantee is implied. Endpoint-specific HTTP/error behavior remains authoritative.
 
 ### 1.4 Ownership concealment
 
-Customer-owned read APIs may return the same generic `404` for a nonexistent resource, another Customer’s resource, or a resource unavailable in the requested lifecycle state. Authorized Staff reads may retain more accurate operational distinctions.
+Concealment is endpoint-specific, not a universal Customer rule:
+
+| Customer read | Missing/foreign-resource behavior |
+|---|---|
+| Minimal application status | Both return `404 LOAN_APPLICATION_NOT_FOUND`. |
+| Submitted Collateral facts | Missing, foreign, or another product returns `404 LOAN_APPLICATION_NOT_FOUND`. |
+| Checklist | Missing application/checklist and foreign application return `404 DOCUMENT_CHECKLIST_NOT_FOUND`. |
+| Identity verification | Missing and foreign attempts return `404 IDENTITY_VERIFICATION_NOT_FOUND`. |
+| LoanAccount | Missing, foreign, and unavailable accounts return `404 LOAN_ACCOUNT_NOT_FOUND`. |
+| Approved offer | Foreign ownership returns `403 ACCESS_DENIED`; missing application/offer keeps its not-found code. |
+
+Other operations retain the ownership behavior stated in their endpoint sections. Authorized Staff reads may retain more accurate operational distinctions.
 
 ### 1.5 Idempotency
 
@@ -108,7 +127,7 @@ Outside the login and refresh responses, JSON responses do not expose passwords 
 
 Authorized Staff endpoints return only the restricted operational fields defined for their contracts. Partner employee reads may return employment and salary evidence to callers with `partner:read`; recommendation and decision command responses return safe operation evidence without `internalNotes`. Restricted credit notes are returned only through the authorized linked Staff review-history read defined in Section 5.0.1. Product-verification completion responses never return the reviewer or restricted assessment note.
 
-The contractual destination-reveal operation is the sole v1 JSON endpoint permitted to return the full immutable disbursement account number.
+Full Customer Identity Reference and the full immutable disbursement account number are available in JSON only through their dedicated reveal contracts in Sections 4.2.2.1 and 7.2 respectively. Ordinary JSON projections remain masked or omit those values; authorized document-content reads return exact bytes under Section 1.10.
 
 ### 1.7 Request correlation
 
@@ -120,7 +139,40 @@ Every response includes `X-Request-ID` as transport correlation for the HTTP req
 
 `GET /v3/api-docs` returns the generated OpenAPI definition. `GET /swagger-ui.html` redirects to the Swagger UI entry under `/swagger-ui/`. The definition identifies the API as `Meridian Lending Platform API` version `v1` and declares stateless JWT access through the HTTP Bearer scheme named `bearerAuth`. The public operations listed in section 1.2 do not require that scheme.
 
-Meridian grants credentialed cross-origin browser access only to the explicit origins configured by `MERIDIAN_FRONTEND_ALLOWED_ORIGINS`; the local-development default is `http://localhost:5173`. The CORS policy allows credentials plus `GET`, `POST`, `PUT`, and preflight `OPTIONS` requests with `Accept`, `Authorization`, `Content-Type`, and `X-Request-ID`. Responses expose `X-Request-ID` for transport correlation, `Retry-After` for controlled retry guidance, and `Content-Disposition` for the safe filename on authorized content reads. A disallowed origin receives no CORS grant, wildcard origins are rejected, and CORS does not change endpoint authentication or permission requirements.
+Meridian grants credentialed cross-origin browser access only to the explicit origins configured by `MERIDIAN_FRONTEND_ALLOWED_ORIGINS`; the local-development defaults are `http://localhost:5173` for Customer Web and `http://localhost:5174` for Internal Web. The CORS policy allows credentials plus `GET`, `POST`, `PUT`, and preflight `OPTIONS` requests with `Accept`, `Authorization`, `Content-Type`, and `X-Request-ID`. Responses expose `X-Request-ID` for transport correlation, `Retry-After` for controlled retry guidance, and `Content-Disposition` for the safe filename on authorized content reads. A disallowed origin receives no CORS grant, wildcard origins are rejected, and CORS does not change endpoint authentication or permission requirements.
+
+---
+
+### 1.9 Shared document upload and safety contract
+
+Application documents, digital Customer identity evidence, pre-application intake evidence, and signed assisted-action evidence use `multipart/form-data` with required UUID `uploadRequestId`, optional UUID `expectedCurrentVersionId`, and one required `file`. The first upload omits the baseline; replacement supplies the exact current version. Endpoint sections define additional target fields and exact authorization. A stale baseline normally returns `409 STALE_DOCUMENT_VERSION`; digital identity submission instead uses `409 IDENTITY_VERIFICATION_EVIDENCE_STALE`.
+
+Files must contain 1 byte through 10 MiB and use `application/pdf`, `image/jpeg`, or `image/png`, with matching detected signature and declared MIME type. The original filename must be nonblank, at most 255 characters, and contain no slash, backslash, `..`, or ISO control character. Application content validation returns `422 INVALID_DOCUMENT_UPLOAD`. Multipart transport permits a file up to 10 MiB and a complete request up to 11 MiB including framing and fields; transport-limit violations return `413 INVALID_DOCUMENT_UPLOAD`.
+
+New and replacement bytes remain private until mandatory malware scanning succeeds. Unsafe content returns `422 UNSAFE_DOCUMENT_UPLOAD`; scanner unavailability, timeout, or invalid response returns `503 DOCUMENT_SCAN_UNAVAILABLE` without provider details. Neither failure creates a usable version. Exact successful replay checks authorization and logical content and returns the existing immutable version without rescanning or requiring scanner availability. Conflicting reuse returns `409 IDEMPOTENCY_KEY_REUSED`.
+
+### 1.10 Immutable document-content reads
+
+A content read resolves the exact requested immutable version within its authorized owner and target before opening storage. It never falls back to a different version. Success streams the selected bytes with detected `Content-Type`, exact `Content-Length`, a safe original filename in attachment `Content-Disposition`, `Cache-Control: no-store, private`, and `X-Content-Type-Options: nosniff`. No storage key, path, URL, or hash is returned. Unavailable stored bytes return `503 DOCUMENT_STORAGE_UNAVAILABLE` without storage details.
+
+| Content family | Authorization and version boundary |
+|---|---|
+| Application checklist | Customer ownership plus `document:read:own`, or Staff without Customer context and exact `document:review` or `approval:decide`; Section 5.5. |
+| Customer identity | Dedicated own or Staff identity-verification authority; the verification binds the exact evidence; Section 3.20. |
+| Intake | Staff without Customer context, exact `document:upload:intake` plus `loan:originate:staff`; current and historical versions remain readable for `OPEN`, `COMPLETED`, and `ABANDONED`; Section 3.19. |
+| Signed Customer action | Purpose-specific audience in Section 5.7; historical versions remain readable after replacement, action completion, cancellation, or contract supersession. Completed actions link their consumed version, not the latest upload. |
+
+Reads do not change current pointers, OCR targets, verification, lending facts, or workflow state. Endpoint sections define their distinct not-found/concealment and purpose-denial codes; generic document or lending authority must not substitute for the required permission.
+
+### 1.11 Paged reads
+
+Paged reads return `page`, `size`, `totalElements`, `totalPages`, and ordered `items`. Pages are zero-based. Most bounded queues allow sizes 1–100; Staff correction tasks instead allow 1–50. Each endpoint retains its own defaults, page/size bounds, filters, sort order, and validation mapping; this convention does not make array-returning reads paginated.
+
+### 1.12 Unknown command results
+
+A timeout, network failure, malformed response, or unrecognized server result does not prove that a command failed. Preserve the original request identity and logical content for operations with durable replay. A GET may reconcile current state or supply safe candidate fields, but does not prove which unresolved request succeeded unless the endpoint explicitly supplies that evidence. Disbursement, repayment, settlement, and closure use exact replay to recover the original operation outcome; never generate a new UUID merely to retry an unknown result.
+
+For commands without a business UUID, use the endpoint's authoritative case/read projection before another explicit action. Recommendation and decision recovery additionally require exact cycle/recommendation provenance; assisted conversion requires `COMPLETED` plus a resulting application ID. A failed reconciliation leaves contradictory actions unavailable. Sensitive reveal operations require successful case revalidation before another explicit reveal and provide no financial replay envelope. Endpoint-specific recovery rules below remain authoritative.
 
 ---
 
@@ -327,7 +379,7 @@ POST /api/v1/auth/email-verification/request
 }
 ```
 
-The endpoint always returns `202 Accepted` with no response body for an unknown email, an already verified User, a Staff User, or an eligible unverified Customer User. Only the eligible case locks current User state, revokes the prior active verification token, creates a replacement digest, commits, and then attempts email delivery. Delivery failure does not reverse replacement state and does not alter the public response.
+The endpoint always returns `202 Accepted` with no response body for an unknown email, an already verified User, a Staff User, or an eligible unverified Customer User. Only the eligible case revokes the prior active verification token, creates a replacement digest, commits, and then attempts email delivery. Delivery failure does not reverse replacement state and does not alter the public response.
 
 The endpoint has its own per-instance, effective-remote-address limit of 5 requests per 10 minutes by default. This capacity is independent from registration, login, and refresh. A rejected request returns `429 RATE_LIMIT_EXCEEDED` with `Retry-After` before token rotation or email delivery.
 
@@ -343,7 +395,7 @@ POST /api/v1/auth/email-verification/confirm
 }
 ```
 
-The opaque token identifies the User; the request does not accept email or User identity. Meridian digests and locks authoritative token state, verifies that it is known, unexpired, and unrevoked, marks Identity `users.email_verified_at`, consumes the token, and returns `204 No Content`. Repeating confirmation with that consumed token after successful verification is idempotent. Competing confirmations serialize on the token and cannot create conflicting state.
+The opaque token identifies the User; the request does not accept email or User identity. Meridian validates authoritative token state, verifies that it is known, unexpired, and unrevoked, marks Identity `users.email_verified_at`, consumes the token, and returns `204 No Content`. Repeating confirmation with that consumed token after successful verification is idempotent. Competing confirmations serialize on the token and cannot create conflicting state.
 
 Unknown, expired, and revoked tokens all return `401 INVALID_EMAIL_VERIFICATION_TOKEN` with `Email verification token is invalid or expired.`. Confirmation changes only Identity account-security state; Customer `verificationStatus` remains `UNVERIFIED` until its separate business-verification workflow changes it. Confirmation is not request-rate limited because the token has at least 256 bits of entropy.
 
@@ -363,7 +415,7 @@ POST /api/v1/auth/password-reset/request
 
 The endpoint always returns `202 Accepted` with no response body. Unknown, email-unverified, `SUSPENDED`, and `DISABLED` Users receive the same response as eligible Users, and the response exposes no User, Customer, role, account-state, verification, or delivery fact. Email lookup trims surrounding whitespace and normalizes case under the registration and login convention.
 
-An `ACTIVE`, email-verified Customer or Staff User is eligible. Identity locks the authoritative User, revokes any prior active password-reset token, persists one fresh SHA-256 token digest with a 30-minute default lifetime, commits, and then asks Notification to send the raw token. SMTP failure does not reverse token state or alter the response; another request replaces that token. Competing requests for one User serialize so the database retains at most one unconsumed, unrevoked token.
+An `ACTIVE`, email-verified Customer or Staff User is eligible. Identity revokes any prior active password-reset token, persists one fresh SHA-256 token digest with a 30-minute default lifetime, commits, and then asks Notification to send the raw token. SMTP failure does not reverse token state or alter the response; another request replaces that token. Competing requests for one User serialize so the database retains at most one unconsumed, unrevoked token.
 
 The endpoint has an independent per-instance, effective-remote-address limit of 5 requests per 10 minutes by default. Caller-controlled forwarding headers do not alter the key. A rejected request returns `429 RATE_LIMIT_EXCEEDED` with `Retry-After` before token mutation or email delivery and does not consume login, refresh, registration, or email-verification capacity.
 
@@ -382,7 +434,7 @@ POST /api/v1/auth/password-reset/confirm
 
 The new password uses the registration length policy: 12 through 72 characters with no additional composition rule. Meridian does not trim or normalize the password.
 
-Identity digests and locks the token, locks its authoritative User, verifies that the token is known, active, unexpired, and owned by an active email-verified User, BCrypt-hashes the new password, replaces the password, clears failed-login and temporary-lock state, consumes the token, and revokes every refresh-token family for that User in one transaction. Competing confirmations cannot both change password state. Success returns `204 No Content`, clears the browser refresh cookie, and returns no access or refresh credential. The User must log in normally with the new password.
+Identity verifies that the token is known, active, unexpired, and owned by an active email-verified User, BCrypt-hashes the new password, replaces the password, clears failed-login and temporary-lock state, consumes the token, and revokes every refresh-token family for that User in one transaction. Competing confirmations cannot both change password state. Success returns `204 No Content`, clears the browser refresh cookie, and returns no access or refresh credential. The User must log in normally with the new password.
 
 Unknown, expired, revoked, consumed, or otherwise ineligible token state returns `401 INVALID_PASSWORD_RESET_TOKEN` with `Password reset token is invalid or expired.`. Consumed-token replay is not idempotently successful, including when the replay supplies a different password. Administrative User status, email-verification time, Customer association, roles, permissions, and Customer business-verification state do not change.
 
@@ -398,7 +450,7 @@ POST /api/v1/auth/login
 
 ```json
 {
-  "email": "customer.demo@meridian.local",
+  "email": "customer@example.com",
   "password": "<password>"
 }
 ```
@@ -415,15 +467,17 @@ Successful response fields:
 - `roles`
 - `permissions`
 
+Login optionally accepts `expectedUserType` as `CUSTOMER` or `STAFF`. A mismatch returns the same `401 INVALID_CREDENTIALS` without issuing credentials; omission leaves the actor type unconstrained.
+
 `customerId` may be `null` for Staff principals.
 
 Successful login also sets `MERIDIAN_REFRESH_TOKEN` as an HttpOnly cookie. The cookie is not part of the JSON response. Its path is `/api/v1/auth`, `SameSite` is `Strict`, its maximum age matches the configured refresh-token lifetime, and `Secure` is controlled by `MERIDIAN_REFRESH_TOKEN_COOKIE_SECURE`. Deployed HTTPS environments must set that flag to `true`; the local HTTP default is `false`.
 
 For a known User, Meridian records consecutive failed password attempts. The default policy temporarily blocks new password logins for 15 minutes after 5 consecutive failures; both values are configurable. Competing password attempts for one known User observe one authoritative sequence. An expired lock starts a fresh attempt sequence, and a successful active-User login clears previous failure and lock state.
 
-An unknown email, a wrong password, and any password submitted during an active temporary lock all return `401 INVALID_CREDENTIALS` with `Invalid credentials.`. The response does not expose whether the User exists, the failed-attempt count, or the lock expiry. Temporary login lockout does not change User status or revoke existing access tokens and refresh-token families. Administrative `SUSPENDED` and `DISABLED` behavior remains separate.
+An unknown email, a wrong password, a mismatched optional `expectedUserType`, and any password submitted during an active temporary lock all return `401 INVALID_CREDENTIALS` with `Invalid credentials.`. The response does not expose whether the User exists, the failed-attempt count, or the lock expiry. Temporary login lockout does not change User status or revoke existing access tokens and refresh-token families. Administrative `SUSPENDED` and `DISABLED` behavior remains separate.
 
-A newly registered Customer User with a correct password but no `emailVerifiedAt` receives `401 EMAIL_VERIFICATION_REQUIRED` with `Email verification required.`. That attempt creates no access token or refresh session and does not count as a failed password attempt; any stale failed-attempt state is cleared as it is for a successful password check. Verified Customer and backfilled demo Users continue through the established login flow. Refresh also rejects and revokes inconsistent session state for an unverified User as `401 INVALID_REFRESH_TOKEN`.
+A newly registered Customer User with a correct password but no `emailVerifiedAt` receives `401 EMAIL_VERIFICATION_REQUIRED` with `Email verification required.`. That attempt creates no access token or refresh session and does not count as a failed password attempt; any stale failed-attempt state is cleared as it is for a successful password check. Verified active Users continue through the established login flow. A correct password for a `SUSPENDED` or `DISABLED` User returns `401 ACCOUNT_SUSPENDED` with `Account is not active.`; it issues no credentials. Refresh also rejects and revokes inconsistent session state for an unverified User as `401 INVALID_REFRESH_TOKEN`.
 
 Login applies request-boundary throttling per effective servlet remote address and application instance before password verification. The default permits 10 requests per one-minute window. A request over the configured limit returns `429 RATE_LIMIT_EXCEEDED` with `Too many requests.` and a positive `Retry-After` header containing the whole-second wait until the current window resets. A rejected request does not change User login-protection state or create authentication credentials.
 
@@ -434,7 +488,7 @@ POST /api/v1/auth/refresh
 Cookie: MERIDIAN_REFRESH_TOKEN=<opaque-refresh-token>
 ```
 
-The endpoint accepts no request body and does not require a Bearer token. Meridian locks the refresh-token session, verifies that it is unconsumed, unrevoked, and unexpired, reloads the associated active User and current RBAC grants, consumes the presented token, and creates one replacement in the same family. The response uses the same JSON fields as login and replaces the refresh cookie. Each replacement receives the full configured inactivity lifetime from its rotation time.
+The endpoint accepts no request body and does not require a Bearer token. Meridian verifies that the presented refresh session is unconsumed, unrevoked, and unexpired, reloads the associated active User and current RBAC grants, consumes the presented token, and creates one replacement in the same family. The response uses the same JSON fields as login and replaces the refresh cookie. Each replacement receives the full configured inactivity lifetime from its rotation time.
 
 Only a SHA-256 digest of the cryptographically random refresh token is persisted. The raw refresh token, digest, session identity, family identity, and replacement relationship are not returned in JSON or errors.
 
@@ -510,7 +564,7 @@ The activation request contains an explicit non-null target state:
 
 Deactivation removes the product from the public catalogue and preserves the existing inactive-product submission and Salary Advance readiness behavior. Neither command changes existing applications, offers, contracts, LoanAccounts, schedules, repayments, or Salary Advance exposure.
 
-An unknown code returns `404 PRODUCT_CODE_NOT_FOUND`. A supported code whose product row is missing returns `404 PRODUCT_NOT_FOUND`. Each command locks the product row before applying the target state. Repeating identical limits or activation returns the current projection without another save, timestamp change, or audit event. The commands do not use a request UUID. A client must not automatically retry after an unknown transport result; it refreshes the protected list and may explicitly submit the same target state again.
+An unknown code returns `404 PRODUCT_CODE_NOT_FOUND`. A supported code whose product row is missing returns `404 PRODUCT_NOT_FOUND`. Competing product changes are serialized. Repeating identical limits or activation returns the current projection without another save, timestamp change, or audit event. The commands have no request UUID. Under Section 1.12, reconcile through the protected list before explicitly submitting the same target state again.
 
 ### 3.11 Protected Internal User administration
 
@@ -561,11 +615,11 @@ Role assignment changes one role only:
 }
 ```
 
-Both commands use target-state `PUT` semantics and lock the target User before validation and mutation. A target equal to current state returns the current safe projection without changing `updatedAt`, authorization freshness, refresh sessions, or audit evidence. A real status or role-assignment change updates the User timestamp, increments authorization freshness once, and records one actor-bound PII-safe audit outcome. Suspension and disablement also revoke every refresh-token session for the target User in the same transaction; reactivation never restores those sessions. A real role change for an active User preserves its refresh sessions.
+Both commands use serialized target-state `PUT` semantics. A target equal to current state returns the current safe projection without changing `updatedAt`, authorization freshness, refresh sessions, or audit evidence. A real status or role-assignment change updates the User timestamp, increments authorization freshness once, and records one actor-bound PII-safe audit outcome. Suspension and disablement also revoke every refresh-token session for the target User in the same transaction; reactivation never restores those sessions. A real role change for an active User preserves its refresh sessions.
 
 Access JWTs carry a private `authzVersion` claim. For a protected request, Meridian verifies signature and expiry, checks exact `jti` revocation, compares that claim with the current lightweight User authorization version, and only then installs the embedded roles and permissions. A mismatch returns `401 INVALID_TOKEN`. Internal Web may perform its established single refresh: an active User receives a replacement token with current roles and permissions, while a suspended or disabled User cannot refresh. The authorization version is never returned in an administration response.
 
-The commands do not use a request UUID and clients must not retry automatically after an unknown transport result. The client preserves its last confirmed view, refreshes protected User state, and may explicitly send the same target state again after review.
+The commands have no request UUID. Section 1.12 recovery uses protected User state while preserving the last confirmed view, then permits explicit submission of the same target state after review.
 
 ### 3.12 Customer profile
 
@@ -595,7 +649,7 @@ The safe Customer response contains `customerId`, `customerNumber`, Customer `st
 
 The JSON body contains only `{ "identityReference": "FICTIONAL-CORRECTED-REFERENCE" }`, a nonblank value of at most 100 characters. A supplied ownership field cannot select another Customer on the own route. Staff acts as Staff and does not impersonate the Customer. These commands introduce no permission grants or generic Customer administration.
 
-The Customer must be `ACTIVE`, with a `COMPLETE` identity-bearing profile and a summary of `UNVERIFIED` or `REJECTED`. The command locks Customer, replaces only the protected reference after the existing normalized duplicate check, and returns the safe Customer shape from Section 3.12 with `200` and `Cache-Control: no-store, private`. A changed reference sets the summary to `UNVERIFIED`; an identical normalized reference is a no-op. No raw reference, ciphertext, fingerprint, or old/new sensitive value appears in the response or correction audit. `CUSTOMER_IDENTITY_REFERENCE_CORRECTED` records safe Customer/status/actor evidence transactionally.
+The Customer must be `ACTIVE`, with a `COMPLETE` identity-bearing profile and a summary of `UNVERIFIED` or `REJECTED`. The command serializes Customer changes, replaces only the protected reference after the existing normalized duplicate check, and returns the safe Customer shape from Section 3.12 with `200` and `Cache-Control: no-store, private`. A changed reference sets the summary to `UNVERIFIED`; an identical normalized reference is a no-op. No raw reference, ciphertext, fingerprint, or old/new sensitive value appears in the response or correction audit. `CUSTOMER_IDENTITY_REFERENCE_CORRECTED` records safe Customer/status/actor evidence transactionally.
 
 Failures include `400` request validation, `403` missing route authority or `CUSTOMER_IDENTITY_REFERENCE_ACCESS_DENIED` for an invalid actor, `404 CUSTOMER_NOT_FOUND`, `409 CUSTOMER_NOT_ACTIVE`, `422 PROFILE_INCOMPLETE`, `409 IDENTITY_REFERENCE_IMMUTABLE` while identity is verified, and `409 IDENTITY_REFERENCE_ALREADY_IN_USE`. Ordinary profile updates still reject a changed reference after completion or while the Customer summary is `VERIFIED`, including a profile temporarily made incomplete. Correction preserves pending attempts, exact documents, terminal decisions, Partner history, and LoanApplication provenance; it never verifies identity automatically. See Section 3.20 for retry of pending verification.
 
@@ -744,7 +798,7 @@ Rejection body:
 
 Rejection also accepts `IDENTITY_EVIDENCE_MISMATCH` and `INSUFFICIENT_SOURCE_EVIDENCE`. Approval requires one exact Partner Employee and `CURRENT_EMPLOYEE_CONFIRMED`; rejection must not select an employee.
 
-Before approval, Partner revalidates the active Partner Company, current UTC effective month, authoritative latest `COMPLETED` batch, current usable Customer identity evidence, selected employee ownership and batch, active row and employment state, and identity match. Success atomically updates the current same-employer link or disables the old current link and creates a fresh different-employer `VERIFIED` link with `MANUAL_REVIEW_APPROVED`. It then resolves the review, supersedes competing pending current-month reviews for the same Customer, and records PII-safe audit evidence atomically. Exact active Customer verification performs the same competing-review supersession. Unresolved, inactive, and rejected alternatives do not establish employment and cannot supersede other companies' pending reviews. Import refresh does not supersede Customer-declared employment attempts. Rejection records `MANUAL_REVIEW_REJECTED` without changing the prior relationship. Neither outcome creates or transfers a LoanApplication, Salary Advance limit, reservation, exposure, or Loan-owned verification snapshot.
+Before approval, Partner revalidates the active Partner Company, current UTC effective month, authoritative latest `COMPLETED` batch, current usable Customer identity evidence, selected employee ownership and batch, active row and employment state, and identity match. Success atomically updates the current same-employer link or disables the old current link and creates a fresh different-employer `VERIFIED` link with `MANUAL_REVIEW_APPROVED`. It then resolves the review, supersedes competing pending current-month reviews for the same Customer, and records PII-safe audit evidence atomically. Exact active Customer verification performs the same competing-review supersession. Unresolved, inactive, and rejected alternatives do not establish employment and cannot supersede other companies' pending reviews. Import refresh does not supersede Customer-declared employment attempts. Rejection records `MANUAL_REVIEW_REJECTED` without changing the prior relationship. Neither outcome creates or transfers a LoanApplication or Loan-owned verification snapshot, or changes Loan-owned limit, reservation, or exposure.
 
 An exact terminal replay returns the recorded projection without another link or audit effect. A different decision after terminal resolution returns `409 PARTNER_ELIGIBILITY_REVIEW_ALREADY_RESOLVED`. Competing decisions serialize so one terminal outcome wins. The client reconciles an unknown command result through the detail GET and does not retry the decision optimistically.
 
@@ -755,7 +809,7 @@ Important errors:
 | Status | Code | Condition |
 |---|---|---|
 | `400` | `VALIDATION_FAILED` | Invalid status/page input, unknown fields, missing outcome/reason, or an invalid outcome/reason/employee combination. |
-| `403` | `FORBIDDEN` | The caller lacks exact `partner:read` for reads or `partner:manage` for decision. |
+| `403` | `ACCESS_DENIED` | The caller lacks exact `partner:read` for reads or `partner:manage` for decision. Application actor checks may instead return `PARTNER_ELIGIBILITY_REVIEW_ACCESS_DENIED`. |
 | `404` | `PARTNER_ELIGIBILITY_REVIEW_NOT_FOUND`, `PARTNER_COMPANY_NOT_FOUND`, or `CUSTOMER_NOT_FOUND` | Required authoritative state does not exist. |
 | `409` | `PARTNER_ELIGIBILITY_REVIEW_ALREADY_RESOLVED`, `PARTNER_ELIGIBILITY_REVIEW_STALE`, or `CUSTOMER_NOT_ACTIVE` | The review is terminal, prior-month/replaced-batch stale, or the Customer is inactive. |
 | `422` | `PARTNER_COMPANY_INACTIVE`, `PARTNER_EMPLOYEE_INACTIVE`, `PARTNER_ELIGIBILITY_EMPLOYEE_INVALID`, or `PROFILE_INCOMPLETE` | Current evidence cannot authorize the requested outcome. |
@@ -784,7 +838,7 @@ Staff bank-account requests and masked responses match Section 3.13. The explici
 
 Digital activation is a separate Staff Customer-intake operation; it does not require or create an assisted-origination case. `GET /api/v1/staff/customers/{customerId}/digital-access` returns `customerId`, `enabled`, nullable `email`, and `emailVerified`. For an unlinked Customer, the latter three fields are `false`, `null`, and `false`. The response exposes no credential, token, login-protection, authorization-version, or raw identity fields. Staff uses this GET to reconcile an unknown activation result without automatically replaying the POST.
 
-`POST /api/v1/staff/customers/{customerId}/digital-access` accepts only `email` and `identityReference` in JSON. The authenticated actor must be a Staff User with no Customer association and exact `customer:intake:manage`. Customer locks the exact existing active Customer, requires an identity-bearing profile, fingerprints the presented identity reference, and requires an exact match with its stored protected fingerprint. Profile-completion status may remain `INCOMPLETE`. Identity normalizes the email, rejects an existing Customer User mapping with `409 CUSTOMER_DIGITAL_ACCESS_ALREADY_ENABLED`, and rejects an email used by any User type with `409 EMAIL_ALREADY_REGISTERED`. A missing Customer returns `404 CUSTOMER_NOT_FOUND`; an inactive Customer returns `409 CUSTOMER_NOT_ACTIVE`; missing or mismatched identity evidence returns `422 CUSTOMER_DIGITAL_ACCESS_OWNERSHIP_NOT_VERIFIED` without disclosing the reference. Unknown request fields, including password fields, return `400 VALIDATION_FAILED`.
+`POST /api/v1/staff/customers/{customerId}/digital-access` accepts only `email` and `identityReference` in JSON. The authenticated actor must be a Staff User with no Customer association and exact `customer:intake:manage`. Customer validates the exact existing active Customer, requires an identity-bearing profile, fingerprints the presented identity reference, and requires an exact match with its stored protected fingerprint. Profile-completion status may remain `INCOMPLETE`. Identity normalizes the email, rejects an existing Customer User mapping with `409 CUSTOMER_DIGITAL_ACCESS_ALREADY_ENABLED`, and rejects an email used by any User type with `409 EMAIL_ALREADY_REGISTERED`. A missing Customer returns `404 CUSTOMER_NOT_FOUND`; an inactive Customer returns `409 CUSTOMER_NOT_ACTIVE`; missing or mismatched identity evidence returns `422 CUSTOMER_DIGITAL_ACCESS_OWNERSHIP_NOT_VERIFIED` without disclosing the reference. Unknown request fields, including password fields, return `400 VALIDATION_FAILED`.
 
 Success creates an active `CUSTOMER` User linked to the unchanged `customerId`, with the Customer's authoritative display name, only the `CUSTOMER` role, an unguessable hashed placeholder secret, and initially unverified email. It creates independent digest-only email-verification and initial password-setup tokens plus a Staff actor-bound, PII-safe `IDENTITY_CUSTOMER_DIGITAL_ACCESS_ENABLED` audit entry in one transaction. The setup token uses the existing password-reset persistence and confirmation contract.
 
@@ -805,18 +859,11 @@ Assisted-origination creation accepts:
 
 `productCode` is `UNSECURED_CONSUMER_LOAN` or `COLLATERAL_LOAN`. `SALARY_ADVANCE` returns `422 ASSISTED_ORIGINATION_PRODUCT_NOT_ALLOWED`. `customerId` is optional at creation but, when present, must resolve to an active Customer. The response contains `assistedOriginationCaseId`, `productCode`, nullable `customerId`, `status`, nullable `loanApplicationId`, creator Staff User ID, and lifecycle timestamps. Creation always returns `OPEN`; a successful UCL or Collateral conversion returns `COMPLETED` with the durable resulting `loanApplicationId`.
 
-Customer association uses `{ "customerId": "..." }`. Association and abandonment lock the intake row and require `OPEN`. Abandonment transitions to `ABANDONED`, records `terminalAt`, and blocks later Customer association or evidence mutation with `409 ASSISTED_ORIGINATION_CASE_NOT_OPEN`. None of these commands creates a LoanApplication, application number, checklist, product verification, review cycle, Approval evidence, offer, contract, or exposure.
+Customer association uses `{ "customerId": "..." }`. Association and abandonment serialize intake changes and require `OPEN`. Abandonment transitions to `ABANDONED`, records `terminalAt`, and blocks later Customer association or evidence mutation with `409 ASSISTED_ORIGINATION_CASE_NOT_OPEN`. None of these commands creates a LoanApplication, application number, checklist, product verification, review cycle, Approval evidence, offer, contract, or exposure.
 
 The controlled intake evidence types are `CUSTOMER_IDENTITY`, `UCL_PAPER_APPLICATION`, and `COLLATERAL_PAPER_APPLICATION`. Identity evidence is allowed for either supported product. The UCL and Collateral paper application forms are accepted only for the matching intake product; mismatch returns `422 INTAKE_EVIDENCE_PRODUCT_MISMATCH`.
 
-Upload is `multipart/form-data` with:
-
-- path `evidenceType`;
-- required UUID `uploadRequestId`;
-- optional UUID `expectedCurrentVersionId`;
-- required `file` with `application/pdf`, `image/jpeg`, or `image/png`, maximum 10 MiB.
-
-The first upload omits `expectedCurrentVersionId`. Replacement supplies the current version returned by the metadata read. Exact `uploadRequestId` replay returns the existing version. Reuse for different content returns `409 IDEMPOTENCY_KEY_REUSED`; a changed current pointer returns `409 STALE_DOCUMENT_VERSION`. The response contains version ID, sequence, safe original filename, detected media type, byte size, and upload time. Evidence metadata contains logical intake-document ID, case ID, evidence type, current-version ID, and ordered immutable versions. It never exposes storage keys. Intake upload does not require or create an application checklist or correction task and is not authorized by `document:upload:staff`.
+Intake upload uses Section 1.9 with path `evidenceType` and the current baseline from the metadata read. The response contains version ID, sequence, safe original filename, detected media type, byte size, and upload time. Evidence metadata contains logical intake-document ID, case ID, evidence type, current-version ID, and ordered immutable versions. It never exposes storage keys. Intake upload does not require or create an application checklist or correction task and is not authorized by `document:upload:staff`.
 
 Intake content retrieval uses:
 
@@ -826,7 +873,7 @@ GET /api/v1/staff/assisted-originations/{assistedOriginationCaseId}/evidence/{ev
 
 The caller must be a Staff User without Customer context and hold exact `document:upload:intake`. Loan additionally authorizes the case through its assisted-origination boundary, which requires `loan:originate:staff`. Generic `loan:read`, application-document review, and Customer document authority do not grant intake bytes. Document validates the product/evidence type, resolves the logical document for that exact case and type, and verifies that the requested immutable version belongs to it before opening storage.
 
-Current and historical versions are readable for `OPEN`, `COMPLETED`, and `ABANDONED` cases. Reading does not change the current pointer, OCR target, identity-verification state, application facts, or workflow. Success streams only the selected PDF/JPEG/PNG bytes with that version's safe original filename, detected `Content-Type`, byte size in `Content-Length`, attachment `Content-Disposition`, `Cache-Control: no-store, private`, and `X-Content-Type-Options: nosniff`. Configured frontend origins may read `Content-Disposition` to preserve the filename during an explicit download. Storage keys and storage URLs are never returned.
+Current and historical versions are readable for `OPEN`, `COMPLETED`, and `ABANDONED` cases. Reading does not change the current pointer, OCR target, identity-verification state, application facts, or workflow. Section 1.10 defines the exact-byte response and headers; configured frontend origins may read `Content-Disposition` for an explicit download.
 
 Missing case returns `404 ASSISTED_ORIGINATION_CASE_NOT_FOUND`; missing case/type document returns `404 INTAKE_EVIDENCE_NOT_FOUND`; unknown or unrelated version returns `404 INTAKE_EVIDENCE_VERSION_NOT_FOUND`. Product-incompatible evidence returns `422 INTAKE_EVIDENCE_PRODUCT_MISMATCH`. Missing endpoint authority returns the established security denial; invalid Staff context returns `403 INTAKE_EVIDENCE_ACCESS_DENIED`, and failed Loan authorization returns `403 ASSISTED_ORIGINATION_ACCESS_DENIED`. Unavailable stored bytes return `503 DOCUMENT_STORAGE_UNAVAILABLE` without storage details or fallback to another version. The read creates no business mutation or retrieval audit event.
 
@@ -867,7 +914,7 @@ POST /api/v1/staff/assisted-originations/{assistedOriginationCaseId}/unsecured-c
 }
 ```
 
-The command locks the case and requires an `OPEN` UCL intake, a selected Customer, current authoritative Customer readiness including successful identity verification, a current signed `UCL_PAPER_APPLICATION`, an active UCL product, valid product amount and term, no blocking UCL application, and no outstanding UCL LoanAccount. Success returns `201 Created` and atomically creates one `STAFF_ASSISTED` UCL application in `DOCUMENTS_PENDING`, the normal `INCOME_PROOF`, `BANK_STATEMENT`, and `EMPLOYMENT_PROOF` checklist, the initial `PENDING_MANUAL_REVIEW` verification, lifecycle/audit evidence, and the completed-case application link. The intake paper evidence remains Document-owned and is not copied into the application checklist.
+The command serializes conversion and requires an `OPEN` UCL intake, a selected Customer, current authoritative Customer readiness including successful identity verification, a current signed `UCL_PAPER_APPLICATION`, an active UCL product, valid product amount and term, no blocking UCL application, and no outstanding UCL LoanAccount. Success returns `201 Created` and atomically creates one `STAFF_ASSISTED` UCL application in `DOCUMENTS_PENDING`, the normal `INCOME_PROOF`, `BANK_STATEMENT`, and `EMPLOYMENT_PROOF` checklist, the initial `PENDING_MANUAL_REVIEW` verification, lifecycle/audit evidence, and the completed-case application link. The intake paper evidence remains Document-owned and is not copied into the application checklist.
 
 Collateral conversion is:
 
@@ -889,7 +936,7 @@ POST /api/v1/staff/assisted-originations/{assistedOriginationCaseId}/collateral-
 }
 ```
 
-The authenticated actor must be Staff without Customer context and must hold `loan:originate:staff`. The command locks and requires an `OPEN` Collateral case with a selected Customer, current authoritative Customer readiness including successful identity verification, a current signed `COLLATERAL_PAPER_APPLICATION`, an active Collateral product, valid amount and term, one valid structured Collateral fact, and no blocking Collateral application. Existing Collateral LoanAccount state adds no product-specific origination restriction.
+The authenticated actor must be Staff without Customer context and must hold `loan:originate:staff`. The command serializes conversion and requires an `OPEN` Collateral case with a selected Customer, current authoritative Customer readiness including successful identity verification, a current signed `COLLATERAL_PAPER_APPLICATION`, an active Collateral product, valid amount and term, one valid structured Collateral fact, and no blocking Collateral application. Existing Collateral LoanAccount state adds no product-specific origination restriction.
 
 Success returns `201 Created` and atomically creates one `STAFF_ASSISTED` Collateral application in `DOCUMENTS_PENDING`, exactly one structured Collateral row, the normal required `COLLATERAL_OWNERSHIP_EVIDENCE` checklist item, the initial `PENDING_MANUAL_REVIEW` Collateral verification, lifecycle/audit evidence, and the completed-case application link. Estimated value remains advisory; the command performs no automated valuation or loan-to-value decision. `COLLATERAL_PAPER_APPLICATION` and `CUSTOMER_IDENTITY` remain pre-application intake evidence and are not copied into the application checklist.
 
@@ -911,19 +958,21 @@ The case GET is the authoritative uncertain-result reconciliation read. `COMPLET
 | POST | `/api/v1/staff/customer-identity-verifications/{verificationId}/reject` | Staff `customer:identity:verify` | Controlled rejected outcome; `200` |
 | POST | `/api/v1/staff/assisted-originations/{caseId}/identity-verifications` | Staff `customer:identity:verify` | Bind exact current intake evidence; `201` |
 
-Identity seeds the two own capabilities to `CUSTOMER` and the dedicated review capability only to `LOAN_OFFICER`. `customer:read`, `loan:read`, generic `document:review`, and application-document own permissions grant no identity-verification access. Approver, Accounting, and Back-Office seeded accounts have no access. The capability does not require generic Customer-directory authority.
+Identity seeds the two own capabilities to `CUSTOMER` and the dedicated review capability only to `LOAN_OFFICER`. `customer:read`, `loan:read`, generic `document:review`, and application-document own permissions grant no identity-verification access. The predefined Approver, Accounting, and Back-Office roles do not grant that capability. The capability does not require generic Customer-directory authority.
 
-Digital submission is multipart with `file`, UUID `uploadRequestId`, and nullable UUID `expectedCurrentVersionId`. It accepts one PDF/JPEG/PNG up to 10 MiB under the normal signature, MIME, and filename rules. Ownership comes from authentication; no Customer ID is accepted. The Customer must be active with a complete profile; bank-account and loan readiness are not prerequisites. Exact request replay matches Customer, baseline, filename, MIME, size, bytes hash, and actor. Different logical content with the same request ID returns `409 IDEMPOTENCY_KEY_REUSED`; a changed baseline returns `409 IDENTITY_VERIFICATION_EVIDENCE_STALE`.
+Digital submission uses the shared upload and safety contract in Section 1.9, with its identity-specific stale-evidence mapping below. Ownership comes from authentication; no Customer ID is accepted. The Customer must be active with a complete profile; bank-account and loan readiness are not prerequisites. Exact request replay matches Customer, baseline, filename, MIME, size, bytes hash, and actor. Different logical content with the same request ID returns `409 IDEMPOTENCY_KEY_REUSED`; a changed baseline returns `409 IDENTITY_VERIFICATION_EVIDENCE_STALE`.
 
 Assisted binding accepts only `{ "documentVersionId": "<UUID>" }`. The server resolves the case-selected Customer and validates the exact current `CUSTOMER_IDENTITY` version. A new attempt requires an open case. An already verified Customer reuses existing readiness for later assisted loans without a new identity file. Replacing a pending attempt preserves it as `SUPERSEDED`; replacing rejected evidence creates a new pending attempt. Upload never means verified.
 
 VERIFY accepts `{ "requestId": "<UUID>", "documentVersionId": "<UUID>", "presentedIdentityReference": "<reference shown on exact evidence>" }`. The transient reference is at most 100 characters, submitted only in the body, compared against Customer's protected fingerprint, and excluded from persistence, responses, logs, and audit. Mismatch returns `422 IDENTITY_REFERENCE_MISMATCH` without completing the attempt. After controlled profile correction under Section 3.12.1, Staff may retry that same pending attempt and exact version; current-document, full-name, actor, stale-evidence, competing-decision, and replay guards still apply. REJECT accepts request/version IDs and exactly one `rejectionReason`: `IDENTITY_REFERENCE_MISMATCH`, `NAME_MISMATCH`, `UNREADABLE_EVIDENCE`, or `UNACCEPTABLE_EVIDENCE`; it accepts no presented reference or free text. Both commands require pending/current evidence, active complete matching Customer context, and dedicated Staff authority. Exact request/outcome/reason/reviewer replay returns the recorded result; conflicting terminal or stale commands return `409`.
 
-Safe history/detail fields are `verificationId`, `sequence`, `customerNumber`, submitted `fullName`, `source`, `method`, `status`, controlled nullable `rejectionReason`, `submittedAt`, `completedAt`, and `evidence`. Evidence contains only `versionId`, `versionNumber`, `filename`, `mimeType`, `byteSize`, and `uploadedAt`. Queue rows set `evidence` to null. No Customer UUID, raw Identity Reference, email, phone, address, bank information, storage key, hash, ciphertext, fingerprint, reviewer notes, or login identity is returned. Content reads return the exact immutable file with attachment disposition, `Cache-Control: private, no-store`, and `X-Content-Type-Options: nosniff` after authorization.
+Safe history/detail fields are `verificationId`, `sequence`, `customerNumber`, submitted `fullName`, `source`, `method`, `status`, controlled nullable `rejectionReason`, `submittedAt`, `completedAt`, and `evidence`. Evidence contains only `versionId`, `versionNumber`, `filename`, `mimeType`, `byteSize`, and `uploadedAt`. Queue rows set `evidence` to null. No Customer UUID, raw Identity Reference, email, phone, address, bank information, storage key, hash, ciphertext, fingerprint, reviewer notes, or login identity is returned. Content reads follow Section 1.10 after dedicated identity authorization.
 
 Full-name updates through either ordinary profile channel are permitted before verification and rejected after verification with `409 VERIFIED_IDENTITY_CHANGE_NOT_ALLOWED`. Rejection preserves the verified summary, successful readiness reference, historical decisions, and LoanApplication provenance. Mutable contact, employment, and bank facts do not invalidate verified identity. New Salary Advance, UCL, and Collateral submission require current verified readiness and retain the exact successful verification reference internally; failure is `422 CUSTOMER_IDENTITY_VERIFICATION_REQUIRED`. Salary Advance remains Customer-digital only and retains its separate Partner Employee requirements; UCL and Collateral retain both permitted channels. Historical applications do not acquire this origination guard. See the [error catalog](../architecture/MER-ARCH-004-api-error-catalog.md) for identity workflow failures.
 
 ## 4. Salary Advance, UCL, and Collateral Loan Origination
+
+Across the HTTP workflows in Sections 4–8, UCL and Collateral commands create or mutate no Salary Advance limit, reservation, movement, or exposure. Their servicing responses report `principalReleased = 0`; Salary Advance alone reserves eligible principal, converts its exact reservation on activation, and releases exposure under its product-specific rules. Endpoint sections retain the precise action, replay, and readiness differences. [MER-BIZ-001 Sections 6–7](../business/MER-BIZ-001-business-requirements-and-workflows.md#6-common-loan-lifecycle-and-workflow-controls) owns the common lifecycle and product policy.
 
 ### 4.1 Salary Advance readiness
 
@@ -967,7 +1016,7 @@ An authenticated Customer with `loan:read:own` may read only their own applicati
 
 The response contains only `loanApplicationId`, `applicationNumber`, `productCode`, `productType`, `originationChannel`, `requestedAmount`, `requestedTermMonths`, `status`, and `submittedAt`. It excludes structured Collateral facts, Customer, employee-link, limit, verification, review-cycle, actor, audit/history, payment, and banking evidence. This is a durable status projection for reconnect/resume flows, not a next-action engine, command recommendation, history API, or Staff work queue.
 
-The Customer-owned correction-abandonment command in Section 5.4 is the only v1 command that produces `CANCELLED`. The route does not accept cancellation from another state or a Staff or administrative cancellation.
+The returned-correction cancellation contracts in Section 5.4 produce `CANCELLED`: the owning Customer may cancel eligible Customer-digital Salary Advance/UCL; an authorized Loan Officer may record an evidenced Customer-requested cancellation only for Staff-assisted UCL. Other source states, Collateral cancellation, and generic Staff/administrative cancellation are unavailable.
 
 #### 4.2.1.1 Customer-own submitted Collateral facts
 
@@ -1095,7 +1144,7 @@ Neither response exposes Customer PII, raw document contents, internal operation
 
 Success returns `201 Created`.
 
-The authenticated Customer must satisfy Customer readiness, including current successful Customer identity verification, plus Partner eligibility, product, amount, term, document, blocking-application, outstanding-debt, and available-limit requirements. Submission obtains locked Customer readiness and records the exact successful identity-verification reference as immutable internal LoanApplication provenance.
+The authenticated Customer must satisfy Customer readiness, including current successful Customer identity verification, plus Partner eligibility, product, amount, term, document, blocking-application, outstanding-debt, and available-limit requirements. Submission validates authoritative Customer readiness and records the exact successful identity-verification reference as immutable internal LoanApplication provenance.
 
 The response contains the application identity and number, authenticated `customerId`, product code/type, status, requested terms, reusable employee-link ID, product-verification result, total/used/reserved/available limit snapshots, and submission time. It excludes employee code, identity evidence, salary, Partner import-batch identity, bank-account data, and internal history/audit evidence.
 
@@ -1130,7 +1179,7 @@ The API derives Customer identity from the Bearer token and does not accept `cus
 
 Success returns `201 Created` with `loanApplicationId`, `applicationNumber`, `productCode`, `productType`, `status`, `requestedAmount`, `requestedTermMonths`, `productVerificationResult`, and `submittedAt`. Loan records the application in `DOCUMENTS_PENDING`, stores `PENDING_MANUAL_REVIEW` as its product-verification result, and creates required `INCOME_PROOF`, `BANK_STATEMENT`, and `EMPLOYMENT_PROOF` checklist items.
 
-The endpoint stops at origination and evidence setup. It rejects a Customer who already has another UCL LoanAccount with positive contractual outstanding in `ACTIVE` or `OVERDUE` using `409 OUTSTANDING_LOAN_ACCOUNT_EXISTS`; zero-outstanding `SETTLED` or `CLOSED` UCL accounts do not block, unrelated Salary Advance accounts are ignored, and inconsistent account state returns safe `409 SYSTEM_STATE_CONFLICT`. Separate Staff commands perform manual verification and review entry. The full UCL lifecycle then supports structured correction and re-verification, approval and immutable exact-request offer handling, correction cancellation, operational contracts, activation, and servicing through settlement and closure.
+The endpoint stops at origination and evidence setup. It rejects a Customer who already has another UCL LoanAccount with positive contractual outstanding in `ACTIVE` or `OVERDUE` using `409 OUTSTANDING_LOAN_ACCOUNT_EXISTS`; zero-outstanding `SETTLED` or `CLOSED` UCL accounts do not block, unrelated Salary Advance accounts are ignored, and inconsistent account state returns safe `409 SYSTEM_STATE_CONFLICT`. Separate Staff commands perform manual verification and review entry. The common lifecycle is defined in [MER-BIZ-001 Section 6](../business/MER-BIZ-001-business-requirements-and-workflows.md#6-common-loan-lifecycle-and-workflow-controls); Sections 5–8 below define its HTTP contracts.
 
 Important errors:
 
@@ -1168,7 +1217,7 @@ Success returns `201 Created` with `loanApplicationId`, `applicationNumber`, `pr
 
 The application starts in `DOCUMENTS_PENDING` with application-owned sequence-1 `PENDING_MANUAL_REVIEW` Collateral verification. Uploading the required evidence through the existing Document workflow can complete generic upload readiness and advance the application to `SUBMITTED`; it does not complete Collateral verification or permit review. The Staff verification commands in Sections 4.8-4.9 make the terminal decision. Only the authoritative latest `VERIFIED` cycle permits review, recommendation, and an Approver action.
 
-Collateral submission serializes by Customer and product and rejects an existing blocking Collateral application. It deliberately does not impose an outstanding Collateral LoanAccount rule, compare requested amount to estimated value, or create Salary Advance reservation, Partner, or exposure effects. Structured Collateral facts and requested terms are immutable after submission. Approval, pricing, offer response, operational contract preparation, manual-disbursement activation, LoanAccount creation, final schedule construction, repayment, overdue evaluation and cure, settlement, and closure are executable. Collateral servicing uses the common financial controls with zero Salary Advance exposure effect.
+Collateral submission serializes by Customer and product and rejects an existing blocking Collateral application. It deliberately does not impose an outstanding Collateral LoanAccount rule, compare requested amount to estimated value, or create Salary Advance reservation, Partner, or exposure effects. Structured Collateral facts and requested terms are immutable after submission. Sections 5–8 define the downstream HTTP contracts. [MER-BIZ-001 Section 7.3](../business/MER-BIZ-001-business-requirements-and-workflows.md#73-collateral-loan) owns the product workflow; Collateral servicing retains zero Salary Advance exposure effect.
 
 Important errors:
 
@@ -1339,9 +1388,7 @@ No body is required. The reviewer is derived from the Bearer token.
 
 The first successful start creates the active review cycle and assigns the authenticated Loan Officer as durable steward. A later start after an Approver return or completed correction is allowed only for that same assigned actor and copies the assignment into the new cycle. Another authorized reviewer receives `403 LOAN_REVIEW_ASSIGNED_TO_ANOTHER_OFFICER`. An unresolved legacy assignment fails closed with `409 SYSTEM_STATE_CONFLICT`; intake, verification, document, correction, or current-session evidence is never used to guess ownership.
 
-For UCL, review start additionally requires the authoritative verification result to be `VERIFIED`. Missing, pending, `FAILED`, and `REQUIRES_MORE_INFORMATION` records fail closed. The same Loan Officer may complete UCL manual verification and start review; the existing maker-checker rule still requires a different Approver for the final decision.
-
-For Collateral Loan, review start requires the authoritative latest numbered verification cycle to be `VERIFIED`. Missing, pending, `FAILED`, and `REQUIRES_MORE_INFORMATION` evidence fails closed. The same Loan Officer may complete manual verification and later start review or recommend; maker-checker still requires a different Approver from the recommending Loan Officer.
+UCL and Collateral review start require the authoritative latest product-verification cycle to be `VERIFIED`; missing, pending, `FAILED`, and `REQUIRES_MORE_INFORMATION` evidence fails closed. The same Loan Officer may verify, start review, and recommend. The final Approver must differ from the recommending Loan Officer (Section 5.2).
 
 ---
 
@@ -1363,7 +1410,7 @@ The decision read adds a `customer` object containing only non-empty `customerNu
 
 The decision read returns the exact latest recommendation and review-cycle provenance, purpose-limited assigned/recommending/deciding Staff actor summaries, current-actor maker-checker eligibility, current Loan state and readiness, the durable decision tied to that recommendation when present, and ordered safe decision history. Each actor summary contains only `userId`, `displayName`, and `email`; missing legacy identity remains null. The Approver queue uses server-side exact `APPROVAL_PENDING` membership, optional exact product filtering, zero-based paging of 1 to 100 items, and deterministic `submittedAt DESC, loanApplicationId DESC` ordering. Queue rows do not perform per-row Identity lookups.
 
-Recommendation and queue reads exclude Customer PII; the decision read exposes only the Customer business identity specified above. All three reads exclude restricted internal notes, document content, audit and operation identifiers, external references, Customer-only offer data, roles, permissions, sessions, Customer associations, and credential/security state. They execute as repeatable-read observations across the Approval-owned evidence, Loan-owned boundary projection, one batched purpose-limited Identity lookup, and the decision-only Customer lookup. A missing application returns `404 LOAN_APPLICATION_NOT_FOUND`. An `APPROVAL_PENDING` case without an applicable recommendation for the active review cycle, or with a decision already recorded for that recommendation, fails closed with `409 SYSTEM_STATE_CONFLICT`; historical decisions remain readable after later valid Loan transitions.
+Recommendation and queue reads exclude Customer PII; the decision read exposes only the Customer business identity specified above. All three reads exclude restricted internal notes, document content, audit and operation identifiers, external references, Customer-only offer data, roles, permissions, sessions, Customer associations, and credential/security state. They return consistent observations across Approval, Loan, authorized Staff summaries, and the decision-only Customer context. A missing application returns `404 LOAN_APPLICATION_NOT_FOUND`. An `APPROVAL_PENDING` case without an applicable recommendation for the active review cycle, or with a decision already recorded for that recommendation, fails closed with `409 SYSTEM_STATE_CONFLICT`; historical decisions remain readable after later valid Loan transitions.
 
 Recommendation and decision POSTs have no business UUID and are never automatically retried. After an uncertain result, the client reads the corresponding projection and resolves only when the exact review-cycle/recommendation provenance and action prove the durable result. A failed reconciliation read leaves contradictory commands locked until an explicit successful refresh.
 
@@ -1373,7 +1420,7 @@ Recommendation and decision POSTs have no business UUID and are never automatica
 GET /api/v1/staff/loan-applications/{loanApplicationId}/review-history
 ```
 
-This Approval-owned read requires a Staff principal without Customer context and any one exact permission: `loan:review`, `approval:recommend`, or `approval:decide`. `loan:read` alone is insufficient. It composes existing Loan review cycles and Approval recommendation/decision evidence in one repeatable-read observation with one batched safe Staff actor lookup. It performs no workflow writes and requires no new history persistence. Successful responses carry `Cache-Control: no-store, private`.
+This Approval-owned read requires a Staff principal without Customer context and any one exact permission: `loan:review`, `approval:recommend`, or `approval:decide`. `loan:read` alone is insufficient. It returns consistent linked review-cycle, recommendation, decision, and safe Staff-actor evidence without workflow writes. Successful responses carry `Cache-Control: no-store, private`.
 
 The response contains `loanApplicationId`, `applicationNumber`, `applicationStatus`, and `cycles` in ascending stored `cycleNumber` order. Each cycle contains `reviewCycleId`, `cycleNumber`, nullable `assignedLoanOfficer`, `status`, `startedAt`, nullable `endedAt`, nullable `recommendation`, and nullable `decision`. An application without recorded cycles returns an empty array. Partial cycles retain their null recommendation or decision; historical numbering is never recomputed.
 
@@ -1411,9 +1458,15 @@ Every recommendation requires `expectedReviewCycleId` from the Staff recommendat
 
 The authenticated recommending actor must also be the Loan-owned review cycle's assigned Loan Officer. A different actor receives `403 LOAN_REVIEW_ASSIGNED_TO_ANOTHER_OFFICER` before recommendation, audit, event, correction, or Loan transition effects are written. A missing legacy assignment fails closed with `409 SYSTEM_STATE_CONFLICT`.
 
-For UCL, positive and rejection recommendations and the structured Customer or Staff correction actions are executable. UCL correction tasks may replace or review only application-owned current `INCOME_PROOF`, `BANK_STATEMENT`, or `EMPLOYMENT_PROOF` evidence. They cannot create a Salary-specific `RECENT_PAYSLIP` task or change requested amount or term.
+Product-specific correction limits apply to verification completion, recommendation, Approver correction, upload, completion, and resubmission:
 
-For Collateral Loan, a latest `VERIFIED` cycle permits normal approval/rejection recommendation. Revision recommendations may create only Customer `DOCUMENT_REPLACEMENT` or Staff `DOCUMENT_REVIEW` tasks for the existing current `COLLATERAL_OWNERSHIP_EVIDENCE` item. They cannot add checklist items, upload supporting documents, or change requested terms or submitted Collateral facts. Resubmission must return through manual verification before another review.
+| Product | Allowed document targets and changes |
+|---|---|
+| Salary Advance | Customer `SUPPORTING_DOCUMENT_UPLOAD` may introduce `RECENT_PAYSLIP`; Staff tasks use `SUPPORTING_DOCUMENT_UPLOAD` or `DOCUMENT_REVIEW`, as illustrated below. |
+| UCL | Customer replacement or Staff review of current application-owned `INCOME_PROOF`, `BANK_STATEMENT`, or `EMPLOYMENT_PROOF`; no Salary-specific `RECENT_PAYSLIP` task and no requested amount/term change. |
+| Collateral | Only Customer `DOCUMENT_REPLACEMENT` or Staff `DOCUMENT_REVIEW` of the existing current `COLLATERAL_OWNERSHIP_EVIDENCE`; no new checklist item, supporting upload, or change to requested terms or submitted Collateral facts. |
+
+UCL and Collateral allow normal approval/rejection recommendations after authoritative verification. For these two products, a resubmitted correction requires the authoritative latest cycle to be verified before review; Section 5.3 retains cycle-creation and guard differences. [MER-BIZ-001 Section 6.4](../business/MER-BIZ-001-business-requirements-and-workflows.md#64-document-review-and-correction) owns correction policy.
 
 Representative Customer task:
 
@@ -1472,7 +1525,7 @@ For UCL, `APPROVE` atomically records the decision, generates one immutable exac
 
 For Collateral Loan, the authoritative latest verification cycle must still be `VERIFIED` when any Approver action executes. Missing evidence returns `409 COLLATERAL_VERIFICATION_REQUIRED`; pending, failed, or more-information outcomes return the corresponding `422 PRODUCT_VERIFICATION_PENDING`, `PRODUCT_VERIFICATION_FAILED`, or `PRODUCT_VERIFICATION_REQUIRES_MORE_INFORMATION` code. Each failure leaves no durable decision or Loan-side effect. `APPROVE` atomically records the decision and generates one exact-request offer using 1.5% monthly flat original-principal interest, zero fee, seven-calendar-day validity, and one undated `MONTHLY_INSTALLMENT` item per approved month. Total interest is rounded once to whole VND using `HALF_UP`; principal and interest residuals are assigned only to the final item. The estimated Collateral value does not change principal or create a loan-to-value decision or counteroffer.
 
-Collateral `REJECT`, `RETURN_TO_LOAN_OFFICER_REVIEW`, and `REQUEST_CUSTOMER_OR_STAFF_CORRECTION` use the common transitions and reason/plan rules. `RETURN_TO_LOAN_OFFICER_REVIEW` creates the next cycle with the existing assigned Loan Officer, never the Approver. Correction and later review restart also preserve that assignment. Correction remains limited to replacement or Staff review of the existing ownership-evidence item; no action changes submitted Collateral facts or requested terms. None creates Salary Advance reservation, limit, movement, or exposure effects. `MER-ARCH-006-api-request-flow-and-dependencies.md` defines the synchronous coordination and rollback boundary.
+Collateral `REJECT`, `RETURN_TO_LOAN_OFFICER_REVIEW`, and `REQUEST_CUSTOMER_OR_STAFF_CORRECTION` use the common transitions and reason/plan rules. `RETURN_TO_LOAN_OFFICER_REVIEW` creates the next cycle with the existing assigned Loan Officer, never the Approver. Correction and later review restart also preserve that assignment. Section 5.1 defines the unchanged Collateral correction targets and immutable facts. The common product-exposure boundary in Section 4 applies. MER-ARCH-006 Section 8 defines synchronous coordination and rollback.
 
 Important errors include `LOAN_REVIEW_ASSIGNED_TO_ANOTHER_OFFICER`, `MAKER_CHECKER_VIOLATION`, `STALE_REVIEW_RECOMMENDATION`, `STALE_REVIEW_CYCLE`, `COLLATERAL_VERIFICATION_REQUIRED`, the product-verification outcome codes above, `PRODUCT_POLICY_INVALID`, `INVALID_PRODUCT_TERM`, and controlled reason/plan validation errors.
 
@@ -1500,9 +1553,9 @@ Client-visible rules:
 - a Customer-only request may be resubmitted by Staff only for an eligible Staff-assisted UCL or Collateral application after every task is complete; Customer-digital Customer-only requests remain outside Staff authority;
 - UCL resubmission preserves completed verification evidence, returns the application to `SUBMITTED`, and creates the next linked `PENDING_MANUAL_REVIEW` verification cycle; an untouched pending pre-review cycle is reused;
 - review cannot restart until the authoritative latest UCL verification cycle is `VERIFIED`;
-- UCL resubmission rechecks product-scoped outstanding debt and does not invoke Salary Advance eligibility, limit, reservation, movement, or revalidation behavior;
+- UCL resubmission rechecks product-scoped outstanding debt and does not invoke Salary Advance eligibility or revalidation (Section 4 also excludes exposure effects);
 - Collateral resubmission preserves completed cycles, preserves submitted Collateral facts, returns to `SUBMITTED`, and creates exactly one next pending cycle linked to the resubmitted correction; it has no outstanding-LoanAccount guard or Salary Advance effect;
-- Collateral replacement/review is limited to the existing ownership-evidence checklist item, and review cannot restart until the new authoritative cycle is `VERIFIED`;
+- all correction targets retain Section 5.1 limits; Collateral review cannot restart until the new authoritative cycle is `VERIFIED`;
 - identical requests replay safely;
 - a different request after completion or resubmission conflicts.
 
@@ -1524,7 +1577,7 @@ This narrow command requires an authenticated Customer with `loan:cancel:own`, d
 
 The only allowed source status is `RETURNED_FOR_REVISION`. A new request against any other status, including an application already cancelled by another request, returns `409 LOAN_APPLICATION_CANCELLATION_NOT_ALLOWED`. An exact replay of the successful request UUID returns the original `CANCELLED` result with `idempotentReplay = true`.
 
-Success atomically marks the active correction request `CANCELLED`, changes the LoanApplication to `CANCELLED`, and records immutable history and audit evidence. For Salary Advance it also releases the repository-derived reservation exactly once and writes one `RESERVATION_RELEASED` movement. For UCL it stores no release reference and creates no Salary Advance limit, movement, reservation, conversion, or release effect. Cancellation does not run Partner freshness or re-verification and changes neither LoanAccount nor repayment state.
+Success atomically marks the active correction request `CANCELLED`, changes the LoanApplication to `CANCELLED`, and records immutable history and audit evidence. For Salary Advance it also releases the repository-derived reservation exactly once and writes one `RESERVATION_RELEASED` movement. For UCL it stores no release reference and retains the zero-exposure boundary in Section 4. Cancellation does not run Partner freshness or re-verification and changes neither LoanAccount nor repayment state.
 
 #### 5.4.1 Evidenced Staff-assisted UCL cancellation
 
@@ -1542,7 +1595,7 @@ The command body is:
 }
 ```
 
-Loan derives the Customer subject from the application and records the authenticated Staff user as actor. It consumes the exact current evidence version, terminalizes the correction and application through the same cancellation execution path as Customer-digital cancellation, stores the Staff actor and Document version reference in `loan_application_cancellations`, and records PII-safe Customer, application, correction, evidence, and status audit facts. UCL continues to create no Salary Advance exposure effect.
+Loan derives the Customer subject from the application and records the authenticated Staff user as actor. It consumes the exact current evidence version, terminalizes the correction and application through the same cancellation execution path as Customer-digital cancellation, stores the Staff actor and Document version reference in `loan_application_cancellations`, and records PII-safe Customer, application, correction, evidence, and status audit facts. UCL retains the zero-exposure boundary in Section 4.
 
 Exact replay requires the same request, application, correction, Staff actor, and evidence version and returns `idempotentReplay = true` without duplicate terminal effects. Reusing the request identity with different logical content returns `409 IDEMPOTENCY_KEY_REUSED`. A new request against the cancelled application returns `409 LOAN_APPLICATION_CANCELLATION_NOT_ALLOWED`. Missing, mismatched, foreign-target, or stale evidence uses the established assisted-action evidence errors.
 
@@ -1570,21 +1623,21 @@ It requires a `STAFF` principal without Customer context and exact `document:rev
 
 The Staff projection excludes uploader User IDs, Customer login identity or contact data, storage references, hashes, request/operation IDs, audit IDs, and document content. It returns `Cache-Control: no-store, private`. Restricted notes must not enter Customer responses, browser storage, URLs, query keys, logs, telemetry, analytics, or exports. An Approver-only reader gains no review, waiver, upload, replacement, or queue authority. A missing checklist returns `404 DOCUMENT_CHECKLIST_NOT_FOUND`. Inconsistent current-version or review associations fail with `409 SYSTEM_STATE_CONFLICT` rather than returning partial evidence.
 
-Upload is multipart with:
-
-- `uploadRequestId`
-- optional `expectedCurrentVersionId`
-- `file`
-
-Accepted types are PDF, JPEG, and PNG, up to 10 MiB, with signature-to-media-type matching. A stale replacement baseline returns `409 STALE_DOCUMENT_VERSION`.
-
-The same mandatory safety contract applies to application documents, digital Customer identity evidence, intake evidence, and signed assisted-action evidence. New and replacement bytes remain private until malware scanning succeeds. Unsafe content returns `422 UNSAFE_DOCUMENT_UPLOAD`; scanner unavailability, timeout, or invalid scanner responses return `503 DOCUMENT_SCAN_UNAVAILABLE` without provider details. Neither outcome creates a usable document version. Exact successful replay retains its normal authorization and content-match checks and returns the existing version without rescanning or requiring scanner availability.
-
-Multipart transport permits one file up to 10 MiB and a request up to 11 MiB including fields and framing. Transport-limit violations return `413 INVALID_DOCUMENT_UPLOAD`; application content validation retains `422 INVALID_DOCUMENT_UPLOAD` and the authoritative 10 MiB rule.
+Uploads follow Section 1.9; application replacement uses `409 STALE_DOCUMENT_VERSION`.
 
 For a `STAFF_ASSISTED` application in `DOCUMENTS_PENDING`, exact `document:upload:assisted` authority permits initial checklist upload without a correction task. It does not authorize Customer-digital application upload, later correction upload, or another workflow state. Exact `document:upload:assisted-correction` authority permits only an upload for the exact active open Customer-owned correction task of an eligible Staff-assisted UCL or Collateral application in `RETURNED_FOR_REVISION`; replacement must name that task's exact baseline version. `document:upload:staff` remains limited to an open Staff-owned correction task, and `document:upload:intake` remains limited to pre-application intake evidence. Exact `uploadRequestId` replay returns the existing logical upload, different logical content returns `409 IDEMPOTENCY_KEY_REUSED`, and replacement must retain the authoritative `expectedCurrentVersionId`. The final missing required initial upload publishes the established completion event and advances the application from `DOCUMENTS_PENDING` to `SUBMITTED` through the existing Loan workflow.
 
 Customer-owned document upload, correction task/query and resubmission, cancellation, offer response, and contract acknowledgment require `originationChannel = CUSTOMER_DIGITAL`. A Customer attempting those mutations against a `STAFF_ASSISTED` application receives `403 CUSTOMER_DIRECT_ACTION_NOT_ALLOWED`; Customer projections do not advertise those direct actions. Purpose-specific Staff-mediated correction completion/resubmission, offer response, contract acknowledgment, and UCL Customer-requested cancellation use separate Staff contracts without manufacturing a Customer principal. No generic Staff checklist-mutation contract is required.
+
+Review targets the exact `documentVersionId` and supports:
+
+- `ACCEPT_DOCUMENT`
+- `WAIVE_DOCUMENT`
+- `REQUEST_REPLACEMENT`
+
+Waiver requires `document:waive` and an allowed waiver code. Replacement requires `DOCUMENT_REPLACEMENT_REQUIRED` plus a Customer-visible instruction. Only an unreviewed authoritative current version is actionable. Reviewing a non-current version returns `409 STALE_DOCUMENT_VERSION`; a new logical review against an already-reviewed current version returns `409 DOCUMENT_ALREADY_REVIEWED`. An exact replay with the original `reviewRequestId` and logical payload still returns the existing immutable decision, while reuse of that request ID with different content remains `409 IDEMPOTENCY_KEY_REUSED`.
+
+Checklist content reads follow the exact authority and response contract in Section 1.10. Historical immutable versions are read by their requested version ID, not by substituting today's current version.
 
 #### 5.5.1 Evidenced Staff-assisted downstream Customer decisions
 
@@ -1601,7 +1654,7 @@ Offer-response evidence uses `CUSTOMER_OFFER_RESPONSE` and binds `loanApplicatio
 }
 ```
 
-Exact `loan:offer:respond:staff` authority and the `LOAN_OFFICER` role are both required. Loan locks the workflow and current offer, derives the Customer subject from the application, verifies the exact current evidence version and declared action, and preserves ordinary offer expiry and transition history. Success moves `CUSTOMER_ACCEPTANCE_PENDING` to `CONTRACT_PENDING` for `ACCEPT`, or to `CUSTOMER_DECLINED` for `DECLINE`, and stores one immutable Staff-assisted response per offer.
+Exact `loan:offer:respond:staff` authority and the `LOAN_OFFICER` role are both required. Loan serializes offer response, derives the Customer subject from the application, verifies the exact current evidence version and declared action, and preserves ordinary offer expiry and transition history. Success moves `CUSTOMER_ACCEPTANCE_PENDING` to `CONTRACT_PENDING` for `ACCEPT`, or to `CUSTOMER_DECLINED` for `DECLINE`, and stores one immutable Staff-assisted response per offer.
 
 The offer-response GET retains the same authority and adds nullable `completedResponse`. It is null before a recorded Customer response, including expiry. A completed response contains `action` (`ACCEPT` or `DECLINE`), `recordedBy` (`userId`, `displayName`, `email` for the safe Staff recorder), `recordedAt`, and `evidence`. Evidence contains `documentId`, exact consumed `documentVersionId`, `evidenceType`, `declaredOfferDecision`, `targetId` (the approved offer), nullable `targetVersion`, `versionNumber`, `detectedMimeType`, `byteSize`, and `uploadedAt`. Top-level `evidence` equals the validated consumed version after completion. Missing or contradictory completed response, Customer/application/offer association, offer state/time, matching transition/recorder/time, evidence version/decision, or safe Staff recorder returns `409 SYSTEM_STATE_CONFLICT`. No Customer login identity or action-record/request/operation IDs are exposed. The GET uses a repeatable-read snapshot and creates no workflow or audit effects.
 
@@ -1616,19 +1669,9 @@ Contract evidence uses `CUSTOMER_CONTRACT_ACKNOWLEDGMENT` and binds `loanApplica
 }
 ```
 
-Exact `loan:contract:acknowledge:staff` authority and the `ACCOUNTING_OFFICER` role are both required. Loan uses the established acknowledgment-request and application lock order, requires the exact current `PREPARED` contract, validates evidence for that version, records the Staff actor and Customer subject separately, and changes only the contract to `ACKNOWLEDGED`; the application remains `CONTRACT_PENDING`. Existing readiness confirmation then operates unchanged. A regenerated version requires fresh evidence and a fresh acknowledgment.
+Exact `loan:contract:acknowledge:staff` authority and the `ACCOUNTING_OFFICER` role are both required. Loan serializes acknowledgment, requires the exact current `PREPARED` contract, validates evidence for that version, records the Staff actor and Customer subject separately, and changes only the contract to `ACKNOWLEDGED`; the application remains `CONTRACT_PENDING`. Existing readiness confirmation then operates unchanged. A regenerated version requires fresh evidence and a fresh acknowledgment.
 
 For both actions, exact request-identity replay returns the recorded outcome without another transition, audit, or action row. Reuse with different semantic content returns `409 IDEMPOTENCY_KEY_REUSED`. Evidence replacement before the action requires the current `expectedCurrentVersionId`; stale replacement returns `409 STALE_DOCUMENT_VERSION`. Missing, mismatched, or non-current evidence returns `422 ASSISTED_ACTION_EVIDENCE_REQUIRED`, `409 ASSISTED_ACTION_EVIDENCE_INVALID`, or `409 STALE_DOCUMENT_VERSION`. Wrong channel, product, target, or state returns the applicable `ASSISTED_ACTION_NOT_ALLOWED`, offer, or contract conflict. After Loan records the action, target authorization rejects further evidence replacement.
-
-Review targets the exact `documentVersionId` and supports:
-
-- `ACCEPT_DOCUMENT`
-- `WAIVE_DOCUMENT`
-- `REQUEST_REPLACEMENT`
-
-Waiver requires `document:waive` and an allowed waiver code. Replacement requires `DOCUMENT_REPLACEMENT_REQUIRED` plus a Customer-visible instruction. Only an unreviewed authoritative current version is actionable. Reviewing a non-current version returns `409 STALE_DOCUMENT_VERSION`; a new logical review against an already-reviewed current version returns `409 DOCUMENT_ALREADY_REVIEWED`. An exact replay with the original `reviewRequestId` and logical payload still returns the existing immutable decision, while reuse of that request ID with different content remains `409 IDEMPOTENCY_KEY_REUSED`.
-
-Checklist content reads require a `STAFF` principal without Customer context and exact `document:review` or `approval:decide` through the Staff route; Customer ownership and `document:read:own` continue to govern the Customer route. Content responses stream only the authorized immutable version and include attachment, `Cache-Control: no-store, private`, and `X-Content-Type-Options: nosniff`.
 
 ### 5.6 Staff correction case and proof
 
@@ -1650,7 +1693,7 @@ The response also contains `assistedCancellation`. Loan reports `available = tru
 
 `assistedCancellation.completedCancellation` is null until a Staff-assisted UCL cancellation is recorded. Completion returns `action = CUSTOMER_REQUESTED_CANCELLATION`, safe Staff `recordedBy` (`userId`, `displayName`, `email`), `recordedAt` (the durable cancellation time), and the same metadata shape as completed offer evidence, with `evidenceType = CUSTOMER_CANCELLATION_REQUEST`, `targetId` equal to the exact cancelled correction, and null declared decision/target version. Upload and command availability are false; the correction ID and consumed evidence metadata remain available. The record must match the terminal application, exact cancelled correction and time, matching cancellation transition/recorder/operation, consumed version, and safe Staff recorder. Missing or contradictory completed assisted evidence returns `409 SYSTEM_STATE_CONFLICT`. Customer-digital cancellation returns no assisted completed provenance. No document contents, Customer login identity, cancellation record ID, or request/operation ID is exposed.
 
-Loan derives document proof through `LoanDocumentChecklistPort`; it does not access Document persistence. The current actionable projection excludes creator/completer identities and keeps Customer-digital task instructions hidden. The response excludes Customer login identity, operation/request IDs, audit IDs, restricted assessment notes, and unrelated Customer data; the separate protected history may include safe Staff summaries and stored audience-specific task instructions. `404 LOAN_APPLICATION_NOT_FOUND` represents a missing application. The command endpoints remain authoritative when state changes after the read.
+Loan derives document proof through Document's authoritative evidence boundary. The current actionable projection excludes creator/completer identities and keeps Customer-digital task instructions hidden. The response excludes Customer login identity, operation/request IDs, audit IDs, restricted assessment notes, and unrelated Customer data; the separate protected history may include safe Staff summaries and stored audience-specific task instructions. `404 LOAN_APPLICATION_NOT_FOUND` represents a missing application. The command endpoints remain authoritative when state changes after the read.
 
 ### 5.7 Signed Customer action evidence reads
 
@@ -1669,7 +1712,7 @@ Both endpoints require a `STAFF` principal without Customer context. Exact `docu
 
 Metadata returns an array filtered to the caller's permitted types. Each logical document contains `documentId`, `evidenceType`, nullable `approvedOfferId`, `declaredOfferDecision`, `loanContractId`, `contractVersion`, `correctionRequestId`, nullable `currentVersion`, and immutable `versionHistory` ordered by version number then ID. Version metadata uses the same safe fields as the Staff checklist. No evidence is an ordinary empty array. Metadata returns `Cache-Control: no-store, private`; contradictory document/current-version associations return `409 SYSTEM_STATE_CONFLICT`.
 
-Content validates the exact application, evidence type, logical document, and immutable version before opening storage. Historical versions remain readable after replacement, action completion, cancellation, or contract supersession; a completed action's specialized link uses its consumed version, not the latest upload. A missing or foreign version returns `404 DOCUMENT_VERSION_NOT_FOUND`; unauthorized purposes return `403 ASSISTED_ACTION_EVIDENCE_ACCESS_DENIED`. Responses stream detected MIME type and exact byte length with attachment disposition, `Cache-Control: no-store, private`, and `X-Content-Type-Options: nosniff`.
+Content validates the exact application, evidence type, logical document, and immutable version before opening storage. Historical versions remain readable after replacement, action completion, cancellation, or contract supersession; a completed action's specialized link uses its consumed version, not the latest upload. A missing or foreign version returns `404 DOCUMENT_VERSION_NOT_FOUND`; unauthorized purposes return `403 ASSISTED_ACTION_EVIDENCE_ACCESS_DENIED`. Section 1.10 defines the exact-byte response and headers.
 
 The reads expose no storage key/path, hash, upload request ID, uploader identity, or Customer login identity. `loan:read`, `audit:read`, `admin:config`, and `approval:decide` alone grant no signed-form access. They create no upload, review, offer response, acknowledgment, cancellation, or workflow mutation authority. Customer-facing signed-form access is outside this contract. Document remains the owner of all existing files and versions; no duplicate file or new persistence history is created.
 
@@ -1691,7 +1734,7 @@ Safe offer data includes approved principal and term, pricing method, flat month
 
 A Customer-owned `STAFF_ASSISTED` offer remains readable through `GET`, with `availableActions = []` even while pending. A pending unexpired `CUSTOMER_DIGITAL` offer retains `["ACCEPT", "DECLINE"]`. This Customer read does not change the separate Staff-assisted offer-response projection or recording contract.
 
-`GET` is read-only. A missing application or offer returns its stable not-found code; a foreign-owned application returns `403 ACCESS_DENIED`. Acceptance moves an eligible Salary Advance, UCL, or Collateral Loan application to `CONTRACT_PENDING`. Decline or first discovery of pending expiry applies the terminal outcome exactly once. Salary Advance reservation release runs only for Salary Advance; UCL and Collateral Loan create no Salary Advance limit, movement, reservation, conversion, or release effect. An identical Customer response is replay-safe, while a contradictory terminal action returns a conflict.
+`GET` is read-only. A missing application or offer returns its stable not-found code; a foreign-owned application returns `403 ACCESS_DENIED`. Acceptance moves an eligible Salary Advance, UCL, or Collateral Loan application to `CONTRACT_PENDING`. Decline or first discovery of pending expiry applies the terminal outcome exactly once. Salary Advance reservation release runs only for Salary Advance; Section 4 defines the zero-exposure product boundary. An identical Customer response is replay-safe, while a contradictory terminal action returns a conflict.
 
 For Collateral Loan, the safe response preserves the submitted requested principal and term and reports `FLAT_ORIGINAL_PRINCIPAL`, `flatMonthlyInterestRate = 0.015000`, zero fee, `MONTHLY_INSTALLMENT`, and the reconciled provisional items. It contains no final repayment dates. Acceptance moves the application to `CONTRACT_PENDING`, where the common operational-contract flow in Section 6.2 begins.
 
@@ -1876,7 +1919,7 @@ GET /api/v1/staff/servicing-work?productCode=UNSECURED_CONSUMER_LOAN&accountStat
 
 The read requires an authenticated `STAFF` actor with no Customer identity and exact `loan:read` authority. It does not require `repayment:update` or an Accounting Officer role. The optional `productCode` filter accepts an executable product code. The optional `accountStatus` filter accepts only `ACTIVE` or `OVERDUE`; when omitted, both serviceable states are returned. `page` must be non-negative, `size` must be from 1 through 100, and ordering is `activatedAt DESC` followed by LoanAccount ID descending.
 
-Loan owns queue membership. The persistence query filters and pages LoanAccounts directly, joins the linked LoanApplication only for application number and product facts, and never constructs membership by paging applications or calling known-ID account reads. Each returned row requires a positive outstanding balance, a linked `DISBURSED` LoanApplication, matching application/account identity, and an `ACTIVE` or `OVERDUE` account state. Contradictory evidence returns `SYSTEM_STATE_CONFLICT`; the read never repairs state or evaluates overdue status.
+Loan owns queue membership. Membership and pagination are determined from LoanAccounts, not inferred by paging applications. Each returned row requires a positive outstanding balance, a linked `DISBURSED` LoanApplication, matching application/account identity, and an `ACTIVE` or `OVERDUE` account state. Contradictory evidence returns `SYSTEM_STATE_CONFLICT`; the read never repairs state or evaluates overdue status.
 
 Each row contains application/account IDs and numbers, product code/type, account status, activation time, originated principal, total paid/outstanding, servicing evaluation date, and optional last-payment value/recorded dates. The response excludes Customer identity, destination details, external payment reference, request UUID, Staff actor identity, product-exposure movement identifiers, encryption evidence, and audit identifiers. `SETTLED` and `CLOSED` accounts do not belong to ordinary repayment work; the application-scoped LoanAccount read may still return them when queried directly.
 
@@ -1982,7 +2025,7 @@ Rules visible to clients:
 - value date cannot precede disbursement or exceed the current business date;
 - `principalAllocated` reports contractual principal satisfied by the payment;
 - `principalReleased` reports product exposure released: it equals allocated principal for Salary Advance and is zero for UCL and Collateral Loan;
-- UCL and Collateral repayment never create or mutate Salary Advance limit or movement evidence;
+- the zero-exposure boundary in Section 4 applies to UCL and Collateral repayments;
 - exact contractual payoff produces `SETTLED`.
 
 The response includes safe transaction/account IDs, amount/value date, recording time, ordered allocations, `principalAllocated`, `principalReleased`, installment outcomes, resulting account status/balances, and `idempotentReplay`. It excludes the external reference, request UUID, actor, Customer, employee-link, limit, bank, audit, history, and internal operation evidence.
@@ -2032,7 +2075,7 @@ Content-Type: application/json
 }
 ```
 
-The caller must be an Approver with `loan:settlement:approve`. The Salary Advance, UCL, or Collateral account must be `ACTIVE` or `OVERDUE`, and `expectedSettlementAmount` must equal locked current total outstanding. Meridian records an `APPROVED_SETTLEMENT` payment transaction, applies oldest-installment and fee-interest-principal allocation, applies the product-specific exposure result, and returns a `SETTLED` result. Salary Advance releases allocated principal exactly; UCL and Collateral report zero principal released and create no Salary Advance movement. Discounted, concessionary, waiver, forgiveness, and write-off outcomes are not accepted.
+The caller must be an Approver with `loan:settlement:approve`. The Salary Advance, UCL, or Collateral account must be `ACTIVE` or `OVERDUE`, and `expectedSettlementAmount` must equal locked current total outstanding. Meridian records an `APPROVED_SETTLEMENT` payment transaction, applies oldest-installment and fee-interest-principal allocation, applies the product-specific exposure result, and returns a `SETTLED` result. Salary Advance releases allocated principal exactly; UCL and Collateral report zero principal released under Section 4. Discounted, concessionary, waiver, forgiveness, and write-off outcomes are not accepted.
 
 The response contains safe application/account/payment/schedule identifiers, amount and value date, approval time, principal allocated and released, resulting balances/status, and `idempotentReplay`. It excludes the request UUID, canonical external payment reference, actor and Customer identities, settlement evidence identity, limit/movement identities, audit/history identities, and internal reconciliation evidence.
 
@@ -2068,18 +2111,41 @@ The response contains only application/account identity, `CLOSED`, closure time,
 
 ## 9. Postman Collection
 
-Collection:
+[Meridian-Platform.postman_collection.json](Meridian-Platform.postman_collection.json) contains representative executable requests and assertions for authentication, all three products, Staff review/approval, correction and document evidence, OCR, contract/disbursement, servicing, ownership/authorization, and replay/negative behavior. It is a selectable scenario library, not an unattended whole-collection run: folder display order does not establish prerequisites, and terminal/negative branches need separate fixtures.
 
-```text
-docs/api/Meridian-Platform.postman_collection.json
-```
+### 9.1 Fresh-install identities
 
-It authenticates role-specific demo actors, stores Bearer tokens, exercises refresh and current-session logout through the cookie jar, and covers the catalogue above, including protected Loan Product and Internal User administration, advisory Salary Advance readiness, durable LoanApplication status recovery, returned-correction cancellation and exact replay, Customer, Staff, mixed-correction, document, intake OCR start/status/replay/stale-version and purpose-limited review behavior, offer, contract, disbursement, LoanAccount, repayment, Administrative Full-Balance Settlement, administrative closure, and negative-security flows. Internal User scenarios cover discovery, predefined roles, reversible status and role targets, safe no-ops, stale-token rejection, missing/nonassignable targets, exact permission denial, and restoration of seeded status, role, access-token, and cookie state. UCL scenarios include all three verification outcomes, correction and re-verification, cancellation, outstanding-debt rejection, and product-generic servicing through closure. The Collateral folder covers prepared ownership evidence, exact-cycle manual verification, Loan Officer recommendation, all four Approver actions, exact offer assertions, Customer acceptance/decline, protected contract preparation, acknowledgment, readiness, destination reveal, activation replay, final schedule reads, ownership concealment, partial repayment and history, Administrative Full-Balance Settlement, and closure.
+Flyway V73 disables the five historical V13 Users and retires their password, refresh, setup, and verification authority on clean install and upgrade. Business fixtures and predefined roles can remain, but no usable Customer or Staff login is supplied. Do not reactivate those Users or reuse their historical password. [MER-DEP-001](../deployment/MER-DEP-001-identity-bootstrap-and-demo-boundary.md) owns bootstrap configuration and refusal/recovery safeguards; the [README](../../README.md#run-meridian-locally) owns local startup.
 
-The Staff LoanAccount servicing folder also checks current Customer context after activation: Accounting and Loan Officer receive the exact contact fields, Approver receives identity with a null phone, and Customer access is denied. These reads use existing role tokens and the activated `loanApplicationId`; assertions do not persist Customer field values.
+| Scenario actor | Required setup before login |
+|---|---|
+| Customer | Register and confirm the newest verification email using Sections 3.1–3.3, or use a separately registered, verified fictional Customer. Copy the confirmed `registrationEmail` and its chosen password to the private `customerEmail` / `customerPassword` inputs. |
+| First Back-Office Admin | Operator performs the opt-in startup bootstrap, receives its Staff setup email, chooses a password through Section 3.5, then disables bootstrap before normal restart. There is no bootstrap HTTP request, configured password, or returned setup secret. |
+| Loan Officer | The administrator creates a normal internal User with predefined `LOAN_OFFICER`; that User consumes the emailed setup link and chooses a password. |
+| Approver | Provision a different internal User with predefined `APPROVER` and complete emailed password setup; keep it distinct from the recommending Loan Officer. |
+| Accounting | Provision a normal internal User with predefined `ACCOUNTING_OFFICER` and complete emailed password setup. |
+| Back-Office scenarios | Use the bootstrapped administrator or another normally provisioned `BACK_OFFICE_ADMIN`. Internal User status/role tests require a disposable, initially active Loan Officer with `LOAN_OFFICER` and without `APPROVER`, whose grants can safely be restored. |
+| Foreign-owner negatives | Independently register and verify a second Customer, log in separately, and supply its transient `otherCustomerAccessToken`. No second Customer is created automatically by the Auth folder. |
 
-The optional protected Identity Reference folder requires `identityReferenceRevealScenarioEnabled=true` and `identityReferenceRevealLoanApplicationId` for an existing application whose fictional demo Customer has complete profile reference `IDREF-MER-001`. It authenticates the seeded roles, asserts the ordinary case mask and raw-value absence, explicitly reveals once with private-cache headers, and checks reveal denials. The generic Staff denial additionally accepts a prepared unrelated Staff token in `identityRevealUnrelatedStaffAccessToken`. Scripts neither save nor log the returned reference.
+Populate the collection's blank actor email/password inputs only in private local runtime values (an active Postman environment may override the blanks). Each actor has a separate password variable. Registration and reset password inputs are also blank; choose 12–72 characters. If the optional Password Reset scenario changes the main Customer's password, update private `customerPassword` before its next login. Scripts capture access tokens in local run variables; never export or commit populated credentials, tokens, cookie jars, or email links.
 
-Complex correction scenarios require prepared application, review-cycle, checklist, and version variables. The optional cancellation folder requires `returnedCancellationScenarioEnabled=true` and a separate Customer-owned `cancellationLoanApplicationId` in `RETURNED_FOR_REVISION`; it confirms the command, exact replay, and terminal application GET without exposing internal evidence IDs. Seed fixtures and scenario-specific IDs belong to the collection or its environment, not this API contract.
+Local Compose captures emails in Mailpit at `http://localhost:8025`. Confirmation/setup tokens are obtained manually from the newest email, never returned by an API or automatically discovered by this collection. Registration resend invalidates its previous token. Staff setup uses the existing password-reset confirmation contract; provisioning failure to deliver email leaves the User committed, and Section 3.11 defines resend. First-admin delivery failure requires bootstrap disabled and ordinary password recovery, not another bootstrap. Outside local development, use the privately delivered email rather than Mailpit.
+
+### 9.2 Run order and data prerequisites
+
+1. Complete actor setup above, then run Auth to capture role-specific Bearer tokens. Its refresh/logout requests must immediately follow Customer login before another actor replaces the shared cookie. A single Postman cookie jar holds the latest login session; access-token variables remain role-specific. Re-login the intended actor before testing its cookie-based session later.
+2. Complete the Customer profile and add/make-primary an active bank account. The deactivate request is an independent aggregate/negative example; do not run it as preparation for lending. Run digital identity submission, inspect exact evidence as Loan Officer, and deliberately enter the matching fictional reference in VERIFY and its exact replay. Rejection/replacement and assisted binding are alternative prepared branches, not subsequent steps for that verified attempt.
+3. For Salary Advance, use an active Partner Company and import a valid complete roster for the **current UTC month**, matching that Customer's fictional profile reference and active employee code, through Section 3.16. Historical seed batches are dated and do not establish current eligibility. Set `partnerCompanyId` and employee variables to the prepared roster, then verify employment. The Partner Admin sample intentionally stores a `FAILED` batch containing an invalid row; its `201` response is not a usable roster. Inactive/missing-employee examples may create review state; isolate them or reconcile it before the positive lending path.
+4. Submit the chosen product. Salary Advance continues through review/recommendation/independent approval. UCL and Collateral require their returned checklist evidence uploaded and accepted before manual verification, followed by review and approval. Keep exact returned version/cycle/recommendation identifiers. Sections 4–8 define the subsequent offer, contract, disbursement, repayment, settlement, and closure calls.
+5. For Staff-assisted UCL/Collateral, select or create the Customer, upload the matching signed paper application and identity evidence, bind and manually verify identity before conversion, then reconcile the resulting case/application and upload its initial application evidence. An already verified Customer reuses that verification. Choose fictional local files; OCR start/review is optional advisory work and never bypasses authoritative Customer or Loan commands. Deployed portfolio OCR is disabled.
+6. Run other branches only with their named prepared fixture variables and opt-in flags. Correction, failed verification, decline/expiry, cancellation, stale versions, overdue, settlement, and closure cannot all share one happy-path application. Overdue reads require a fixture already evaluated by the internal scheduler; no public evaluator endpoint exists. Terminal outcomes and blocking-application/outstanding-debt rules make full happy paths duplicate-sensitive; use fresh eligible fictional Customers or deliberately prepared local fixtures for repeat runs.
+
+### 9.3 Optional protected scenarios
+
+The Identity Reference reveal folder requires `identityReferenceRevealScenarioEnabled=true` and an existing `identityReferenceRevealLoanApplicationId` whose Customer has the complete fictional reference expected by its assertions (`IDREF-MER-001`). It uses the normally provisioned role logins and optionally `identityRevealUnrelatedStaffAccessToken`. Scripts neither save nor log the revealed reference. The ordinary case mask and explicit reveal denials remain separate assertions.
+
+Returned-correction cancellation requires `returnedCancellationScenarioEnabled=true` and a separate owned `cancellationLoanApplicationId` in `RETURNED_FOR_REVISION`; it checks exact replay and the terminal GET. Signed-action and provenance reads require their exact current or consumed historical evidence variables. A completed action must never substitute a newer upload for its consumed version. Staff servicing-context assertions check Accounting/Loan Officer contact access, Approver identity-only access, and Customer denial without retaining the returned contact fields.
+
+Scenario-specific IDs and switches belong to the collection/private environment. Endpoint contracts, permissions, concealment, replay, and recovery remain defined by this guide; fixture preparation does not grant authority or alter the API.
 
 ---

@@ -2,7 +2,7 @@
 
 ## Purpose and Authority
 
-This document defines Meridian's API error identifiers, HTTP statuses, default messages, and caller-facing resolutions for `meridian-platform`.
+This document defines Meridian's error vocabulary, representative HTTP mappings and safe messages, and caller-facing resolutions for `meridian-platform`. [MER-API-001](../api/MER-API-001-endpoints-and-postman-scenarios.md) owns endpoint-specific authorization, concealment, request/response, and recovery contracts.
 
 Checked-in exception construction, global error mapping, controllers, and executable tests remain authoritative for runtime behavior. A catalog entry defines the intended error contract but does not by itself establish that an endpoint or workflow is available. Implementation status belongs in the project roadmap and follow-up register.
 
@@ -12,10 +12,29 @@ Reserved codes are listed separately. They do not become part of an executable A
 
 ## 1. Catalog Rules
 
-- Each error code has one canonical HTTP status and default message.
+- An identifier names a failure meaning; the HTTP status comes from the exception/handler used by the operation. Tables show normal or representative mappings and messages, not a universal status/message guarantee.
+- Clients must use the endpoint-specific contract, HTTP status, and `errorCode`, and must not parse message text. Messages may differ by executable context.
 - The resolution states the caller's next action; it must not expose sensitive evidence or internal implementation details.
-- Context-specific details may narrow a resolution, but they must not change the code's meaning.
+- Operation-specific conditions and mappings must remain explicit when one identifier is reused. A shared identifier does not make permission denial, concealed absence, and state conflict interchangeable.
 - Clients must not infer endpoint availability from this catalog alone.
+
+---
+
+### 1.1 HTTP mapping and known exceptions
+
+The global handler maps `AuthenticationFailedException` to `401`, `AuthorizationException` to `403`, `EntityNotFoundException` to `404`, `BusinessStateConflictException` to `409`, `BusinessRuleViolationException` to `422`, and `ServiceUnavailableException` to `503`. Malformed JSON, type/Bean Validation, constraint, and argument failures use `400 VALIDATION_FAILED`. The security entry point and JWT filter retain their separate authentication codes; method/route permission denial uses `403 ACCESS_DENIED`.
+
+| Identifier | Executable distinction | Caller resolution |
+|---|---|---|
+| `DOCUMENT_CHECKLIST_NOT_FOUND` | `404` on checklist/content/upload/review lookup, including own-read concealment; `409` when workflow processing-readiness validation lacks its required checklist. | Re-read the authorized checklist/case; do not treat a readiness conflict as proof that another Customer's resource exists. |
+| `PRIMARY_BANK_ACCOUNT_REQUIRED` | `422` in origination/correction readiness; `409` when contract destination capture cannot find a primary active account. | Establish an eligible primary account and refresh the relevant application or contract. |
+| `SALARY_ADVANCE_LIMIT_UNAVAILABLE` | `422` for an unusable reservation limit; `409` for missing authoritative limit during correction resubmission. | Refresh eligibility/limit context; reconcile missing evidence rather than blindly retrying. |
+| `SALARY_ADVANCE_RESERVATION_INVALID` | `409` in workflow reconciliation; `422` in the domain reservation-conversion guard. | Reconcile the exact reservation before further financial commands. |
+| `VALIDATION_FAILED` | `400` in transport handlers; `422` in the internal Identity Reference correction validation guard, if reached (HTTP DTO validation normally rejects first). | Correct input under the endpoint contract; do not assume one global status from this name. |
+| `INVALID_DOCUMENT_UPLOAD` | `413` for multipart transport limits; `422` for invalid file content, size, MIME/signature, or filename. | Correct the file/request; no usable version is created. |
+| `MAKER_CHECKER_VIOLATION` versus `STAFF_CORRECTION_MAKER_CHECKER_VIOLATION` | Approval separation is `422`; Staff-task separation is `403` under a distinct identifier. | Use the different authorized actor required by that operation. |
+
+Messages also vary by context: `SYSTEM_STATE_CONFLICT`, `IDEMPOTENCY_KEY_REUSED`, and `DOCUMENT_CHECKLIST_NOT_FOUND` do not each have one runtime string. These differences must not expose raw identity, bank, document-storage, provider, or credential evidence.
 
 ---
 
@@ -24,16 +43,16 @@ Reserved codes are listed separately. They do not become part of an executable A
 | HTTP Status | Error Code | Message | Resolution |
 |---|---|---|---|
 | 401 | `AUTHENTICATION_REQUIRED` | Authentication required | Provide a valid Bearer token in the Authorization header |
-| 401 | `INVALID_CREDENTIALS` | Invalid credentials | Check the username and password |
-| 401 | `TOKEN_EXPIRED` | Token expired | Log in again to obtain a new access token |
-| 401 | `INVALID_TOKEN` | Invalid token | Log in again to obtain a valid access token |
+| 401 | `INVALID_CREDENTIALS` | Invalid credentials. | Check email/password; unknown email, wrong password, mismatched optional `expectedUserType`, and active temporary lock share this response |
+| 401 | `TOKEN_EXPIRED` | Token expired. | Refresh the session or log in again; do not replay an uncertain business command automatically |
+| 401 | `INVALID_TOKEN` | Invalid token. | Replace a malformed, revoked, or authorization-stale access token through the supported refresh/login flow |
 | 401 | `INVALID_REFRESH_TOKEN` | Refresh authentication failed | Log in again to create a new refresh-token family |
 | 401 | `EMAIL_VERIFICATION_REQUIRED` | Email verification required. | Confirm the Customer email, then log in again |
 | 401 | `INVALID_EMAIL_VERIFICATION_TOKEN` | Email verification token is invalid or expired. | Request a replacement verification email and submit its token |
 | 401 | `INVALID_PASSWORD_RESET_TOKEN` | Password reset token is invalid or expired. | Request a replacement password-reset email and submit its token with a new password |
 | 409 | `EMAIL_ALREADY_REGISTERED` | An account with this email already exists. | Log in or use the account-recovery flow instead of registering again |
 | 409 | `CUSTOMER_DIGITAL_ACCESS_ALREADY_ENABLED` | Digital access is already enabled for this Customer. | Read the Customer's digital-access status before another enable request |
-| 403 | `ACCOUNT_SUSPENDED` | Account suspended | Contact support to review the account status |
+| 401 | `ACCOUNT_SUSPENDED` | Account is not active. | Use an active account; suspension/disablement is separate from temporary password-login lockout |
 | 403 | `ACCESS_DENIED` | Access denied | Use a principal whose role includes the required permission |
 | 403 | `CUSTOMER_CONTEXT_REQUIRED` | Customer context required | Use an authenticated customer-linked token for a customer-owned flow |
 | 403 | `SALARY_ADVANCE_READINESS_ACCESS_DENIED` | Salary Advance readiness access denied | Use an authenticated Customer principal with `loan:submit` |
@@ -43,6 +62,10 @@ Reserved codes are listed separately. They do not become part of an executable A
 | 404 | `INTERNAL_USER_NOT_FOUND` | Internal User was not found. | Refresh the Staff User list and use an existing internal User ID |
 | 404 | `INTERNAL_ROLE_NOT_FOUND` | Internal role was not found. | Refresh assignable roles and use a predefined non-Customer role code |
 | 429 | `RATE_LIMIT_EXCEEDED` | Too many requests. | Retry after the number of seconds stated by the `Retry-After` response header |
+
+---
+
+Missing or unsupported Bearer authentication on a protected route returns `AUTHENTICATION_REQUIRED`; a supplied invalid/expired Bearer token has its JWT-specific code even on public routes. Refresh and logout bypass the JWT filter. Missing/invalid refresh authority uses `INVALID_REFRESH_TOKEN`; logout returns `204` even for absent or invalid credentials. Purpose-specific actor checks retain their own `403` identifiers. Customer ownership is concealed only by the endpoint families that define concealment; approved-offer foreign ownership, for example, uses `403 ACCESS_DENIED`.
 
 ---
 
@@ -57,8 +80,8 @@ Reserved codes are listed separately. They do not become part of an executable A
 | 409 | `IDENTITY_REFERENCE_ALREADY_IN_USE` | Identity reference already in use | Use an identity reference that does not belong to another Customer |
 | 422 | `CUSTOMER_DIGITAL_ACCESS_OWNERSHIP_NOT_VERIFIED` | Customer identity could not be verified for digital access. | Recheck the Customer's presented identity reference; do not enable access until it matches the selected Customer |
 | 422 | `PROFILE_INCOMPLETE` | Customer profile incomplete | Complete the required identity, contact, residential, employment, and consent fields |
-| 422 | `PRIMARY_BANK_ACCOUNT_REQUIRED` | Primary bank account required | Add or select a primary active bank account |
-| 409 | `BANK_ACCOUNT_UPDATE_NOT_ALLOWED` | Bank account update not allowed | Refresh the application state; bank-account changes are blocked in this status |
+| 422 / 409 | `PRIMARY_BANK_ACCOUNT_REQUIRED` | Primary bank account required | Add or select a primary active bank account |
+| 409 | `BANK_ACCOUNT_UPDATE_NOT_ALLOWED` | Bank account update not allowed | An inactive account cannot become primary; select another active primary before deactivating a primary when other active accounts remain. This is not a loan-status mutation policy |
 | 404 | `BANK_ACCOUNT_NOT_FOUND` | Bank account not found | Verify that the bank account belongs to the authenticated Customer |
 | 409 | `DUPLICATE_BANK_ACCOUNT` | Duplicate bank account | Use the existing active bank account |
 
@@ -86,6 +109,13 @@ Reserved codes are listed separately. They do not become part of an executable A
 | 409 | `CUSTOMER_IDENTITY_REFERENCE_UNAVAILABLE` | The stored Customer Identity Reference is unavailable. | Clear the temporary value; reconcile the Customer profile through its authorized workflow or escalate for protected-evidence repair. Do not infer cryptographic details or retry automatically. |
 
 Application lookup retains `404 LOAN_APPLICATION_NOT_FOUND`; refresh the exact case rather than choosing a Customer ID. Invalid path UUIDs use the established `400` validation contract. Unknown network/server/schema results require successful case revalidation before another explicit reveal. Audit persistence failure cannot produce a successful reveal response.
+
+### 3.3 Staff Customer intake
+
+| HTTP | Error code | Meaning | Caller action |
+|---|---|---|---|
+| 403 | `STAFF_CUSTOMER_INTAKE_ACCESS_DENIED` | Invalid Staff intake actor or authority | Use Staff without Customer context and the exact intake capability. |
+| 422 | `INVALID_CUSTOMER_SEARCH` | Not exactly one supported search field | Supply only exact Customer number or Identity Reference in the body. |
 
 ## 4. Loan Product and Application
 
@@ -122,13 +152,27 @@ Application lookup retains `404 LOAN_APPLICATION_NOT_FOUND`; refresh the exact c
 
 ---
 
+### 4.1 Product and assisted-origination guards
+
+| HTTP | Error code | Meaning | Caller action |
+|---|---|---|---|
+| 404 | `PRODUCT_CODE_NOT_FOUND` | Unknown product code | Use an executable catalogue code. |
+| 403 | `ASSISTED_ORIGINATION_ACCESS_DENIED` | Invalid Staff origination actor/authority | Use Staff without Customer context and `loan:originate:staff`. |
+| 404 | `ASSISTED_ORIGINATION_CASE_NOT_FOUND` | Missing intake case | Read the exact case identity. |
+| 409 | `ASSISTED_ORIGINATION_CASE_NOT_OPEN` | Intake is terminal | Reconcile its completed application or abandoned state. |
+| 409 | `ASSISTED_ORIGINATION_CUSTOMER_REQUIRED` | Case has no selected Customer | Associate an active Customer before verification/conversion. |
+| 409 | `ASSISTED_ORIGINATION_PRODUCT_MISMATCH` | Conversion does not match intake product | Use the matching UCL or Collateral conversion route. |
+| 422 | `ASSISTED_ORIGINATION_PRODUCT_NOT_ALLOWED` | Product forbids Staff-assisted intake | Salary Advance uses Customer-digital origination. |
+| 422 | `UCL_PAPER_APPLICATION_REQUIRED`, `COLLATERAL_PAPER_APPLICATION_REQUIRED` | Current matching signed paper form absent | Upload the correct intake evidence before conversion. |
+| 403 | `CUSTOMER_DIRECT_ACTION_NOT_ALLOWED` | Customer-direct mutation against assisted application | Use the dedicated evidenced Staff-mediated action, when supported. |
+| 422 | `INVALID_UCL_VERIFICATION_OUTCOME`, `INVALID_COLLATERAL_VERIFICATION_OUTCOME` | Unsupported manual outcome or missing expected Collateral cycle | Supply the supported outcome and required cycle fields. |
+
 ## 5. Partner Management — Salary Advance Eligibility
 
 | HTTP Status | Error Code | Message | Resolution |
 |---|---|---|---|
 | 404 | `PARTNER_COMPANY_NOT_FOUND` | Partner company not found | Verify the Partner Company ID |
 | 422 | `PARTNER_COMPANY_INACTIVE` | Partner company inactive | Use an active Partner Company |
-| 422 | `EMPLOYEE_INACTIVE` | Partner employee inactive | Use an active Partner Employee record |
 | 422 | `EMPLOYEE_NOT_VERIFIED` | Customer employee status not verified | Complete Salary Advance employee verification before creating an application |
 | 422 | `SALARY_ADVANCE_ELIGIBILITY_DATA_STALE` | Salary Advance eligibility data stale | Refresh the Partner Employee data before eligibility or limit use |
 | 409 | `PARTNER_COMPANY_CODE_ALREADY_EXISTS` | Partner company code is already in use | Use a different stable company code or open the existing company |
@@ -136,14 +180,26 @@ Application lookup retains `404 LOAN_APPLICATION_NOT_FOUND`; refresh the exact c
 
 ---
 
+### 5.1 Import and eligibility-review errors
+
+| HTTP | Error code | Meaning | Caller action |
+|---|---|---|---|
+| 422 | `PARTNER_EMPLOYEE_ROWS_REQUIRED` | Missing roster rows | Submit a complete nonempty roster. |
+| 403 | `PARTNER_ELIGIBILITY_REVIEW_ACCESS_DENIED` | Invalid review actor or authority | Use exact Partner read/manage authority for the operation. |
+| 404 | `PARTNER_ELIGIBILITY_REVIEW_NOT_FOUND` | Missing review | Refresh the shared queue/detail. |
+| 409 | `PARTNER_ELIGIBILITY_REVIEW_ALREADY_RESOLVED` | Conflicting terminal decision | Read the recorded result; only exact terminal replay succeeds. |
+| 409 | `PARTNER_ELIGIBILITY_REVIEW_STALE` | Prior-month or replaced source evidence | Customer must verify against current evidence; do not retarget historical source. |
+| 422 | `PARTNER_ELIGIBILITY_EMPLOYEE_INVALID` | Selected employee is not valid current matching evidence | Select one exact eligible employee from the authoritative batch. |
+| 422 | `PARTNER_EMPLOYEE_INACTIVE` | Selected review employee is inactive | Use current active evidence; automatic matching may instead return `MATCHED_INACTIVE` as an outcome. |
+
 ## 6. Loan Core — Salary Advance Limit and Exposure
 
 | HTTP Status | Error Code | Message | Resolution |
 |---|---|---|---|
-| 422 | `SALARY_ADVANCE_LIMIT_UNAVAILABLE` | Salary Advance limit unavailable | Verify employee eligibility and refresh the limit |
+| 422 / 409 | `SALARY_ADVANCE_LIMIT_UNAVAILABLE` | Salary Advance limit unavailable | Verify employee eligibility and refresh the limit |
 | 422 | `INSUFFICIENT_AVAILABLE_LIMIT` | Insufficient available Salary Advance limit | Reduce the requested amount to the available limit |
-| 409 | `SALARY_ADVANCE_RESERVATION_INVALID` | Salary Advance reservation invalid | Reconcile the reservation before correction resubmission, readiness confirmation, or disbursement |
-| 409 | `SALARY_ADVANCE_RESERVATION_RELEASED` | Salary Advance reservation released | Do not continue readiness or activation after the reservation has been released |
+| 409 / 422 | `SALARY_ADVANCE_RESERVATION_INVALID` | Salary Advance reservation invalid | Reconcile the reservation before correction resubmission, readiness confirmation, or disbursement |
+| 422 | `SALARY_ADVANCE_RESERVATION_RELEASED` | Salary Advance reservation released | Do not continue readiness or activation after the reservation has been released |
 
 ---
 
@@ -151,9 +207,8 @@ Application lookup retains `404 LOAN_APPLICATION_NOT_FOUND`; refresh the exact c
 
 | HTTP Status | Error Code | Message | Resolution |
 |---|---|---|---|
-| 409 | `MAKER_CHECKER_VIOLATION` | Maker-checker violation | Use a different authorized user for the final Approver decision |
+| 422 | `MAKER_CHECKER_VIOLATION` | Approver must be different from the Loan Officer who submitted the recommendation. | Use a different authorized user for the final Approver decision |
 | 409 | `STALE_REVIEW_RECOMMENDATION` | Expected recommendation is stale | Refresh the Staff decision evidence and review the latest applicable recommendation |
-| 422 | `REVIEW_RECOMMENDATION_REQUIRED` | Review recommendation required | Record the Loan Officer recommendation before the final decision |
 
 ---
 
@@ -168,7 +223,7 @@ Application lookup retains `404 LOAN_APPLICATION_NOT_FOUND`; refresh the exact c
 | 403 | `CORRECTION_ACCESS_DENIED` | Customer correction access denied | Use the authenticated owner of the LoanApplication |
 | 403 | `STAFF_CORRECTION_ACCESS_DENIED` | Staff correction access denied | Use an authorized Staff actor assigned to the task |
 | 403 | `STAFF_CORRECTION_MAKER_CHECKER_VIOLATION` | Staff correction maker-checker violation | Use a different authorized Staff actor to complete the task |
-| 403 | `CORRECTION_RESUBMISSION_DENIED` | Correction resubmission denied | Customer-only corrections require the owner; Staff or mixed corrections require authorized Staff |
+| 403 | `CORRECTION_RESUBMISSION_DENIED` | Correction resubmission denied | Customer-digital Customer-only corrections require the owner; Staff/mixed corrections and eligible Staff-assisted Customer-only corrections use authorized Staff |
 | 404 | `CORRECTION_REQUEST_NOT_FOUND` | Correction request not found | Refresh the LoanApplication correction state |
 | 404 | `CORRECTION_TASK_NOT_FOUND` | Correction task not found | Refresh the correction task queue |
 | 409 | `CORRECTION_REQUEST_CONFLICT` | Correction request conflict | Refresh the application; resubmission requires an active correction request |
@@ -187,10 +242,9 @@ Application lookup retains `404 LOAN_APPLICATION_NOT_FOUND`; refresh the exact c
 | HTTP Status | Error Code | Message | Resolution |
 |---|---|---|---|
 | 404 | `DOCUMENT_NOT_FOUND` | Document not found | Verify the document ID |
-| 409 | `DOCUMENT_REPLACEMENT_REQUIRED` | Document replacement required | Replace the rejected or expired document |
 | 503 | `DOCUMENT_STORAGE_UNAVAILABLE` | Document storage unavailable | Retry later or contact support if the failure persists |
 | 403 | `DOCUMENT_ACCESS_DENIED` | Document access denied | Use the exact Customer owner or an authorized Staff actor |
-| 403 | `DOCUMENT_UPLOAD_DENIED` | Document upload not authorized | Upload through the open correction task for this checklist item |
+| 403 | `DOCUMENT_UPLOAD_DENIED` | Document upload not authorized | Use the exact Customer-own, initial assisted-upload, or task-scoped Staff upload contract and required authority |
 | 409 | `STALE_DOCUMENT_VERSION` | Document version is stale | Refresh the current immutable version before replacing or reviewing |
 | 409 | `DOCUMENT_ALREADY_REVIEWED` | Document version already reviewed. | Refresh the current document evidence. Only an unreviewed current version may receive a new review decision. |
 | 409 | `DOCUMENT_UPLOAD_REQUIRED` | Current upload required | Upload a current document version before manual review |
@@ -198,16 +252,58 @@ Application lookup retains `404 LOAN_APPLICATION_NOT_FOUND`; refresh the exact c
 | 422 | `DOCUMENT_WAIVER_REASON_REQUIRED` | Controlled waiver reason required | Supply an approved waiver reason code |
 | 409 | `CORRECTION_TASK_PROOF_MISSING` | Correction proof missing | Upload the required new version before completing the task |
 | 403 | `ASSISTED_ACTION_EVIDENCE_ACCESS_DENIED` | Assisted-action evidence access denied | Use exact `document:upload:assisted-action` authority and the action-specific Staff role |
-| 422 | `ASSISTED_ACTION_EVIDENCE_REQUIRED` | Current signed assisted-action evidence required | Upload the signed form for the exact current offer or contract version |
+| 422 | `ASSISTED_ACTION_EVIDENCE_REQUIRED` | Current signed assisted-action evidence required | Upload the signed form for the exact current offer, contract version, or active cancellation correction |
 | 409 | `ASSISTED_ACTION_EVIDENCE_INVALID` | Assisted-action evidence does not match the business target | Refresh and use the current evidence version bound to the exact target and decision |
 
 ---
+
+`DOCUMENT_REPLACEMENT_REQUIRED` is the active controlled correction/replacement **reason code**, not an emitted `409` error identifier. The actionable replacement and current-version rules are defined in MER-API-001 Section 5.5.
+
+### 9.1 Upload, version, and intake failures
+
+| HTTP | Error code | Meaning | Caller action |
+|---|---|---|---|
+| 413 / 422 | `INVALID_DOCUMENT_UPLOAD` | Transport limit or content validation failure | Follow MER-API-001 Section 1.9; status depends on the failure path. |
+| 422 | `UNSAFE_DOCUMENT_UPLOAD` | Mandatory safety scan rejected bytes | Provide safe fictional evidence; no usable version was created. |
+| 503 | `DOCUMENT_SCAN_UNAVAILABLE` | Scanner unavailable, timed out, or invalid response | Wait for scanning recovery; do not bypass scanning. |
+| 404 / 409 | `DOCUMENT_CHECKLIST_NOT_FOUND` | Missing or concealed checklist; workflow conflict variant | Use Section 1.1 and the endpoint-specific contract. |
+| 404 | `DOCUMENT_CHECKLIST_ITEM_NOT_FOUND` | Missing checklist item | Refresh the exact checklist. |
+| 404 | `DOCUMENT_VERSION_NOT_FOUND` | Missing or unrelated immutable version | Use the exact authorized version; never fall back to current. |
+| 409 | `DOCUMENT_CHECKLIST_ITEM_EXISTS` | Attempt to add an existing item | Use the supported replacement path. |
+| 409 | `DOCUMENT_CHECKLIST_ITEM_MISMATCH` | Item does not belong to the application | Refresh the exact application checklist. |
+| 403 | `DOCUMENT_REVIEW_DENIED` | Reviewer/authentication or target association invalid | Use the authenticated authorized reviewer and exact item. |
+| 422 | `DOCUMENT_WAIVER_REASON_NOT_ALLOWED` | Waiver reason supplied to another outcome | Supply waiver reasons only with a waiver. |
+| 422 | `INVALID_DOCUMENT_REVIEW_NOTES` | Invalid restricted note | Correct the permitted note shape/length; do not disclose it elsewhere. |
+| 403 | `INTAKE_EVIDENCE_ACCESS_DENIED` | Invalid Staff intake evidence actor/authority | Use exact intake and Loan origination authority. |
+| 404 | `INTAKE_EVIDENCE_NOT_FOUND` | Missing case/type document | Upload/read the matching case evidence. |
+| 404 | `INTAKE_EVIDENCE_VERSION_NOT_FOUND` | Missing or unrelated intake version | Use the exact case/type/version relationship. |
+| 422 | `INTAKE_EVIDENCE_PRODUCT_MISMATCH` | Paper evidence type incompatible with product | Use the matching intake product/form. |
+
+### 9.2 OCR start, status, and final review
+
+| HTTP | Error code | Meaning | Caller action |
+|---|---|---|---|
+| 403 | `INTAKE_OCR_ACCESS_DENIED`, `INTAKE_OCR_REVIEW_ACCESS_DENIED` | Invalid Staff OCR actor/authority | Use Staff without Customer context, exact intake permission, and authorized case access. |
+| 404 | `OCR_JOB_NOT_FOUND` | Authorized immutable intake version has no job | Explicitly start OCR for the current version when desired; historical status does not create a job. |
+| 409 | `OCR_REQUIRES_CURRENT_INTAKE_VERSION` | Start targets a replaced version | Read current metadata before starting. |
+| 404 | `OCR_RESULT_NOT_FOUND` | Missing job/result for review | Read OCR status; review requires persisted completed output. |
+| 409 | `OCR_RESULT_NOT_COMPLETED` | Job is not completed | Wait or continue manual intake; OCR is advisory. |
+| 409 | `OCR_REVIEW_REQUIRES_CURRENT_INTAKE_VERSION` | Finalization targets a replaced version | Review the current version. |
+| 409 | `OCR_RESULT_CHANGED` | Expected result differs | Refresh the exact review projection. |
+| 409 | `OCR_RESULT_ALREADY_REVIEWED` | Conflicting replay of immutable final review | Read the saved review; exact replay remains successful. |
+| 422 | `OCR_REVIEW_FIELDS_REQUIRED` | Reviewed field map absent | Supply a map; an empty map is allowed. |
+| 422 | `OCR_REVIEW_FIELD_NOT_ALLOWED` | Field outside evidence vocabulary | Use only allowlisted advisory fields, never consent or decision fields. |
+| 422 | `OCR_REVIEW_FIELD_INVALID` | Invalid field value | Correct generic value bounds; owning commands still validate business facts. |
+| 422 | `OCR_REVIEW_PAYLOAD_TOO_LARGE` | Reviewed map exceeds payload bound | Reduce the reviewed field payload. |
+| 503 | `OCR_REVIEW_UNAVAILABLE` | Protected review data cannot be read/written safely | Retry after recovery; do not expose cipher/provider details. |
+
+OCR `FAILED` job state and controlled `failureCategory` are status projection data, not evidence that reserved `OCR_JOB_FAILED` or `OCR_SERVICE_UNAVAILABLE` is emitted as an HTTP error. MER-API-001 Section 3.19 defines the advisory boundary; the deployed portfolio disables the worker.
 
 ## 10. Loan Core — Offer, Contract, Disbursement, and Servicing
 
 | HTTP Status | Error Code | Message | Resolution |
 |---|---|---|---|
-| 409 | `OFFER_EXPIRED` | Offer expired | Request or generate a new offer under the product rules |
+| 409 | `OFFER_EXPIRED` | Offer expired | Refresh the offer/application; an expired offer cannot be accepted, and no caller-controlled offer-regeneration endpoint is defined |
 | 409 | `OFFER_ACTION_CONFLICT` | Offer action conflict | Refresh the offer and do not submit contradictory terminal actions |
 | 404 | `APPROVED_OFFER_NOT_FOUND` | Approved offer not found | Verify that the application has an approved offer for the authenticated Customer |
 | 404 | `CURRENT_CONTRACT_MISSING` | Current operational contract not found | Prepare the first operational contract for the accepted offer |
@@ -252,9 +348,23 @@ Application lookup retains `404 LOAN_APPLICATION_NOT_FOUND`; refresh the exact c
 
 ---
 
+### 10.1 Staff operational access and evidence
+
+| HTTP | Error code | Meaning | Caller action |
+|---|---|---|---|
+| 403 | `ACCOUNTING_ROLE_REQUIRED` | Accounting business role missing for contract/disbursement work | Use the exact Accounting role and operation capability. |
+| 403 | `ACCOUNTING_OFFICER_ROLE_REQUIRED` | Accounting role missing for closure | Use Accounting Officer plus `loan:account:close`. |
+| 403 | `APPROVER_ROLE_REQUIRED` | Approver role missing for settlement | Use Approver plus `loan:settlement:approve`. |
+| 403 | `STAFF_CONTEXT_REQUIRED` | Repayment lacks a Staff-shaped actor | Use Staff without Customer association and repayment authority. |
+| 403 | `LOAN_CONTRACT_WORK_ACCESS_DENIED`, `LOAN_DISBURSEMENT_WORK_ACCESS_DENIED`, `LOAN_SERVICING_WORK_ACCESS_DENIED`, `LOAN_SETTLEMENT_WORK_ACCESS_DENIED`, `LOAN_CLOSURE_WORK_ACCESS_DENIED` | Staff workspace actor/permission denied | Use the purpose-specific authority from MER-API-001 Sections 6.5 and 7.1–7.6. |
+| 403 | `LOAN_SERVICING_PROVENANCE_ACCESS_DENIED`, `LOAN_SETTLEMENT_EVIDENCE_ACCESS_DENIED` | Purpose-specific evidence audience denied | Use the exact Staff read or Approver settlement capability. |
+| 403 | `ASSISTED_UCL_CANCELLATION_ACCESS_DENIED` | Staff UCL cancellation actor/authority denied | Use Loan Officer plus exact `loan:cancel:staff`. |
+| 404 | `APPROVED_LOAN_SETTLEMENT_NOT_FOUND` | Approved settlement absent or concealed | Reconcile the selected account; GET does not prove an unresolved request UUID. |
+| 409 | `INVALID_APPLICATION_STATE` | Application outside contract/disbursement workspace state | Refresh the exact workspace; do not infer action from generic application status. |
+
 ## 11. Audit & Compliance Controls
 
-Executable source does not define an Audit-specific caller-facing error code. Planned Audit vocabulary remains in Section 14 rather than implying an active Audit API contract.
+Audit has no public mutation API. Internal payload construction can raise `INVALID_AUDIT_PAYLOAD`, `DUPLICATE_AUDIT_PAYLOAD_KEY`, or `AUDIT_PAYLOAD_TOO_LARGE` (each maps to `422` if propagated) for invalid shape, repeated keys, or excessive safe payload size. These are guard failures, not instructions for an HTTP client to submit audit payloads. Escalate a repeated failure through the owning business operation; never omit required audit to make a command succeed. Reserved immutability/unavailability vocabulary remains in Section 14.
 
 ---
 
@@ -262,7 +372,7 @@ Executable source does not define an Audit-specific caller-facing error code. Pl
 
 | HTTP Status | Error Code | Message | Resolution |
 |---|---|---|---|
-| 400 | `VALIDATION_FAILED` | Input validation failed | Correct the field errors in the response payload |
+| 400 / 422 | `VALIDATION_FAILED` | Input validation failed. | Correct request shape, types, or required fields; transport mapping is `400`, while the internal Identity Reference correction guard can propagate `422`. The envelope does not include field-level errors |
 | 409 | `IDEMPOTENCY_KEY_REUSED` | Request ID reused for different content | Replay the original logical content or use a new request ID |
 
 ---
@@ -274,6 +384,30 @@ Executable source does not define an Audit-specific caller-facing error code. Pl
 | 409 | `SYSTEM_STATE_CONFLICT` | System state conflict | Refresh the resource. Escalate if workflow, account, schedule, reservation, or exposure evidence remains inconsistent |
 
 ---
+
+### 13.1 Workflow and invariant guards
+
+These identifiers are constructed by executable services/domain guards. Their mapped status describes the exception family if propagated; this inventory does not promise that every guard is directly reachable through a valid HTTP DTO. Reconcile authoritative state before another command; repeated internal-evidence failures require repair rather than client-supplied replacement facts.
+
+| HTTP | Error code | Meaning | Caller action |
+|---|---|---|---|
+| 409 | `LOAN_REVIEW_START_NOT_ALLOWED`, `LOAN_RECOMMENDATION_NOT_ALLOWED`, `APPROVAL_DECISION_NOT_ALLOWED` | Lifecycle disallows review/recommendation/decision or already has its outcome | Refresh exact cycle/recommendation evidence. |
+| 409 | `DOCUMENT_UPLOAD_COMPLETION_NOT_ALLOWED`, `DOCUMENT_REPLACEMENT_NOT_ALLOWED`, `DOCUMENT_REPLACEMENT_ALREADY_REQUESTED` | Document lifecycle disallows completion/replacement or already has its replacement task | Refresh the checklist and active correction. |
+| 409 | `ACTIVE_CORRECTION_REQUEST_EXISTS`, `CORRECTION_RESUBMISSION_NOT_ALLOWED` | Conflicting active correction or invalid resubmission lifecycle | Use the active correction and its authorized completion path. |
+| 409 | `CONTRACT_READINESS_NOT_ALLOWED`, `MANUAL_DISBURSEMENT_CONFIRMATION_NOT_ALLOWED` | Application not in required contract/disbursement state | Reconcile current contract and application before command. |
+| 409 | `LOAN_ACCOUNT_ACTIVATION_NOT_ALLOWED`, `MANUAL_DISBURSEMENT_NOT_ALLOWED` | Missing ready-contract basis for activation/evidence | Reconcile readiness and exact contract version. |
+| 404 | `SALARY_ADVANCE_VERIFICATION_NOT_FOUND`, `SALARY_ADVANCE_LIMIT_NOT_FOUND` | Required Salary Advance verification/limit absent | Escalate missing authoritative financial evidence. |
+| 409 | `SALARY_ADVANCE_VERIFICATION_REQUIRED` | Correction resubmission lacks its saved Salary Advance verification | Reconcile original verification before resubmission. |
+| 422 | `SALARY_ADVANCE_LIMIT_STATE_INVALID`, `SALARY_ADVANCE_RESERVATION_RELEASE_NOT_ALLOWED`, `REPAYMENT_RELEASE_NOT_ALLOWED`, `REPAYMENT_RELEASE_EVIDENCE_INVALID` | Salary Advance amounts, release, or movement evidence inconsistent | Reconcile exact product exposure; do not alter another product's exposure. |
+| 422 | `LOAN_ACCOUNT_INVALID`, `MANUAL_DISBURSEMENT_INVALID`, `REPAYMENT_SCHEDULE_INVALID`, `REPAYMENT_BALANCE_INVALID`, `REPAYMENT_INSTALLMENT_PROGRESS_INVALID`, `REPAYMENT_SERVICING_INVALID`, `REPAYMENT_TRANSACTION_INVALID`, `REPAYMENT_ALLOCATION_INVALID` | Inconsistent financial/account/schedule/allocation evidence | Escalate after authoritative reload; clients cannot supply substitute persisted facts. |
+| 422 | `LOAN_APPLICATION_CANCELLATION_COMMAND_INVALID`, `ASSISTED_UCL_CANCELLATION_COMMAND_INVALID`, `LOAN_ACCOUNT_CLOSURE_COMMAND_INVALID`, `REPAYMENT_COMMAND_INVALID`, `SETTLEMENT_COMMAND_INVALID` | Invalid application command fields/identities | Correct the command under its endpoint DTO; transport validation may reject earlier with `400`. |
+| 422 | `LOAN_APPLICATION_CANCELLATION_EVIDENCE_INVALID`, `LOAN_ACCOUNT_CLOSURE_EVIDENCE_INVALID`, `LOAN_SETTLEMENT_EVIDENCE_INVALID` | Terminal action and financial evidence do not reconcile | Escalate; do not manufacture terminal evidence. |
+| 422 | `RECOMMENDATION_REASON_REQUIRED`, `APPROVAL_DECISION_REASON_REQUIRED` | Action requires a reason | Provide the required rationale. |
+| 422 | `INVALID_OPERATION_CONTEXT` | Operation actor/identity conflicts with authoritative source | Escalate inconsistent orchestration evidence. |
+| 422 | `VALIDATION_ERROR` | Internal Staff provisioning validation failed | Correct required email/display-name/role input; normal HTTP Bean Validation may reject earlier. |
+| 409 | `INTERNAL_USER_NOT_ACTIVE` | Setup target is not active eligible verified Staff | Restore eligible status before explicit setup resend. |
+
+`ADMINISTRATOR_ALREADY_ESTABLISHED` is an executable **startup-only** bootstrap refusal. It has no HTTP endpoint/status contract. Disable bootstrap and use supported administration/recovery under MER-DEP-001; do not treat the historical accounts as setup fixtures.
 
 ## 14. Reserved Error Codes
 
@@ -305,6 +439,7 @@ These codes describe planned contract vocabulary. They are not active workflow e
 | 422 | `EMPLOYEE_VERIFICATION_REQUIRES_REVIEW` | Employee verification requires review | Send the case through authorized manual review with supporting evidence |
 | 404 | `PARTNER_EMPLOYEE_IMPORT_BATCH_NOT_FOUND` | Partner employee import batch not found | Verify the import batch ID |
 | 422 | `PARTNER_EMPLOYEE_IMPORT_INVALID` | Partner employee import invalid | Correct the invalid rows and import the batch again |
+| 422 | `EMPLOYEE_INACTIVE` | Partner employee inactive | Reserved alternative vocabulary; active review rejection uses `PARTNER_EMPLOYEE_INACTIVE`, while automatic matching returns outcomes. |
 
 ### Salary Advance Limit States
 
@@ -320,6 +455,7 @@ These codes describe planned contract vocabulary. They are not active workflow e
 | 404 | `APPROVAL_REQUEST_NOT_FOUND` | Approval request not found | Verify the approval ID |
 | 422 | `APPROVAL_REQUIRED` | Approval required | Record the Approver decision before the next workflow step |
 | 409 | `DECISION_ALREADY_SUBMITTED` | Decision already submitted | Refresh the approval record; the decision is immutable once recorded |
+| 422 | `REVIEW_RECOMMENDATION_REQUIRED` | Review recommendation required | Reserved vocabulary; the executable decision path uses expected recommendation/cycle validation. |
 
 ### Document Upload and Review
 
@@ -370,7 +506,6 @@ These codes describe planned contract vocabulary. They are not active workflow e
 
 | HTTP Status | Error Code | Message | Reserved use |
 |---|---|---|---|
-| 404 | `OCR_JOB_NOT_FOUND` | OCR job not found | Reserved for OCR job lookup |
 | 409 | `OCR_JOB_PENDING` | OCR job pending | Reserved for incomplete OCR processing |
 | 500 | `OCR_JOB_FAILED` | OCR job failed | Reserved for failed OCR processing |
 | 404 | `OCR_RESULT_NOT_AVAILABLE` | OCR result not available | Reserved for unavailable OCR output |
