@@ -119,26 +119,15 @@ Privately compare `SELECT DISTINCT protection_key_id FROM loan_contracts ORDER B
 
 ## 3. Resend and Identity Acceptance
 
-The operator creates the Resend account/key, verifies `meridianfinance.dev`, and applies the provider-prescribed SPF/DKIM records through Cloudflare. Review DMARC policy and alignment without inventing DNS values. [Resend's SMTP contract](https://resend.com/docs/send-with-smtp) specifies `smtp.resend.com`, username `resend`, API key as SMTP password, and STARTTLS on 587. Meridian requires TLS upgrade, certificate/hostname validation, auth, and 5-second connection/read/write timeouts. There is no production Mailpit fallback.
-
-Place the credential in `MERIDIAN_SMTP_PASSWORD` in the mode-0600 private environment. Keep its parent mode 0700. Do not use `docker compose config` without `--quiet` against real configuration. Production startup validates the required transport, sender, and frontend destinations; missing/empty credentials fail Compose, and invalid transport settings fail startup. The private credential is never printed by the helper scripts. Maintain ordinary INFO logging and do not enable JavaMail debug or publish provider errors.
-
-Verify TLS from the host privately, without sending an API key in the command:
-
-```bash
-openssl s_client -starttls smtp -connect smtp.resend.com:587 \
-  -servername smtp.resend.com -verify_hostname smtp.resend.com -verify_return_error </dev/null
-```
-
-Require a valid trust chain and hostname. A successful TLS handshake is not proof of SMTP authentication or inbox delivery.
+Configure production Resend transport, domain authentication, credential protection, and the host TLS probe through [MER-DEP-002 §3.1](MER-DEP-002-cloudflare-edge-and-aws-runtime.md#31-smtp-provider-configuration). Require that configuration before onboarding acceptance; a successful TLS handshake alone does not prove SMTP authentication or inbox delivery. Do not expose credentials, token-bearing links, or message bodies in acceptance evidence.
 
 Use three owner-controlled normal external inbox deliveries: Customer verification, Customer reset, and Staff setup. Record delivery time/outcome and link host/scheme only, without token-bearing URLs or message bodies. Customer verification is `https://meridianfinance.dev/verify-email#token=…`; Customer reset is `/reset-password#token=…`; Staff initial setup is `https://internal.meridianfinance.dev/set-password#token=…`. Later Staff reset uses Internal `/reset-password`. Customer digital access uses Customer `/activate-access#verificationToken=…&setupToken=…`.
 
-Follow MER-DEP-001 for temporary first-admin bootstrap and disable it immediately afterward. The private Compose variables allow explicit enablement, email, and display name; no password bypass exists. If delivery fails after account/token commit, disable bootstrap and use supported Forgot password/resend after correcting transport. Do not retry bootstrap to replace an established administrator. Test expired/replaced/used tokens through their existing contracts; verification confirmation has its existing exact replay semantics, while password reset/setup remains single-use. Do not change those rules during acceptance.
+Follow [MER-DEP-001 §3](MER-DEP-001-identity-bootstrap-and-demo-boundary.md#3-establish-the-first-back-office-admin) for temporary first-admin bootstrap and disable it immediately afterward. If delivery fails after account/token commit, the account remains created: disable bootstrap, correct transport, restart normally, and use supported Forgot password; an authorized administrator can resend setup. Do not retry bootstrap to replace an established administrator. Test expired/replaced/used tokens through their existing contracts; verification confirmation has its existing exact replay semantics, while password reset/setup remains single-use. Do not change those rules during acceptance.
 
 ## 4. Matched Backup Before Release or Reset
 
-For the two-month portfolio, the operator takes a manual matched backup before each release, reset, or storage cutover; once weekly while actively receiving demo data; and after a demo session whose state should be retained. Verify an off-host encrypted copy after every backup. Retain weekly matched sets for the portfolio period and at least two last-known-good release sets. The operator owns this schedule; no automation or defined production recovery SLA exists.
+For the portfolio runtime, the operator takes a manual matched backup before each release, reset, or storage cutover; once weekly while actively receiving demo data; and after a demo session whose state should be retained. Verify an off-host encrypted copy after every backup. Retain weekly matched sets for the portfolio period and at least two last-known-good release sets. The operator owns this schedule; no automation or defined production recovery SLA exists.
 
 Inventory all key IDs and private files first. The helper archives the complete private directory, including `runtime.env`, `tunnel-token`, and separately retained key/configuration files. Refuse missing files, symlinks, hard-linked private files, or an existing backup destination. Use a new absolute destination outside the source and private directories. The helper validates project/service labels and exact volume identities, stops ingress then backend, checks that no running document writer remains, and leaves traffic stopped even on failure. OCR/other writers must not exist in this topology. PostgreSQL stays running for `pg_dump --format=custom`. Do not allow another operator or process to write to the database during the consistency cut.
 
@@ -153,7 +142,7 @@ node meridian-platform/deployment/recovery.mjs backup meridian-prod \
 node meridian-platform/deployment/recovery.mjs verify "$backup"
 ```
 
-The set contains `database.dump`, `documents.tgz`, `private.tgz`, `release.json`, and a checksum manifest. `release.json` records source, exact image ID, and last successful migration version. CP4 images must match their embedded source label. For the first pre-CP4 image without that label, source attribution is explicitly operator-confirmed; record the inspected running image ID and independently reviewed source association before proceeding. A supplied SHA alone is not artifact proof.
+The set contains `database.dump`, `documents.tgz`, `private.tgz`, `release.json`, and the `matched-set.json` checksum manifest. `release.json` records source, exact image ID, and last successful migration version. Labeled releases must match their embedded source revision. For a legacy image without that label, source attribution is explicitly operator-confirmed; record the inspected running image ID and independently reviewed source association before proceeding. Section 7 defines the retained-legacy-artifact exception. A supplied SHA alone is not artifact proof.
 
 Retain exact current/previous image artifacts as well as their release records:
 
@@ -167,7 +156,7 @@ Use only the current ID when no previous image exists, and record that limitatio
 
 ## 5. Isolated Restore and Application Readback
 
-Verify checksums before extraction. Restore first into a new `cp4restore-*` project with fresh volumes. The helper refuses production names and any existing restore volume; it publishes no port and initially joins no network. It restores the matching DB, document bytes/modes, and private files. Do not point it at live PostgreSQL or attach a production network. Backups are trusted operator artifacts, not arbitrary uploaded archives.
+Verify checksums before extraction. Restore first into a new `cp4restore-*` project with fresh volumes. This legacy helper prefix is required by `recovery.mjs`. The helper refuses production names and any existing restore volume; it publishes no port and initially joins no network. It restores the matching DB, document bytes/modes, and private files. Do not point it at live PostgreSQL or attach a production network. Backups are trusted operator artifacts, not arbitrary uploaded archives.
 
 ```bash
 restore_project=cp4restore-REPLACE_WITH_NEW_LOWERCASE_NAME
@@ -182,9 +171,9 @@ For actual recovery, stop traffic first, review the isolated result, and obtain 
 
 ## 6. Non-Root Document Volume Cutover
 
-The image runs as UID/GID `10001:10001`; capabilities are dropped and privilege escalation is disabled. Fresh volumes receive the image's owned storage tree. Existing CP2/CP3 root-owned volumes require one explicit migration after a verified matched backup and before backend cutover. Preserve PostgreSQL, scanner signatures, document bytes, and cryptographic keys.
+The image runs as UID/GID `10001:10001`; capabilities are dropped and privilege escalation is disabled. Fresh volumes receive the image's owned storage tree. Existing root-owned volumes from a legacy image require one explicit ownership cutover after a verified matched backup and off-host copy and before backend startup. Preserve PostgreSQL, scanner signatures, document bytes, and cryptographic keys.
 
-Validate the expected volume and its Compose labels, stop all writers, and mount only that document volume. This one-shot root helper has no network, a read-only root filesystem, no Docker socket, and only ownership/mode capabilities. It rejects symlinks, hard links, special files, and unexpected top-level paths. It changes directories to 0700, files to 0600, and owner/group to 10001; it never deletes/replaces content. Review the exact command and backup before execution:
+After explicit operator authorization, validate the expected volume and its Compose labels, stop ingress and all writers, and mount only that document volume. This one-shot root helper has no network, a read-only root filesystem, no Docker socket, and only ownership/mode capabilities. It rejects symlinks, hard links, special files, and unexpected top-level paths. It changes directories to 0700, files to 0600, and owner/group to 10001; it never deletes/replaces content. Review the exact command and backup before execution:
 
 ```bash
 node meridian-platform/deployment/recovery.mjs verify "$backup"
@@ -207,9 +196,9 @@ Local development shares this Dockerfile and keeps Mailpit. A preserved local do
 
 Build from a clean reviewed commit. `release.mjs` rejects a supplied SHA that differs from checkout HEAD, dirty source, an existing release tag, and overwritten metadata. It verifies the embedded OCI source label and exact Docker image ID. The optional previous record is validated and its image retained with a dedicated rollback reference before building. No command builds or deploys `latest`.
 
-For the initial CP3 rollback artifact only, a matched backup's `release.json` may explicitly record `sourceAttribution=operator-confirmed-pre-CP4` when that image has no revision label. The helper still compares its exact image ID and requires the reviewed source association; it permits that historical artifact's former root user only as a retained previous image. This exception cannot validate a newly built or running CP4 release. Actual previous-image redeployment still requires proved schema compatibility and operator approval.
+For the retained initial pre-revision-label rollback artifact only, a matched backup's `release.json` may explicitly record `sourceAttribution=operator-confirmed-pre-CP4`. This exact attribution value is an executable compatibility identifier in `release.mjs` and `recovery.mjs`. The helper still compares its exact image ID; the operator must independently review its source association. The exception permits the historical artifact's former root user only as a retained previous image; it cannot validate a newly built or running approved release. Actual previous-image redeployment still requires proved schema compatibility and operator approval.
 
-The CP3 artifact predates private readiness and required SMTP TLS. Retaining it provides a recovery reference, not permission to reopen traffic without CP4 controls. If recovery selects that artifact, keep ingress stopped until a reviewed forward repair restores the required runtime controls and smoke succeeds. For a subsequent CP4 previous image, verify its own record and the current schema compatibility before normal traffic resumes.
+The legacy artifact predates private readiness and required SMTP TLS. Retaining it provides a recovery reference, not permission to reopen traffic without the required runtime controls. If recovery selects that artifact, keep ingress stopped until a reviewed forward repair restores those controls and smoke succeeds. For a retained labeled/non-root previous image, verify its own record and the current schema compatibility before normal traffic resumes.
 
 ```bash
 reviewed_sha=REPLACE_WITH_REVIEWED_40_CHARACTER_SHA
@@ -220,17 +209,30 @@ node meridian-platform/deployment/release.mjs build "$reviewed_sha" "$record" "$
 
 Omit the previous argument for the initial release only. Keep source SHAs distinct from image IDs/digests. Copy the record's exact `imageId` into private `MERIDIAN_BACKEND_IMAGE`; retain the previous artifact/record and off-host export. Do not retag or rebuild over the sole rollback reference. Compose must not rebuild implicitly.
 
-After backup, cutover, configuration validation, and independent approval:
+For existing state, require the verified matched backup and off-host encrypted copy before replacement. Retain previous artifacts/records and complete any ownership cutover. First installation has no prior state to back up; confirm that the intended fresh volumes contain no state to preserve. After configuration validation and independent operator approval, keep ingress stopped and start dependencies and the approved backend:
 
 ```bash
 compose config --quiet
+compose stop cloudflared
+compose up -d postgres clamav
+compose ps
+```
+
+Require PostgreSQL and ClamAV health before starting the backend; `--no-deps` does not wait for them. After both service health checks pass:
+
+```bash
 compose up -d --no-deps meridian-platform
 backend=$(compose ps -q meridian-platform)
 node meridian-platform/deployment/release.mjs verify "$record" "$backend"
-compose exec -T meridian-platform curl --fail --silent --show-error --max-time 10 http://127.0.0.1:9090/actuator/health/readiness
-# Only after smoke acceptance, resume the existing ingress.
-compose start cloudflared
 ```
+
+Wait for backend health; startup may still be completing immediately after `up -d`. Require a successful private readiness response before proceeding:
+
+```bash
+compose exec -T meridian-platform curl --fail --silent --show-error --max-time 10 http://127.0.0.1:9090/actuator/health/readiness
+```
+
+Keep ingress stopped on failure. Complete private acceptance first, then follow section 9 to start ingress only for the controlled public smoke window. Keep normal traffic closed until smoke succeeds; stop ingress again on failure.
 
 Flyway runs before ordinary application availability; readinessState remains refusing until startup runners, including any bootstrap, finish. Schema migration failure prevents normal readiness. Git/image rollback never undoes persisted migrations. Do not alter historical migrations or apply `repair`, drop, undo, or manual financial SQL to force startup.
 
@@ -241,7 +243,7 @@ Flyway runs before ordinary application availability; readinessState remains ref
 | Application-only regression with proved schema compatibility | Set `MERIDIAN_BACKEND_IMAGE` to the retained previous exact ID, recreate backend, verify its release identity/readiness and preserved data, repeat smoke before traffic |
 | Compatibility unknown, failed migration, or incompatible schema | Require reviewed coordinated recovery of matching DB + documents + keys + approved artifact; explicitly approve loss of post-snapshot writes |
 
-Local rehearsal restores V73 into a fresh database and starts the matching artifact without further schema change. No CP4 migration is introduced. Compatibility with future migrations is a release-specific review decision, never a blanket rollback guarantee.
+Local rehearsal restores the V73 schema into a fresh database and starts the matching artifact without further schema change. It does not prove backward compatibility with another image or schema. Compatibility with future migrations is a release-specific review decision, never a blanket rollback guarantee.
 
 ## 8. Deliberate Full Demo Reset and Supported Reseed
 
@@ -271,19 +273,23 @@ Verify old access/refresh/setup/reset tokens and passwords cannot authorize dele
 
 ## 9. Deterministic Startup Smoke and Acceptance
 
+Private `GET /actuator/health/readiness` checks completed startup/Flyway through `readinessState`, a small PostgreSQL query, and reversible document-storage stage/move/read/delete operations. It excludes scanner availability and disabled OCR. The public `/api/v1/health` route is liveness and cannot replace this dependency acceptance.
+
 1. Compare running image ID/source label with the approved release record; inspect exact named mounts, UID/GID, dropped capabilities, no host-published ports, and backend/DB/ClamAV health. Preserve SG/UFW zero inbound rules.
 2. Through SSM/Docker, run the private readiness command in section 7. Require HTTP 200 and only `{"status":"UP"}`. A required DB/storage failure returns 503 and `DOWN` without paths/errors. From a sibling container, port 9090 must refuse; the public listener must deny `/actuator/**` even for authenticated actors. OCR never gates readiness.
-3. Once private checks pass, resume ingress for a controlled smoke window. Public `curl --fail --silent --show-error https://api.meridianfinance.dev/api/v1/health` must reach liveness. Verify external `/actuator/health/readiness` cannot expose private health.
+3. Once private checks pass, use `compose start cloudflared` to resume existing ingress for a controlled smoke window. On first installation, create it with `compose up -d --no-deps cloudflared` only after those same checks pass. Public `curl --fail --silent --show-error https://api.meridianfinance.dev/api/v1/health` must reach liveness. Verify external `/actuator/health/readiness` cannot expose private health.
 4. With fictional profile/document data and owner-controlled inboxes, register Customer, require unverified-login rejection, receive/confirm verification, log in, and read own profile. Receive a Customer reset message and verify host/scheme privately. Check refresh/logout through the ordinary secure cookie contract.
 5. If first installation/reset, follow the temporary bootstrap procedure, read Internal `/set-password` mail privately, set password, disable bootstrap/recreate, then log into Internal Web and perform an authorized administration read. Subsequent releases use an established Staff account. Customer portal must reject Staff login through its existing separation rules.
 6. Upload a benign fictional document through an authenticated supported endpoint (for example Customer identity verification), require a scanned accepted version, and read back/check bytes with the same authorized actor. Repeat an old-document read after restart; confirm DB/keys/mount continuity.
 
-On smoke failure, stop ingress, avoid further financial writes, and use section 7's migration-compatible rollback or coordinated recovery decision. Do not hide a failing dependency by weakening authentication, TLS, readiness, or scan rules. General readiness deliberately omits scanner availability so protected reads/servicing remain diagnosable; per-upload CP3 scanning remains mandatory and fail-closed. Scanner health plus clean upload are mandatory smoke conditions before uploads resume.
+On smoke failure, stop ingress, avoid further financial writes, and use section 7's migration-compatible rollback or coordinated recovery decision. Do not hide a failing dependency by weakening authentication, TLS, readiness, or scan rules. General readiness deliberately omits scanner availability so protected reads/servicing remain diagnosable; per-upload scanning remains mandatory and fail-closed. Scanner health plus clean upload are mandatory smoke conditions before uploads resume.
 
-Keep CP3 authenticated deployed upload acceptance as a separate gate: near/exact 10 MiB, >10 MiB rejection, benign EICAR-bearing fixture rejection, scanner outage fail-closed, no authoritative/retrievable rejected object, exact successful replay while scanner is down, and cleanup/reconciliation. Scanner disruption needs an approved controlled window and restored health afterward. Direct clamdscan proof does not satisfy that API gate.
+Authenticated deployed upload acceptance is a separate gate: require clean acceptance near and at 10 MiB (10,485,760 bytes), >10 MiB rejection, EICAR test-fixture rejection, scanner outage fail-closed, no authoritative/retrievable rejected object, exact successful replay while the scanner is down without another scan/promotion, and cleanup/reconciliation. Scanner disruption needs an explicitly approved controlled window and restored health afterward. Direct `clamdscan` proof does not satisfy that authenticated API gate.
 
 ## 10. Local Rehearsal and Operator Acceptance
 
 Build a local test image and run `node meridian-platform/deployment/rehearse.mjs meridian-platform:cp4-local-proof`. The script creates only `cp4test-*`/`cp4restore-*` resources, random synthetic private keys, fake inboxes/Mailpit, and private PostgreSQL/ClamAV; it never publishes service ports or starts Tunnel. Success removes only its validated disposable Docker resources and retains the synthetic matched backup privately for inspection. Failure leaves named disposable resources for diagnosis. This proves local mechanics; it cannot prove Cloudflare, Resend, live volume ownership, external backup access, or deployed smoke.
 
-Real Resend domain/TLS/auth/inbox delivery, live key inventory/off-host restore, production image identity, old-volume cutover, bootstrap/login/cookies, and deployed smoke require operator evidence and independent review. Record observed results and unavailable evidence in the release/acceptance record. [MER-FU-032](../project/MER-TRACK-001-follow-up-register.md#mer-fu-032---harden-document-storage-scanning-and-retention) stays Open for broader production storage lifecycle, retention/legal hold, and recovery hardening. Local rehearsal alone cannot establish deployed acceptance.
+`cp4test-*` and `cp4restore-*` are legacy helper namespaces enforced/generated by the rehearsal and recovery scripts. `meridian-platform:cp4-local-proof` is the retained local test-image tag supplied to the helper, not a production release identity. Preserve these command identifiers when using the documented rehearsal.
+
+Real Resend domain/TLS/auth/inbox delivery, live key inventory/off-host restore, production image identity, old-volume cutover, bootstrap/login/cookies, and deployed smoke require operator evidence and independent review. Record observed results and unavailable evidence in the release/acceptance record. These portfolio recovery procedures do not define production-grade storage lifecycle, retention, legal hold, or key governance. Local rehearsal alone cannot establish deployed acceptance.
