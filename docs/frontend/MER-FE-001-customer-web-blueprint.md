@@ -8,7 +8,7 @@
 | Product | Meridian Lending Platform |
 | Document Type | Customer Web frontend rulebook and implementation blueprint |
 | Version | 1.0 |
-| Status | Planning baseline |
+| Status | Maintained frontend authority |
 | Author | Dong Duy |
 | Scope | Responsive Customer Web for public identity flows and authenticated Customer self-service |
 
@@ -16,7 +16,7 @@
 
 ## 2. Purpose and Authority
 
-This document defines the stable frontend decisions that Customer Web implementations share: technology, source organization, state ownership, browser authentication, visual language, components, layouts, navigation, page composition, responsive behavior, accessibility, and delivery sequence.
+This document defines the stable frontend decisions that Customer Web implementations share: technology, source organization, state ownership, browser authentication, visual language, components, layouts, navigation, page composition, responsive behavior, and accessibility.
 
 It does not define lending rules, lifecycle transitions, permissions, financial calculations, eligibility, document readiness, authentication semantics, or the HTTP contract. Those rules remain with their existing authorities.
 
@@ -24,19 +24,12 @@ It does not define lending rules, lifecycle transitions, permissions, financial 
 |---|---|
 | Intended actors, products, workflows, statuses, policies, and business outcomes | [MER-BIZ-001](../business/MER-BIZ-001-business-requirements-and-workflows.md) |
 | HTTP methods, paths, request and response shapes, authorization, ownership concealment, and idempotency | [MER-API-001](../api/MER-API-001-endpoints-and-postman-scenarios.md) and generated OpenAPI |
-| Executable behavior | Backend source, security configuration, migrations, and tests |
+| Executable behavior | Customer Web source, routes, API modules, and tests; backend source, security configuration, migrations, and tests for server behavior |
 | Error identifiers, statuses, safe messages, and caller resolutions | [MER-ARCH-004](../architecture/MER-ARCH-004-api-error-catalog.md) |
-| Deliberately deferred backend and projection work | [MER-TRACK-001](../project/MER-TRACK-001-follow-up-register.md) |
+| Follow-up status, sequencing, and future work | [MER-TRACK-001](../project/MER-TRACK-001-follow-up-register.md) |
 | Customer Web presentation and client implementation rules | This document |
 
-The blueprint distinguishes four kinds of statement:
-
-- **Backend fact** describes verified v1 behavior on which the frontend may rely.
-- **Frontend decision** is a rule established by this blueprint.
-- **API dependency** is required before the named Customer experience can be complete.
-- **Deferred decision** is intentionally outside the Customer Web MVP foundation.
-
-An API dependency does not authorize the frontend to copy business configuration, synthesize missing resources, or infer workflow actions.
+This blueprint defines accepted Customer Web behavior and its capability boundaries. A backend endpoint alone does not establish a Customer Web surface; frontend routes, feature code, and tests establish the executable client. Missing reads never authorize copied business configuration, synthesized resources, or inferred workflow actions. Runtime transactions, locking, replay, and rollback remain with [MER-ARCH-006](../architecture/MER-ARCH-006-api-request-flow-and-dependencies.md).
 
 ---
 
@@ -64,7 +57,7 @@ page composition
 
 New pages must reuse an existing layer before adding a new abstraction. A visually distinct box on one page is not sufficient reason to create a shared component.
 
-### 3.1 Delivery Character
+### 3.1 Presentation and Component Reuse
 
 Backend delivery remains correctness-heavy because it owns financial and workflow invariants. Customer Web delivery is component-driven, visually reviewed, and optimized for short vertical increments. Speed does not permit the frontend to become a second business-rule engine. Presentation follows the Meridian Institutional Editorial Banking system in Sections 9–19. A visual refactor preserves proven stateful components and changes their presentation and composition without changing business behavior.
 
@@ -154,7 +147,7 @@ The Customer Web foundation uses the following stack unless a later approved dec
 | shadcn/ui | Locally owned accessible primitives | Generic controls begin with shadcn/ui rather than custom reimplementation. |
 | Lucide | Icon vocabulary | Icons use consistent size and stroke treatment and do not replace required text. |
 
-Vitest, React Testing Library, and the Vite ESLint baseline belong in the foundation checkpoint as delivery tooling. Tests should verify route behavior, component states, form behavior, and API-boundary handling rather than implementation details.
+Vitest, React Testing Library, and the Vite ESLint baseline provide verification tooling. Tests should verify route behavior, component states, form behavior, and API-boundary handling rather than implementation details.
 
 The MVP foundation does not include Redux, Zustand, MobX, GraphQL, Next.js, microfrontends, Storybook, a custom CSS framework, offline persistence, or a frontend hexagonal-architecture copy. These tools require a demonstrated need before adoption.
 
@@ -244,7 +237,7 @@ The foundation defines one non-secret API base URL setting. No credentials, toke
 - `lib/api` owns transport behavior: base URL, JSON parsing, multipart handling, Bearer injection, credential mode, request correlation, timeout/abort behavior, and error-envelope parsing.
 - Feature API modules own paths, request/response types, and query or mutation options.
 - API response types describe the HTTP contract; domain components receive smaller view props where that improves reuse.
-- Generated OpenAPI client adoption is deferred. The first implementation uses narrow handwritten API modules checked against generated OpenAPI and `MER-API-001`.
+- Narrow handwritten API modules are checked against generated OpenAPI and `MER-API-001`; generated-client tooling is outside this blueprint’s capability boundary.
 
 ### 7.2 Query Rules
 
@@ -262,10 +255,14 @@ For an operation with `requestId`, `uploadRequestId`, `completionRequestId`, `re
 
 1. Generate the UUID when the user starts one logical submission.
 2. Keep it stable while that submission is pending.
-3. Reuse it when the client retries the same logical content after a transport timeout or uncertain result.
+3. Reuse it only for an explicit same-content retry supported by that operation’s backend contract after a transport timeout or uncertain result; never automatically replay an uncertain command.
 4. Generate a new UUID only after the user changes the logical content or starts a distinct action.
 
 The request UUID does not belong in the URL, user-visible copy, analytics, or logs. `X-Request-ID` is transport correlation and does not replace operation identity.
+
+Direct origination has no client business UUID. After an uncertain submission, direct the Customer to inspect their application list and latest information before another deliberate attempt; do not automatically repeat the POST or manufacture success from local form state. GET reconciliation is not exact-request replay proof. Identity correction, identity-evidence upload, and activation retain the stricter recovery rules in Sections 7.6 and 8.6.
+
+Application checklist uploads and replacements retain the same upload identity and predecessor baseline for a supported exact retry. File bytes remain transient; a changed file or replacement baseline is a different logical operation. A failed or changing prerequisite read must not authorize upload, task completion, correction resubmission, offer response, or contract acknowledgment.
 
 ### 7.4 Error Mapping
 
@@ -283,6 +280,8 @@ The HTTP client parses the Meridian error envelope and exposes status, `errorCod
 | `429 RATE_LIMIT_EXCEEDED` | Persistent rate-limit message and countdown from `Retry-After` |
 | `503` | Retry option without exposing storage or infrastructure details |
 | Unknown failure | Generic fallback plus readable `X-Request-ID` for support |
+
+HTTP status and `errorCode` are interpreted together in the endpoint context. Message text is not parsed as a business contract, and an identifier alone does not establish a universal HTTP status. Exact mappings remain with MER-API-001 and MER-ARCH-004.
 
 Error-code label maps live in `lib/errors` for cross-cutting codes or in the owning feature for domain-specific codes. Customer Web must not show raw exception text, stack traces, internal identifiers, or restricted evidence. Known errors use verified feature mappings; unknown errors use safe Customer-facing fallback text rather than the API message. An uncertain command result must not claim the command failed or invite another submission before the Customer checks the latest record. Support correlation references may remain visible.
 
@@ -470,7 +469,7 @@ The preferred source-of-truth logo assets for Customer Web are:
 
 The main shell uses the unchanged horizontal wordmark on Navy, at 176 px wide on desktop and 144 px in the compact header, with its intrinsic aspect ratio and at least 16 px clear space from controls. Auth may use the unchanged expanded lockup; compact focused/detail identity may use the approved mark with an accessible Meridian Home link. Do not crop an asset to obtain a different lockup or restyle SVG fills.
 
-Illustrations and other extended brand assets remain deferred.
+Illustrations and other extended brand assets are outside the accepted visual system.
 
 ### 10.3 Typography
 
@@ -576,18 +575,18 @@ The table is a responsibility vocabulary, not a requirement to install every lis
 | `ReadinessSummary` | Presents returned readiness facts and blocker-code actions | Salary Advance and Customer readiness surfaces |
 | `RequiredActionCard` | One persistent action with reason and destination | Home and application detail |
 | `ApplicationSummary` | Application number, product, requested terms, status, and submitted time | List and detail headers |
-| `ApplicationTimeline` | Maps returned application state to documented lifecycle milestones | Application detail after the read projection can support it |
+| `ApplicationTimeline` | Presents a recorded lifecycle timeline only from returned historical facts | A full Customer historical timeline is outside the accepted surface; current status is not history |
 | `ApplicationStepper` | Shows form-wizard progress only | Multi-step application and correction forms |
 | `AmountInput` | Whole-VND entry, display formatting, and accessible raw-value handling | Every Customer money input |
 | `DocumentUpload` | File selection, constraints, upload progress, replacement baseline, and retry identity | Evidence and correction flows |
-| `DocumentStatus` | Current filename/version and backend review/readiness state | After a Customer document projection exists |
+| `DocumentStatus` | Current filename/version and backend review/readiness state | Application evidence and correction workspaces |
 | `OfferSummary` | Approved principal, term, interest, fee, total, expiry, and provisional items | Approved-offer page |
 | `ContractSummary` | Version, status, accepted terms, masked destination, and acknowledgment | Contract page |
 | `LoanAccountCard` | Account status and high-level paid/outstanding facts | Loan list and Home |
 | `RepaymentSummary` | Paid and outstanding component totals | Loan detail |
 | `InstallmentRow` | Due date, contractual components, servicing components, and status | Responsive schedule |
 
-`ApplicationTimeline` must not be built from the current compact application status response as though it were a complete history. It may launch only when the backend supplies the facts required for a faithful projection.
+`ApplicationTimeline` must not be built from the compact application status response as though it were a complete history. Application Detail presents current status and actions; the browser must not invent timestamps or past transitions.
 
 ### 11.3 Composition Rule
 
@@ -633,12 +632,13 @@ Section 14 owns the page-specific fields, actions, state requirements, and succe
 
 ## 13. Customer Information Architecture
 
-### 13.1 Planned Routes
+### 13.1 Routes and Navigation
 
 ```text
 Public
 ├── /login
 ├── /register
+├── /demo-privacy
 ├── /verify-email
 ├── /activate-access
 ├── /verify-email/pending
@@ -669,37 +669,31 @@ The primary navigation labels are Home, Products, Applications, Loans, and Accou
 
 Browser titles identify every public, account, application, nested application, and loan route. Repayment history uses its own title when selected within Loan Detail. Nested pages link back to the exact parent application or loan list.
 
-Product application forms use nested focused-flow routes or route state under the product route. Exact step URLs are chosen during feature implementation; they must remain browser-back-safe and must not expose sensitive form values.
+The three product application routes are `/products/salary-advance/apply`, `/products/unsecured-consumer-loan/apply`, and `/products/collateral-loan/apply`. They use focused layouts outside the main navigation shell and an authoritative Customer identity guard. Form steps remain transient client navigation, browser-back-safe, and free of sensitive URL values. Unsupported paths and unknown product slugs show safe not-found or unavailable states.
 
-Documents are not a top-level navigation destination in the MVP. Evidence is meaningful in the context of an application or correction, and the v1 API exposes no Customer-wide document index. Required actions appear on Home and Application Detail after the required projections exist.
+Documents are not a top-level navigation destination in the MVP. Evidence is meaningful in the context of an application or correction, and the v1 API exposes no Customer-wide document index. Required actions on Home and Application Detail come from the owned application index. They never come from remembered submission IDs or a locally inferred lifecycle.
 
-### 13.2 Verified Capability Baseline and Dependencies
+### 13.2 Customer Capabilities
 
-| Customer capability | Verified v1 support | Blueprint decision or dependency |
-|---|---|---|
-| Register, verify email, login, refresh, logout, request/confirm reset | Complete endpoint surface | Implement in the Auth checkpoint. |
-| Own profile and bank accounts | Own reads and mutations exist | Implement after Auth. Treat protected identity reference as “on file” after completion. |
-| Product catalogue | Public list/detail expose name, description, active state, and amount range | **API dependency:** allowed terms, pricing display, repayment method, evidence requirements, and eligibility notes must come from an enriched product contract before complete product detail/application UX. |
-| Home readiness | Profile, bank-account list, catalogue, and Salary Advance readiness can be queried | **API dependency:** active-application, active-loan, and required-action aggregation. Do not reconstruct them from browser storage. |
-| Salary Advance readiness | Customer readiness returns limit facts, reusable link ID, and blockers | Usable for an already linked Customer. |
-| First-time Salary Advance employee verification | Verification command requires `partnerCompanyId` and employee code | **API dependency:** Customer-safe Partner selection/lookup. Staff Partner Company reads must not be reused. |
-| Salary Advance submission | Authenticated submit endpoint exists | **API dependency:** allowed terms must be returned by product policy; do not hardcode them as frontend authority. |
-| UCL submission | Authenticated amount/term submission creates three checklist items | Customer checklist query exposes the required checklist item IDs and current evidence state. |
-| Collateral submission | Authenticated submission returns ownership-evidence item ID | Initial upload can follow submission. Customer checklist/current-version query supports reconnect and resume. |
-| Application tracking | Customer application index with backend-owned lifecycle/required-action summaries and owned application-by-ID status read | Home, list, and resume navigation use these reads. **API dependency:** richer history/timeline evidence for a faithful timeline. |
-| Correction tasks | Owned task list, completion, resubmission, and narrow Salary Advance/UCL cancellation exist by application ID | Customer correction flow composes the application index and Document projection. Never show cancellation for Collateral or another state. |
-| Document upload/status | Customer checklist/current-version/readiness query, upload, and content reads exist | Use the Customer checklist query to discover item/version IDs and authoritative document status/readiness. |
-| Approved offer | Owned read, accept, and decline exist by application ID | Build after application navigation can discover pending offers. |
-| Contract | Owned current-contract read and acknowledgment exist | Customer sees and acknowledges; readiness confirmation and destination reveal remain Staff-only. |
-| LoanAccount and repayment history | Owned reads exist by application ID | **API dependency:** Customer LoanAccount index. Customer servicing remains read-only. |
+| Capability | Authoritative read and frontend behavior |
+|---|---|
+| Identity and session | Public registration, verification, activation, login, recovery, and protected Customer routes follow Sections 7.6 and 8. |
+| Profile and bank accounts | Own-profile/readiness and masked-account reads drive account maintenance; protected identity remains “On file” after completion. |
+| Product catalogue | Product list/detail return policy presentation, allowed terms, pricing, repayment method, evidence requirements, and eligibility notes. Render those facts without calculating an offer or copying policy. |
+| Home | Compose own-profile readiness, bank accounts, products, Salary Advance readiness, the owned application index, and the owned LoanAccount index as independent query regions. Returned `requiredAction`, `lifecycleActive`, and `servicingActive` facts select summaries; no synthetic portfolio totals or aggregation endpoint is assumed. |
+| Salary Advance | Customer-safe Partner verification options, employee verification/current attempts, and readiness support first-time verification and updates. Display returned limits/blockers and submit only against current prerequisites and product terms. Staff Partner administration reads are not reused. |
+| UCL and Collateral | Direct submission uses returned product policy. The Customer checklist discovers required item/current-version IDs for initial evidence, reconnect, and replacement. Collateral captures one structured asset without LTV calculation. |
+| Application tracking and corrections | The owned index/detail and purpose-specific Document/correction reads drive navigation and action gates. Current state is not a full historical timeline. Only eligible Customer-digital Salary Advance/UCL returned corrections expose cancellation; Collateral does not. |
+| Offer and contract | Owned offer/current-contract reads govern exact offer response and version acknowledgment. Contract readiness and destination reveal remain Staff operations. |
+| LoanAccount and repayment history | The owned LoanAccount index drives discovery; account, schedule/progress, and paged repayment reads remain read-only. |
 
-`MER-FU-037` already tracks richer lending projections. Frontend-enabling endpoint work should extend that item rather than creating browser-side substitutes.
+Customer Web supports direct LoanApplication origination/submission without persistent save-and-return drafts. Unsaved form state is browser-local and transient; it is not a persisted `DRAFT` LoanApplication. Staff-assisted intake is a separate Internal Web capability. Historical Staff-assisted applications retain the read-only channel boundary in Section 8.1.
 
 ---
 
 ## 14. Customer Page Inventory and Composition
 
-Each page below defines its intended composition. “Dependency” means the page may be scaffolded only as an honest unavailable state until the named backend contract exists; it must not ship a simulated data path.
+Each page below defines accepted composition and interaction. Its reads and actions must remain within the Customer contract; an unavailable read produces an honest recovery state, never a simulated data path.
 
 ### 14.1 Public Identity Pages
 
@@ -719,7 +713,7 @@ Password confirmation is a client-only matching check. The backend remains autho
 
 | Page | Purpose and primary goal | Backend capability | Composition and primary actions | Important states and success destination |
 |---|---|---|---|---|
-| Home | Show account readiness and the next meaningful Customer work | Profile, bank accounts, products, Salary Advance readiness; portfolio projections are missing | `CustomerAppLayout`, editorial `PageHeader`, flat account-setup and required-action regions, ruled active application and loan summaries, bounded product discovery regions | Profile and product portions can load independently; application/loan/action areas depend on frontend-enabling projections; actions navigate to the owning page |
+| Home | Show account readiness and the next meaningful Customer work | Profile, bank accounts, products, Salary Advance readiness, owned application and LoanAccount indexes | `CustomerAppLayout`, editorial `PageHeader`, flat account-setup and required-action regions, ruled active application and loan summaries, bounded product discovery regions | Regions load independently; application/loan/action summaries use the owned indexes and backend activity/action facts; actions navigate to the owning page |
 | Profile | Complete or maintain the Customer profile | `GET /customers/me`, `PUT /customers/me/profile`, dedicated `PUT /customers/me/identity-reference` | Transactional header and account navigation, readiness context, flat labeled form sections, verified full name read-only, mutable fields, consent checkboxes, Save | Initial completion requires full name and identity reference; after completion show protected identity as “On file”; omit both identity-bearing fields from verified ordinary updates; non-verified name remains editable and reference correction is a separate pre-verification action; success stays and refreshes Home readiness |
 | Bank Accounts | Maintain masked Customer-owned destination sources | Bank-account list/add/make-primary/deactivate endpoints | Ruled masked-account list and primary badge, distinct Add account form, make-primary and deactivate confirmations; list/form stack below `xl` | Empty state explains application readiness; mutation conflicts refetch; success stays and refreshes profile/readiness queries |
 
@@ -731,15 +725,15 @@ Bank-account UI never displays or stores a full account number after the add req
 
 | Page | Purpose and primary goal | Backend capability | Composition and primary actions | Important states and success destination |
 |---|---|---|---|---|
-| Product Catalogue | Compare active Meridian products | Public product list | `CustomerAppLayout`, browse `PageHeader`, comparable flat `LoanProductCard` grid, separate profile-readiness prompt | Empty catalogue is a real empty state; details are limited to returned fields until product metadata is enriched |
+| Product Catalogue | Compare active Meridian products | Public product list | `CustomerAppLayout`, browse `PageHeader`, comparable flat `LoanProductCard` grid, separate profile-readiness prompt | Empty catalogue is a real empty state; details use returned policy presentation only |
 | Salary Advance Product | Understand readiness, verify or update employment, and begin an application | Product detail, Salary Advance readiness, employee verification, submission | Editorial product summary, ruled policy facts, transactional `ReadinessSummary` and limit summary, blocker actions, reusable verification form, Update employment, Apply | A ready Customer may intentionally open the existing verification form; every verification result and authoritative review-state change, including removal of superseded attempts, refetches readiness; local pending feedback yields to successful authoritative reads; genuinely pending review removes Apply; submission goes to Application Detail |
-| Salary Advance Application | Submit requested amount and term against returned readiness | Salary Advance submission | `FocusedFlowLayout`, `ApplicationStepper`, amount, term, readiness summary, review, Submit | No server draft exists; leaving warns about unsaved input; amount/term policy options depend on enriched product metadata; success goes to Application Detail |
-| UCL Product | Understand the streamlined evidence-based product and begin | Product detail and UCL submission | Editorial product summary, ruled policy facts, eligibility notes, required-evidence section, Apply | Full policy and evidence copy depends on product metadata; Apply enters focused flow |
+| Salary Advance Application | Submit requested amount and term against returned readiness | Salary Advance submission | `FocusedFlowLayout`, `ApplicationStepper`, amount, term, readiness summary, review, Submit | No server draft exists; leaving warns about unsaved input; amount/term options use returned product policy; success goes to Application Detail |
+| UCL Product | Understand the streamlined evidence-based product and begin | Product detail and UCL submission | Editorial product summary, ruled policy facts, eligibility notes, required-evidence section, Apply | Policy and evidence copy uses returned product metadata; Apply enters focused flow |
 | UCL Application | Submit requested amount and term, then provide required evidence | UCL submission and document upload | Amount/term form, review, evidence workspace for income proof, bank statement, employment proof | The request must not invent income/employment fields absent from v1; checklist item discovery uses the Customer checklist query; success goes to Documents, then Application Detail |
-| Collateral Product | Understand the one-asset manual-assessment workflow and begin | Product detail and Collateral submission | Editorial product summary, ruled policy facts, ownership-evidence section, supported Collateral fact summary, Apply | Product policy metadata remains an API dependency; Apply enters focused flow |
+| Collateral Product | Understand the one-asset manual-assessment workflow and begin | Product detail and Collateral submission | Editorial product summary, ruled policy facts, ownership-evidence section, supported Collateral fact summary, Apply | Returned product policy drives presentation; Apply enters focused flow |
 | Collateral Application | Submit terms and one structured Collateral fact, then ownership evidence | Collateral submission and document upload | Amount/term, Collateral type, description, estimated value, ownership status, condition note, review, ownership-evidence upload | Estimated value is not an LTV calculation; submitted facts become immutable; success goes to Documents using returned evidence ID, then Application Detail |
 
-Application forms must not offer “Save draft” until a backend draft contract exists. Local unsaved form state is not a Meridian `DRAFT` application.
+Application forms provide direct submission without “Save draft” or persistent save-and-return behavior. Local unsaved form state is transient and is not a Meridian `DRAFT` application.
 
 ### 14.4 Application, Evidence, Correction, Offer, and Contract Pages
 
@@ -856,7 +850,7 @@ Every mutation defines:
 | Submitting | Disable duplicate submission, retain values, and show progress in the action. |
 | Success | Update persistent page state, invalidate exact queries, then navigate when the page contract says so. |
 | Business rejection | Keep the form or page visible and show the backend-owned recovery action. |
-| Unexpected failure | Preserve input, retain the logical request UUID for an uncertain retry, and show correlation when available. |
+| Unexpected failure | Preserve only input allowed by the feature’s sensitive-state lifetime, retain an existing logical UUID only for supported exact recovery, and show correlation when available. No-UUID commands require authoritative refresh and deliberate review before another attempt. |
 
 Optimistic updates are not used for offer response, contract acknowledgment, correction completion/resubmission, document replacement, application submission, or bank-account primary/deactivation. These actions depend on authoritative state and return quickly enough to wait for confirmation.
 
@@ -869,7 +863,7 @@ Toasts may confirm a saved profile, added account, copied reference, or successf
 ## 17. Responsive Design
 
 - From `xl`, `CustomerAppLayout` uses the horizontal top navigation in Section 12. Below `xl`, it uses a compact header and accessible Sheet. Navigation never becomes a horizontally clipped strip of five destinations.
-- Primary navigation order remains Home, Products, Applications, Loans, Account. Missing API-dependent destinations remain out of production navigation until their authoritative queries exist.
+- Primary navigation order remains Home, Products, Applications, Loans, Account. Unsupported destinations remain absent from production navigation.
 - Below `md`, repeated records use stacked labeled rows. Horizontal scrolling is reserved for information that cannot be understood when split, such as a wide financial allocation detail; any scroll region is named, keyboard reachable, and visibly signposted.
 - Detail pages follow the single-column reading order in Section 12. A rail must not leave a blank column when absent or become a separate independently scrolling financial pane.
 - Forms use one column by default. Two-column fields are allowed only for short, closely related values from `md`; long text, evidence, consent, and feedback span the available width.
@@ -938,107 +932,13 @@ Each bounded implementation review includes:
 
 Preserve independent query regions: one failed region must not be styled as a successful empty page or hide unrelated readable records. Important business outcomes remain persistent. No visual acceptance is complete using ideal-data screenshots alone. An unavailable test environment is a reported acceptance gap, not a passing result.
 
-Token corrections occur centrally and require review against all consuming surfaces. Implementers must report an infeasible rule rather than silently inventing a replacement. Figma may support later brand exploration, but implementation does not wait for pixel-perfect mockups. Detailed task-specific rollout plans and review checkpoints belong in the working handoff, not a second permanent design-authority document.
+Token corrections occur centrally and require review against all consuming surfaces. Implementers must report an infeasible rule rather than silently inventing a replacement. Figma may support later brand exploration, but implementation does not wait for pixel-perfect mockups. Detailed task-specific rollout plans and review sequences belong in the working handoff, not a second permanent design-authority document.
 
 ---
 
-## 20. Delivery Checkpoints
+## 20. Customer Web Capability Exclusions
 
-The sequence below keeps review boundaries small and places missing API authority before dependent UI. `MER-FE-001` establishes this rulebook without changing frontend source, packages, or backend behavior. Delivery-history identifiers such as pull-request numbers do not form part of this durable roadmap.
-
-The FE-CP identifiers below describe functional delivery dependencies. A presentation-only refactor derives its own bounded review sequence from current shared-component coupling; it must not repeat completed backend-enabling work or reopen these business slices. Sections 9–19 remain its visual authority.
-
-### FE-CP1 — Frontend Foundation
-
-- Vite, React, and TypeScript application;
-- React Router and provider composition;
-- Tailwind and shadcn/ui foundation;
-- semantic tokens and base typography;
-- TanStack Query and typed HTTP/error boundary;
-- auth, main app, focused flow, and detail layouts;
-- responsive navigation shell;
-- lint, unit/component test, build, and CI baseline;
-- no large business feature.
-
-### FE-CP2 — Customer Authentication Experience
-
-- registration and verification pending;
-- fragment-token email confirmation;
-- login, bootstrap refresh, deduplicated refresh, and logout;
-- forgot/reset password and local session clearing;
-- protected Customer routes and session-error handling;
-- rate-limit and request-correlation presentation.
-
-### FE-CP3 — Customer Account
-
-- own-profile read and completion/update;
-- protected identity-reference treatment;
-- bank-account list, add, make-primary, and deactivate;
-- account readiness presentation.
-
-### FE-CP4 — Frontend-Enabling Backend Read Contracts
-
-Complete and test the smallest backend contracts required by the next Customer Web slices:
-
-- product policy presentation fields required for term, rate, repayment, evidence, and eligibility UI;
-- Customer-safe Partner selection for Salary Advance verification;
-- Customer application and LoanAccount indexes;
-- Customer document checklist/current-version/readiness projection;
-- richer Customer application action/status projection or another narrow aggregation sufficient for Home and resume.
-
-This checkpoint extends existing backend ownership and `MER-FU-037`; it must not create frontend-owned policy or expose restricted evidence.
-
-### FE-CP5 — Dashboard and Product Catalogue
-
-- readiness and required-action composition;
-- active application and LoanAccount summaries;
-- product catalogue and product detail pages;
-- full loading, empty, error, and responsive states.
-
-### FE-CP6 — Salary Advance Customer Flow
-
-- readiness and blocker actions;
-- first-time/re-verification experience;
-- limit presentation;
-- amount/term submission;
-- application destination and resume.
-
-### FE-CP7 — UCL and Collateral Origination and Evidence
-
-- UCL amount/term submission and three-item evidence flow;
-- Collateral one-asset fact form and ownership evidence;
-- document upload, replacement baseline, reconnect, and status;
-- explicit product-specific copy without client-side pricing or LTV logic.
-
-### FE-CP8 — Application Tracking and Corrections
-
-- application list and detail;
-- faithful status/action projection;
-- Customer correction tasks, proof, completion, and resubmission;
-- narrow Salary Advance/UCL correction cancellation;
-- no Staff task execution.
-
-### FE-CP9 — Offers and Contracts
-
-- approved-offer review, expiry, accept, and decline;
-- current operational contract and exact-version acknowledgment;
-- masked destination and provisional repayment presentation.
-
-### FE-CP10 — LoanAccount and Servicing Reads
-
-- LoanAccount list and detail;
-- paid/outstanding summary;
-- immutable final schedule and installment servicing state;
-- paged repayment history;
-- no Customer payment-entry or Staff servicing commands.
-
-Staff Web and Back-Office Administration feature delivery, OCR review UI, deployment, and production hosting remain separate later work.
-
----
-
-## 21. Deferred Frontend Concerns
-
-The Customer Web MVP foundation deliberately defers:
+The accepted Customer Web boundary excludes:
 
 - illustration system and extended brand assets;
 - dark mode;
@@ -1051,18 +951,18 @@ The Customer Web MVP foundation deliberately defers:
 - advanced animation and charting;
 - analytics, experimentation, personalization, and marketing tracking;
 - Customer notifications beyond the existing email-driven identity flows;
-- saved LoanApplication drafts until the backend exposes a draft contract;
+- persistent saved LoanApplication drafts; direct submission and transient unsaved forms remain the supported flow;
 - Customer payment initiation or payment-provider integration;
 - OCR execution and Customer OCR-result presentation;
-- localization infrastructure until the initial UI language and copy authority are selected.
+- localization infrastructure; English remains the UI copy language.
 
 The approved logo assets and Meridian Navy, Gold, and Ivory anchors are fixed inputs. System typography, desktop top navigation, compact Sheet navigation, and the token/layout rules in Sections 9–19 are established decisions. English UI copy remains the implementation language. Product/design review validates their application and Customer copy clarity; it does not reopen the navigation model, introduce another font or palette, or change component state and authority rules for visual convenience.
 
 ---
 
-## 22. Implementation Readiness Rules
+## 21. Page Acceptance Rules
 
-A future page checkpoint is ready to implement when:
+A Customer page is complete only when:
 
 1. every displayed business fact has an authoritative backend response;
 2. every action maps to an executable Customer endpoint and permission;
