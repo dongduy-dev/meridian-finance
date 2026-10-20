@@ -13,7 +13,7 @@ Reserved codes are listed separately. They do not become part of an executable A
 ## 1. Catalog Rules
 
 - An identifier names a failure meaning; the HTTP status comes from the exception/handler used by the operation. Tables show normal or representative mappings and messages, not a universal status/message guarantee.
-- `MER-FU-043` tracks executable identifier/status/message normalization. Clients must use the endpoint contract, HTTP status, and `errorCode`, never parse message text or assume normalization is complete.
+- Clients must use the endpoint-specific contract, HTTP status, and `errorCode`, and must not parse message text. Messages may differ by executable context.
 - The resolution states the caller's next action; it must not expose sensitive evidence or internal implementation details.
 - Operation-specific conditions and mappings must remain explicit when one identifier is reused. A shared identifier does not make permission denial, concealed absence, and state conflict interchangeable.
 - Clients must not infer endpoint availability from this catalog alone.

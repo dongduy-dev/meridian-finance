@@ -84,7 +84,7 @@ Customer-facing operations derive `customerId` from the authenticated principal.
 | `429` | Request-rate limit exceeded |
 | `503` | Required protected capability unavailable |
 
-[MER-ARCH-004](../architecture/MER-ARCH-004-api-error-catalog.md) owns the error vocabulary and representative safe messages. Status depends on the endpoint and failure path, not just the identifier: for example, approval `MAKER_CHECKER_VIOLATION` is `422`, while `STAFF_CORRECTION_MAKER_CHECKER_VIOLATION` is `403`. `DOCUMENT_CHECKLIST_NOT_FOUND` can be `404` on reads or `409` during workflow readiness validation. Clients use HTTP status plus `errorCode` and must not parse message text. Known normalization work is tracked under `MER-FU-043`; no universal status/message guarantee is implied.
+[MER-ARCH-004](../architecture/MER-ARCH-004-api-error-catalog.md) owns the error vocabulary and representative safe messages. Status depends on the endpoint and failure path, not just the identifier: for example, approval `MAKER_CHECKER_VIOLATION` is `422`, while `STAFF_CORRECTION_MAKER_CHECKER_VIOLATION` is `403`. `DOCUMENT_CHECKLIST_NOT_FOUND` can be `404` on reads or `409` during workflow readiness validation. Clients use HTTP status plus `errorCode` and must not parse message text. Messages may differ by executable context; no universal status/message guarantee is implied. Endpoint-specific HTTP/error behavior remains authoritative.
 
 ### 1.4 Ownership concealment
 
