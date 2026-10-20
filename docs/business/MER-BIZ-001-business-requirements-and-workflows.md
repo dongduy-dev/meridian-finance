@@ -301,7 +301,7 @@ An active Customer with a complete identity-bearing profile may submit one ident
 
 Completed decisions remain immutable. Replacement preserves earlier attempts and exact versions. Correcting a wrong profile reference preserves the existing pending attempt and exact evidence; an authorized reviewer may retry a mismatch against that same document only while it remains current and all full-name and review guards still hold. A reviewer must inspect the exact current evidence, attest that it supports the Customer identity, and re-enter the Identity Reference presented on that document. Customer compares its protected fingerprint without revealing the stored reference. Rejection uses only identity-reference mismatch, name mismatch, unreadable evidence, or unacceptable evidence. Competing decisions produce one terminal outcome; exact replay produces no duplicate effects.
 
-Before identity verification, full name may be corrected through ordinary Customer or authorized Staff profile maintenance. Once Customer identity is `VERIFIED`, ordinary maintenance must not change full name or Identity Reference; controlled pre-verification reference correction is also prohibited. A rejected change preserves the verified summary, current readiness, successful verification reference, profile, and audit/history. Phone, residential address, employment status, employer name, and bank-account changes do not affect verified identity. Controlled Identity Reference correction under Section 5.9 repairs a pre-verification mistake only. Verified legal-name or identity amendments require a separate purpose-specific Staff-controlled workflow with fresh evidence; that workflow is deferred. Earlier verification, Partner evidence, and LoanApplication provenance remain unchanged.
+Before identity verification, full name may be corrected through ordinary Customer or authorized Staff profile maintenance. Once Customer identity is `VERIFIED`, ordinary maintenance must not change full name or Identity Reference; controlled pre-verification reference correction is also prohibited. A rejected change preserves the verified summary, current readiness, successful verification reference, profile, and audit/history. Phone, residential address, employment status, employer name, and bank-account changes do not affect verified identity. Controlled Identity Reference correction under Section 5.9 repairs a pre-verification mistake only. Verified legal-name or identity amendments require a separate purpose-specific Staff-controlled workflow with fresh evidence; that workflow is outside the MVP. Earlier verification, Partner evidence, and LoanApplication provenance remain unchanged.
 
 New Salary Advance, UCL, and Collateral origination requires a verified Customer with current successful verification evidence. Each product retains its permitted origination channels. An existing verified Customer may reuse that result without another identity document solely because another loan is requested. Each new application preserves the successful identity-verification result as immutable provenance. Salary Advance additionally requires its separate Partner Employee verification after Customer identity verification. Automatic employment verification and manual approval require an active Customer with a complete profile and verified identity. Current employment eligibility must match the current verified Customer identity to the identity recorded when the Partner relationship was verified. A mismatch requires employment verification again and must not rewrite earlier Partner evidence. Applications already created before this requirement continue through their existing downstream lifecycle without a new Customer identity gate.
 
@@ -413,7 +413,7 @@ When evidence is missing or requires correction, the application uses:
 | `DOCUMENTS_PENDING` | Required Customer or Staff uploads are incomplete |
 | `RETURNED_FOR_REVISION` | Structured Customer or Staff correction is required |
 
-Requested amount and term are immutable after submission for every product. Correction addresses only the product-specific evidence or facts permitted by this specification; it cannot amend financial terms. `APPLICATION_TERMS` correction is outside the MVP; financial-term amendments remain deferred under `MER-FU-035`.
+Requested amount and term are immutable after submission for every product. Correction addresses only the product-specific evidence or facts permitted by this specification; it cannot amend financial terms. Post-submission financial-term amendments, including `APPLICATION_TERMS` correction, are outside the MVP.
 
 Every correction task has one operational owner: Customer or Staff. Mixed correction plans use separate tasks. Restricted Staff notes must not appear in Customer instructions. A Staff actor who requested a Staff correction must not complete that task.
 
@@ -507,9 +507,12 @@ Readiness is calculated from current authoritative facts and exposes its status 
 - processing-ready documents;
 - no active correction;
 - valid product-specific pre-disbursement evidence;
+- for UCL and Collateral Loan, the authoritative latest application-owned product-verification cycle in `VERIFIED`;
 - for Salary Advance, an unreleased reservation.
 
-For UCL, contract preparation captures the Customer's current eligible primary active bank account, and readiness additionally requires the authoritative latest application-owned UCL verification cycle to be `VERIFIED`. UCL readiness and activation do not read, reserve, convert, release, or create Salary Advance limit or movement evidence.
+For UCL, contract preparation captures the Customer's current eligible primary active bank account.
+
+UCL and Collateral Loan readiness and activation do not read, reserve, convert, release, or create Salary Advance limit or movement evidence.
 
 Confirmation marks the contract `READY_FOR_DISBURSEMENT` and the application `DISBURSEMENT_PENDING` atomically. It does not transfer funds, create the LoanAccount, create the final schedule, or convert Salary Advance reserved exposure to used exposure.
 
@@ -729,7 +732,7 @@ Status names are namespace-scoped. Similar labels in different concepts do not c
 
 | Status | Business Meaning |
 |---|---|
-| `DRAFT` | Reserved status vocabulary for deferred saved applications; no MVP save-and-return workflow originates in this state |
+| `DRAFT` | Reserved status vocabulary for saved applications outside the MVP; no MVP save-and-return workflow originates in this state |
 | `SUBMITTED` | Submission is accepted and ready for the next required verification, document, or review action |
 | `VERIFICATION_PENDING` | Formal product verification or review is pending |
 | `VERIFICATION_FAILED` | Product verification failed |
@@ -822,7 +825,7 @@ These identifiers define required capabilities. The referenced scope, workflow, 
 | FR-IAM-002 | The system shall enforce role and action permissions and preserve the authenticated actor for Staff business actions. |
 | FR-PROD-001 | The system shall store and display active products with amount limits, terms, pricing, repayment method, required documents, and eligibility notes. |
 | FR-PROD-002 | The system shall let authorized Back-Office Admins manage product activation and minimum/maximum amounts within Section 3.6. |
-| FR-APP-001 | The system shall support direct origination/submission, permitted cancellation, status tracking, and transition control through one common LoanApplication lifecycle under Section 6; persisted Staff-assisted intake remains separate from deferred saved application drafts. |
+| FR-APP-001 | The system shall support direct origination/submission, permitted cancellation, status tracking, and transition control through one common LoanApplication lifecycle under Section 6; persisted Staff-assisted intake remains separate, and persistent save-and-return LoanApplication drafts are outside the MVP. |
 | FR-APP-002 | The system shall validate Customer readiness, active product, amount, term, product-specific facts, checklist requirements, exposure, and concurrency rules before submission. |
 | FR-APP-003 | The system shall prevent a new submitted application for a product while the Customer has another blocking non-terminal application for that product. |
 | FR-APP-004 | The system shall record each LoanApplication origination channel and enforce `CUSTOMER_DIGITAL` for Salary Advance and either `CUSTOMER_DIGITAL` or `STAFF_ASSISTED` for UCL and Collateral Loan. |
@@ -843,7 +846,7 @@ These identifiers define required capabilities. The referenced scope, workflow, 
 | FR-DOC-003 | The system shall support immutable document versions, acceptance, waiver, replacement, controlled reasons, and readiness queries. |
 | FR-REV-001 | The system shall let Loan Officers recommend approval or rejection and request Customer or Staff correction. |
 | FR-REV-002 | The system shall route Customer-sourced correction directly to the Customer for Customer-digital applications and through authorized Staff coordination for Staff-assisted applications, while keeping Customer-sourced correction distinct from Staff correction. |
-| FR-REV-003 | The system shall establish durable Loan Officer stewardship on first review start, preserve it across later review cycles, and permit review restart and recommendation only for the assigned Loan Officer until a separately controlled reassignment capability exists. |
+| FR-REV-003 | The system shall establish durable Loan Officer stewardship on first review start, preserve it across later review cycles, and permit review restart and recommendation only for the assigned Loan Officer; reassignment requires a separate controlled workflow outside the MVP. |
 | FR-APR-001 | The system shall let Approvers approve, reject, return to Loan Officer review, or request structured Customer or Staff correction. |
 | FR-APR-002 | The system shall enforce maker-checker separation between the Loan Officer recommendation and final Approver decision. |
 | FR-OFFER-001 | The system shall generate one immutable approved offer after approval, present it through the application's allowed channel, support idempotent Customer acceptance or decline recorded directly by the authenticated Customer or as an evidenced Staff-assisted Customer decision, and expire pending offers after the configured validity period. |
@@ -1126,9 +1129,9 @@ Extensions must preserve the OCR authority boundary in Section 5.10 and Identity
 ### 13.3 Excluded from the MVP
 
 - persistent save-and-return LoanApplication drafts; direct origination and the separate persisted Staff-assisted intake remain in scope;
-- post-submission financial-term amendments, including `APPLICATION_TERMS` correction and reservation adjustment, deferred under `MER-FU-035`;
+- post-submission financial-term amendments, including `APPLICATION_TERMS` correction and reservation adjustment;
 - generic role creation, permission CRUD or matrix editing, generic configuration centers, arbitrary policy builders, and generic audit products; concrete administration remains bounded by Section 3.6;
-- broader notification-platform capabilities such as SMS or in-app delivery, preferences, durable delivery status, and retry management; the four Identity/security email purposes in Section 3.7 remain in scope, while correction deadlines, reminders, and notifications remain deferred under `MER-FU-034`;
+- broader notification-platform capabilities such as lending-event notifications, SMS or in-app delivery, preferences, durable delivery status, and retry management; the four Identity/security email purposes in Section 3.7 remain in scope, while correction deadlines, reminders, and notifications are outside the MVP;
 - real bank-transfer, payment-gateway, payroll, employer-API, HR-synchronization, or bank-reconciliation integrations;
 - real SMS OTP, biometric authentication, or production identity verification;
 - credit-bureau integration, automated credit scoring, or fully automated approval;
@@ -1148,7 +1151,7 @@ Section 11.5 owns Collateral Loan pricing, Section 11.7 owns shared provisional 
 
 ### 13.5 Post-MVP Product Extensions
 
-Post-MVP product work may introduce multi-level approval, automated repayment simulation, simple collateral loan-to-value validation, and the agreement-execution or external integrations excluded in Section 13.3. Each capability requires an approved business specification before it enters Meridian's executable product contract. `MER-TRACK-001` owns deferred-work status and remaining scope.
+Post-MVP product work may introduce multi-level approval, automated repayment simulation, simple collateral loan-to-value validation, and the agreement-execution or external integrations excluded in Section 13.3. Each capability requires an approved business specification before it enters Meridian's executable product contract. `MER-TRACK-001` owns follow-up identifiers, implementation status, rationale, and remaining work.
 
 ---
 
