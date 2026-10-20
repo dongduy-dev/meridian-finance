@@ -8,7 +8,7 @@
 | Product | Meridian Lending Platform |
 | Document Type | Staff Web frontend rulebook and implementation blueprint |
 | Version | 1.0 |
-| Status | Planning baseline |
+| Status | Maintained frontend authority |
 | Author | Dong Duy |
 | Scope | Staff Web feature area within Internal Web for responsive lending review, approval, correction, contract, disbursement, repayment, settlement, and closure operations |
 
@@ -16,7 +16,7 @@
 
 ## 2. Purpose and Authority
 
-This document defines the stable frontend decisions for Staff Web, Meridian's lending-operations feature area within the shared Internal Web application: application topology, source organization, authentication, permission-aware navigation, state ownership, work queues, case workspaces, command recovery, maker-checker presentation, sensitive-data handling, visual language, layouts, route inventory, API dependencies, and delivery sequence.
+This document defines the stable frontend decisions for Staff Web, Meridian's lending-operations feature area within the shared Internal Web application: application topology, source organization, authentication, permission-aware navigation, state ownership, work queues, case workspaces, command recovery, maker-checker presentation, sensitive-data handling, visual language, layouts, routes, and client capability boundaries. It also owns shared Internal Web operator conventions used by Back-Office Administration: shell/chrome, capability-aware navigation, responsive operator layouts, error/action language, freshness and confirmation patterns, loading/empty/error states, accessibility, and backend-owned workflow truth.
 
 It does not define lending rules, lifecycle transitions, role assignments, financial calculations, document validity, settlement authority, or the HTTP contract. Those rules remain with their existing authorities.
 
@@ -24,27 +24,18 @@ It does not define lending rules, lifecycle transitions, role assignments, finan
 |---|---|
 | Intended actors, products, workflows, statuses, policies, and business outcomes | [MER-BIZ-001](../business/MER-BIZ-001-business-requirements-and-workflows.md) |
 | HTTP methods, paths, request and response shapes, authorization, concealment, and idempotency | [MER-API-001](../api/MER-API-001-endpoints-and-postman-scenarios.md) and generated OpenAPI |
-| Executable behavior | Backend source, security configuration, Flyway migrations, and tests |
+| Executable behavior | Internal Web routes, feature source, API modules, and tests; backend source, security configuration, Flyway migrations, and tests for server behavior |
 | Context ownership and runtime coordination | [MER-ARCH-001](../architecture/MER-ARCH-001-bounded-contexts.md), [MER-ARCH-003](../architecture/MER-ARCH-003-dependency-rules.md), and [MER-ARCH-006](../architecture/MER-ARCH-006-api-request-flow-and-dependencies.md) |
-| Error identifiers, statuses, safe messages, and caller resolutions | [MER-ARCH-004](../architecture/MER-ARCH-004-api-error-catalog.md), subject to the executable inconsistencies tracked by `MER-FU-043` |
-| Deliberately deferred operational queries and product work | [MER-TRACK-001](../project/MER-TRACK-001-follow-up-register.md) |
+| Error identifiers, statuses, safe messages, and caller resolutions | [MER-ARCH-004](../architecture/MER-ARCH-004-api-error-catalog.md) and endpoint-specific MER-API-001 mappings |
+| Follow-up status, sequencing, and future work | [MER-TRACK-001](../project/MER-TRACK-001-follow-up-register.md) |
 | Shared Customer Web frontend foundations | [MER-FE-001](MER-FE-001-customer-web-blueprint.md) |
 | Staff Web presentation and client implementation rules | This document |
 
-The blueprint distinguishes four kinds of statement:
+This blueprint defines accepted frontend behavior and explicit capability exclusions. An endpoint alone does not establish an executable Staff screen; frontend routes, features, and tests establish the client surface. Missing reads do not authorize direct persistence access, copied policy, or a browser-owned database assembled from restricted APIs.
 
-- **Backend fact** describes verified v1 behavior on which Staff Web may rely.
-- **Frontend decision** is a rule established by this blueprint.
-- **API dependency** is required before the named operational experience can be complete.
-- **Deferred decision** is intentionally outside this blueprint's delivery boundary.
+### 2.1 Evidence and Authority
 
-An API dependency does not authorize Staff Web to query persistence directly, combine restricted endpoints into a browser-owned projection, hardcode business policy, or infer missing workflow evidence.
-
-### 2.1 Research Baseline
-
-This planning baseline reflects the current executable Salary Advance, Unsecured Consumer Loan, and Collateral Loan lifecycles through servicing and closure, together with the current security, persistence, and test evidence.
-
-Target-state wording in a business, architecture, or roadmap document is not treated as an executable Staff surface unless a controller, security rule, application service, persistence path, and relevant test evidence support it.
+Salary Advance, UCL, and Collateral use the shared operational lifecycle with distinct product evidence. Business policy remains with MER-BIZ-001, exact HTTP contracts with MER-API-001, and transaction, lock, replay, and rollback mechanics with MER-ARCH-006. This document retains the local client guards needed to use those authorities correctly.
 
 ---
 
@@ -57,7 +48,7 @@ Staff Web has six goals:
 3. Present role separation, expected versions, and maker-checker constraints before consequential actions.
 4. Recover safely from timeouts, refreshes, stale evidence, and concurrent work.
 5. Reuse a compact visual and component vocabulary across review, approval, and servicing.
-6. Make missing backend read contracts explicit so delivery checkpoints start with the dependencies they need.
+6. Require an authorized read and a supported recovery path for every enabled workflow or financial command.
 
 The implementation follows this reuse order:
 
@@ -73,9 +64,9 @@ workspace or queue composition
 
 New pages must reuse an existing layer before adding a new abstraction. A product-specific rule is not a reason to fork the whole workspace; it is a reason for a feature-owned panel driven by authoritative product data.
 
-### 3.1 Delivery Character
+### 3.1 Operational Completeness
 
-Staff Web is an operational client for durable workflow and financial commands. Delivery may remain component-driven and incremental, but completion means more than rendering a form: each checkpoint must define authority, evidence freshness, operation identity, success reconciliation, uncertain-result recovery, error treatment, and permission coverage.
+Staff Web is an operational client for durable workflow and financial commands. Every command surface must define authority, evidence freshness, operation identity, success reconciliation, uncertain-result recovery, error treatment, and permission coverage. An enabled command without a supported recovery path is incomplete.
 
 ### 3.2 Non-Goals
 
@@ -99,15 +90,15 @@ This blueprint does not define or authorize:
 
 Meridian uses `STAFF` as the Identity `userType` for internal users. It does not mean membership in Staff Web. Business roles and permissions determine whether an internal user has capabilities in Staff Web, Back-Office Administration, or both.
 
-| Internal area | Included in this blueprint | Excluded for MER-FE-003 or later work |
+| Internal area | Staff Web | Outside Staff Web |
 |---|---|---|
 | Lending case operations | Loan Officer review and verification, Approver decision and settlement, Accounting contract/disbursement/servicing, Staff correction tasks, document review | Product and policy administration |
-| Partner data | Case-owned safe facts only when a future case projection requires them | Partner Company maintenance, employee imports, and Partner administration |
-| Identity | Staff login, refresh, logout, session and permission-aware navigation | User creation, status changes, role assignment, and permission management |
+| Partner data | Purpose-limited application-owned verification facts | Partner Company maintenance, employee imports, and Partner administration |
+| Identity | Internal session, Customer identity verification, purpose-limited reveal, assisted Customer maintenance and digital-access enablement | Internal User creation/status/predefined-role assignment belongs to MER-FE-003; generic permission management is excluded |
 | Audit | Case-safe history when an authorized API exists | Generic audit exploration, compliance search, and export |
 | Configuration | None | Operational and system configuration |
 
-Administration permissions exist in seeded roles, but most corresponding management use cases and HTTP endpoints do not. `MER-FU-019` and `MER-FU-022` explicitly defer user and permission management UI until backend support exists.
+Partner, Loan Product, and Internal User administration have supported workspaces under `/admin/*`, defined by MER-FE-003. Generic role/permission editing, configuration, and audit exploration remain outside that accepted boundary. Sharing `internal-web/` does not move administrative business capability into Staff Web.
 
 Three narrow upload capabilities remain distinct. `document:upload:assisted` authorizes only an initial required-document upload for a `STAFF_ASSISTED` application in `DOCUMENTS_PENDING`. `document:upload:assisted-correction` is seeded to Loan Officer and authorizes only the exact active open Customer-owned correction task of an eligible Staff-assisted UCL or Collateral application. `document:upload:staff` remains the separate Staff-owned correction-task capability seeded to Back-Office Admin. None authorizes intake evidence or Customer-digital mutation, and Staff Web exposes each control only when the exact permission and workflow state match.
 
@@ -132,7 +123,7 @@ Three narrow upload capabilities remain distinct. `document:upload:assisted` aut
 - Client validation improves input quality. Backend validation and role checks remain authoritative.
 - Staff Web formats financial values; it must not calculate pricing, readiness, balances, allocations, payoff, settlement amounts, schedules, or product exposure.
 - A hidden or disabled action is not authorization. The backend must authorize every request.
-- The client must not interpret a permission description as proof that every related endpoint exists. Exact `loan:read` now authorizes the Staff application index and CP2 case projection, but it does not imply a verification, approval, document, contract, or servicing projection.
+- The client must not interpret a permission description as proof that every related endpoint exists. Exact `loan:read` authorizes the Staff application index and general case projection, but it does not imply a verification, approval, document, contract, or servicing projection.
 - Browser storage must not become an application index, approval ledger, document register, or command-outcome database.
 - A case timeline must be based on returned immutable lifecycle evidence. It must not be reconstructed from the current status and local action history.
 - The client must not expose Customer-only endpoints through a Staff route merely because a Staff user knows a resource identifier.
@@ -189,41 +180,30 @@ Maker-checker is a backend invariant and a visible operational constraint:
 
 ---
 
-## 7. Verified Staff HTTP Surface
+## 7. Staff Workspaces and Authorized Reads
 
-The current backend provides a broad set of direct commands, purpose-limited operational queues including contract work, and Staff application/case foundations. The distinction determines what can ship safely.
+### 7.1 Read Boundaries
 
-### 7.1 Executable Reads
+MER-API-001 owns endpoint paths, payloads, detailed permission/role combinations, and errors. Each feature API module consumes its purpose-specific contract; route guards in Section 28 run before queries. The following client distinctions remain mandatory.
 
-| Capability | Endpoint | Authority | Current limit |
-|---|---|---|---|
-| Assisted-intake discovery | `GET /api/v1/staff/assisted-originations?status=OPEN` | Staff `loan:originate:staff` | UCL and Collateral pre-application cases; no LoanApplication or financial facts |
-| Assisted-intake case | `GET /api/v1/staff/assisted-originations/{assistedOriginationCaseId}` | Staff `loan:originate:staff` | Product, selected Customer ID, lifecycle state, creator, timestamps, and the linked LoanApplication ID after completion |
-| Staff Customer discovery | `POST /api/v1/staff/customers/search` | Staff `customer:read` | Exact Customer number or exact protected-identity match; no raw identity response |
-| Staff Customer intake read | `GET /api/v1/staff/customers/{customerId}` | Staff `customer:read` | Purpose-limited profile/readiness projection without protected identity material |
-| Intake evidence metadata | `GET /api/v1/staff/assisted-originations/{assistedOriginationCaseId}/evidence` | Staff `document:upload:intake` plus valid Loan intake authority | Controlled logical evidence and immutable version metadata; no storage keys or content |
-| Staff application discovery | `GET /api/v1/staff/loan-applications?productCode={productCode}&status={status}&page=0&size=20` | Staff `loan:read` | Cross-product safe facts, exact filters, deterministic page envelope |
-| Staff case foundation | `GET /api/v1/staff/loan-applications/{loanApplicationId}` | Staff `loan:read`; Customer contact also requires `customer:read` | Safe header, Customer readiness, nullable current Customer contact and Loan Officer identity mask under Section 16.3.1, Loan-owned Collateral facts, assigned Loan Officer summary, and ordered lifecycle transitions |
-| Customer Identity Reference reveal | `POST /api/v1/staff/loan-applications/{loanApplicationId}/customer-identity-reference/reveal` | Staff Loan Officer with `loan:read`, `customer:read`, and `customer:identity:reveal` | Explicit audited temporary access; Section 16.3.1 |
-| Assisted offer-response case | `GET /api/v1/staff/loan-applications/{loanApplicationId}/offer-response` | Staff `loan:offer:respond:staff` plus Loan Officer role | Eligible Staff-assisted UCL or Collateral safe header, exact current offer, expiry/action state, and current signed-evidence metadata |
-| Staff document evidence | `GET /api/v1/staff/loan-applications/{loanApplicationId}/documents` | `document:review` | Checklist/readiness, exact current version, immutable version history, and safe review history |
-| Staff correction case | `GET /api/v1/staff/loan-applications/{loanApplicationId}/corrections` | `loan:correction:staff` | Origination channel, latest request, mixed task composition, proof, purpose-limited assisted Customer instructions/actions, completion readiness, and current-actor maker-checker evidence |
-| Safe application status | `GET /api/v1/loan-applications/{loanApplicationId}` | Staff `loan:read` | Minimal durable summary; not a case projection |
-| Document-review queue | `GET /api/v1/document-review-items?status=AWAITING_REVIEW&page=0&size=20` | `document:review` | Current versions awaiting review; list has no total or page metadata |
-| Review-authorized content | `GET /api/v1/staff/loan-applications/{loanApplicationId}/documents/{checklistItemId}/versions/{documentVersionId}/content` | `document:review` | Exact known version only; `no-store`, private attachment |
-| Staff correction queue | `GET /api/v1/staff-corrections/tasks?status=OPEN&page=0&size=20` | `loan:correction:staff` | Open tasks only; list has no total or page metadata |
-| Current contract | `GET /api/v1/loan-applications/{loanApplicationId}/contracts/current` | `loan:contract:read` | Known application only; masked destination |
-| Advisory readiness | `GET /api/v1/loan-applications/{loanApplicationId}/contracts/current/readiness` | `loan:contract:read` | Point-in-time result; optional expected version |
-| Staff contract queue | `GET /api/v1/staff/contract-work?productCode={productCode}&page=0&size=25` | Staff `loan:contract:read` plus Accounting Officer role | Exact `CONTRACT_PENDING` membership, safe contract/readiness summary, product filter, and deterministic page envelope |
-| Staff contract case | `GET /api/v1/staff/loan-applications/{loanApplicationId}/contract` | Staff `loan:contract:read` plus Accounting Officer role | `CONTRACT_PENDING` or `DISBURSEMENT_PENDING`; origination channel, masked contract, canonical readiness, current assisted acknowledgment evidence, purpose-limited Customer and handoff context, and backend-derived work stage |
-| LoanAccount detail | `GET /api/v1/loan-applications/{loanApplicationId}/loan-account` | `loan:read` | Known application only; safe terms, schedule, and servicing state |
-| Repayment history | `GET /api/v1/loan-applications/{loanApplicationId}/repayments?page=0&size=20` | `loan:read` | Known application only; immutable paged outcomes, no external references |
-| Servicing provenance | `GET /api/v1/staff/loan-applications/{loanApplicationId}/servicing-provenance?page=0&size=20` | Staff `loan:read` | Origin, USER/SYSTEM status timeline, Staff-attributed paged repayment rows, optional settlement and closure |
-| Servicing Customer context | `GET /api/v1/staff/loan-applications/{loanApplicationId}/servicing-context` | Staff `loan:read`; Customer fields follow the purpose authority in MER-API-001 Section 7.7.1 | Exact application/account linkage and nullable current Customer context; shared LoanAccount response remains unchanged |
+| Workspace/read | Frontend authority and presentation boundary |
+|---|---|
+| Assisted intake and Customer selection | `loan:originate:staff` opens intake; Customer discovery/read requires `customer:read`, selected-Customer mutation requires `customer:intake:manage`, and intake evidence requires `document:upload:intake` plus valid case authority. Search is exact Customer number or protected-identity match, never a broad Customer directory. |
+| Application discovery/case/history | `loan:read` permits server-filtered discovery and safe case/lifecycle facts. Current Customer contact additionally requires `customer:read`; Identity Reference mask/reveal has the stricter Section 16.3.1 gate. |
+| Product verification/review | Verification and review routes require `loan:review`; Approvers may consume the read-only assessment through `approval:decide`. Recommendation additionally requires `approval:recommend` and backend-confirmed review stewardship. These feature routes do not require general `loan:read`. |
+| Documents | The case and exact content viewer admit `document:review` or `approval:decide`; only `document:review` opens the review queue or review commands. `document:read` and `loan:read` alone grant neither workspace nor content access. |
+| Corrections | `loan:correction:staff` opens the task queue/case, with separate upload, Customer-sourced completion, resubmission, and cancellation gates under Sections 23.3 and 24.6. |
+| Recommendation/decision history | Use the purpose-limited linked history read for authorized review/recommendation/decision audiences. Normal rationale and restricted credit notes retain distinct visibility. General application history is not a substitute. |
+| Independent decision | `approval:decide` opens its queue and case; backend recommendation/cycle identity, readiness, and maker-checker facts gate decisions. |
+| Contract and disbursement | Their separate queue/case contracts require Accounting Officer authority as well as exact permissions; only masked destination facts enter ordinary reads. Section 25 owns the interaction and reveal boundaries. |
+| LoanAccount and repayment history | Application-scoped account, schedule, progress, and paged history reads require `loan:read`; no external payment references appear. Staff servicing provenance and Customer context remain separate purpose-limited reads under Section 26.1. |
+| Customer identity verification/digital access | Dedicated workspaces use `customer:identity:verify` and `customer:intake:manage` respectively. Neither creates a general Customer administration capability. |
+
+A minimal application-status read cannot authorize a specialized command. No feature reuses Customer-owned indexes, offer reads, or self-service commands on behalf of a Staff actor.
 
 ### 7.2 Executable Commands
 
-| Workspace | Commands available now |
+| Workspace | Supported commands |
 |---|---|
 | Assisted origination | Create/reopen/associate/abandon UCL or Collateral intake; create and maintain the selected Customer; manage masked bank accounts; upload or replace controlled paper intake evidence; explicitly request OCR, monitor safe status, finalize corrected structured suggestions beside the current evidence version, and copy finalized reviewed values into the existing unsaved forms; convert an eligible UCL or Collateral case into one Staff-assisted LoanApplication |
 | Customer digital access | Find one existing Customer by exact Customer number or identity reference; read digital-access status; verify the presented identity again and enable a Customer Web login without creating an intake case or changing the Customer or Loan record |
@@ -236,7 +216,7 @@ The current backend provides a broad set of direct commands, purpose-limited ope
 | Disbursement | Reveal the exact ready-contract destination; confirm an externally completed transfer and activate the LoanAccount |
 | Servicing | Record repayment; apply exact payment-backed Administrative Full-Balance Settlement; administratively close an eligible settled account |
 
-### 7.3 Existing Foundations That Are Not Staff Screens
+### 7.3 Purpose-Limited Customer and Platform Boundaries
 
 - Customer-owned application and LoanAccount indexes do not authorize Staff indexing.
 - Customer-owned document checklist reads remain separate from the dedicated Staff document checklist/history projection.
@@ -249,6 +229,8 @@ The current backend provides a broad set of direct commands, purpose-limited ope
 - Partner read endpoints are administration-oriented and do not form a safe lending case snapshot.
 
 ### 7.4 Staff-Assisted UCL and Collateral Conversion
+
+Authenticated Staff remains the actor; the selected Customer remains the business subject. Staff does not impersonate Customer self-service. Customer-sourced correction, offer, contract, and cancellation recordings remain Customer decisions/evidence, distinct from Staff-controlled correction work. Labels and confirmations identify the Customer decision and the Staff recorder. Enabling Customer digital access does not change the immutable `STAFF_ASSISTED` channel of an existing application. Salary Advance remains `CUSTOMER_DIGITAL` only. Staff-assisted UCL/Collateral actions use the separate Staff-mediated workspaces; Customer self-service correction, cancellation, offer, contract, and checklist mutation must not be used for them, and unsupported product/action combinations fail closed.
 
 The paper intake workspace displays safe metadata and ordered immutable versions for Customer identity and the product's signed paper application. The evidence section requires exact intake authority and Loan-assisted case access as defined in [MER-API-001 Section 3.19](../api/MER-API-001-endpoints-and-postman-scenarios.md#319-staff-assisted-customer-and-pre-application-intake). Version number, Current/Historical label, filename, type, size, and upload time identify the selected evidence; raw UUIDs are not its primary description. An explicit View document action opens only the selected version through the protected intake content endpoint, including after the case ends.
 
@@ -274,30 +256,36 @@ VERIFY requires the reviewer to attest the document/name and re-enter its presen
 
 Assisted intake displays selected-Customer verification readiness. An unverified Customer with current `CUSTOMER_IDENTITY` evidence can enter the dedicated review flow by binding that exact intake version; the backend resolves ownership from the case. An already verified Customer reuses verification without another identity file for the next loan. Successful decisions refresh identity queues/detail and Staff origination Customer context. The exact endpoint contract is [MER-API-001 Section 3.20](../api/MER-API-001-endpoints-and-postman-scenarios.md#320-customer-identity-verification).
 
+### 7.6 Assisted Intake OCR
+
+Manual review remains authoritative. Staff Web can explicitly request OCR for an exact current intake-evidence version, monitor the safe job status, review allowlisted suggestions with confidence, correct or omit values, and finalize one immutable review. Only a `REVIEWED` result exposes the explicit application action. That action copies permitted values into existing route-local Customer, bank-account, UCL, or Collateral form inputs; it does not invoke a mutation, alter consent, or bypass the existing Save, Add, Create, validation, permission, confirmation, or uncertain-result behavior.
+
+OCR job/review state remains Document-owned and advisory. Extraction is explicit; polling is limited to active jobs. Staff finalizes corrected or omitted allowlisted suggestions, then explicitly applies finalized values to existing forms. Application retains evidence type/version awareness and does not save Customer or Loan facts. Evidence replacement removes untouched values applied from the old version and restores their preceding form values; manually edited values are retained rather than silently reset. Read-only verified identity fields and consent are not overwritten. Manual intake remains available when OCR is disabled, unavailable, or fails. Reviewed values and source tracking stay in route-local memory and leave with the form/session. Deployed OCR enablement is a separate deployment contract, not implied by the available UI.
+
 ---
 
-## 8. Operational Read Dependencies
+## 8. Operational Discovery and Case Evidence
 
-`MER-FU-037` remains the durable home for specialized Staff work queues, expanded action evidence/history, dashboard aggregation, and richer product projections beyond the CP2 discovery and case foundation.
+Discovery uses server-owned queue membership and purpose-specific case reads. Specialized verification/review queues, broad free-text lookup, and aggregate dashboards are outside the accepted surface; application status filters provide verification/review discovery without replacing their case evidence. TRACK owns enhancement status and sequencing.
 
 ### 8.1 Queue Inventory
 
-| Operational need | Current state | Blueprint decision |
+| Operational need | Discovery surface | Client rule |
 |---|---|---|
-| Document review | Executable narrow queue | May ship first, with honest pagination limits and direct case linking |
-| Staff correction tasks | Executable narrow queue | May ship first; show proof and maker-checker constraints |
-| Cross-product application discovery | Executable foundation | Exact product/status filters, deterministic paging, safe rows, and direct case links |
-| Applications awaiting verification | Executable status-filtered discovery | CP2 may discover by durable status; later workflow screens still require authoritative verification evidence |
-| Applications awaiting Loan Officer review | Executable status-filtered discovery | Review projection owns readiness, current-cycle evidence, durable assignment, and current-actor start availability |
-| Applications awaiting recommendation | Executable status-filtered discovery plus case projection | Recommendation projection owns current-cycle assignment, recorded provenance, and current-actor availability |
-| Applications awaiting approval | Executable narrow queue and case projection | Latest recommendation, safe actor provenance, and maker-checker-safe decision facts are authoritative |
-| Contracts awaiting preparation or readiness | Executable narrow queue | Server-owned `CONTRACT_PENDING` membership and backend-derived preparation, acknowledgment, blocker, or confirm stage |
-| Disbursements awaiting transfer confirmation | Executable narrow queue | Server-owned `DISBURSEMENT_PENDING` membership with exact ready-contract and masked-destination evidence |
-| Active or overdue LoanAccounts | Executable purpose-specific queue | Staff servicing index owns `ACTIVE` / `OVERDUE` membership, server paging, product/status filters, and PII-minimized balances |
-| Accounts eligible for settlement or closure | Executable purpose-specific queues | Loan owns eligible state, reconciliation, product filtering, deterministic paging, and PII-minimized rows |
-| Direct application-number lookup | Useful enhancement | CP2 intentionally provides no free-text or application-number search |
+| Document review | Dedicated queue | Show honest pagination limits and direct case linking |
+| Staff correction tasks | Dedicated queue | Show proof and maker-checker constraints |
+| Cross-product application discovery | Server-filtered application index | Exact product/status filters, deterministic paging, safe rows, and direct case links |
+| Applications awaiting verification | Status-filtered application discovery | Discover by durable status; the verification workspace supplies authoritative current/history evidence |
+| Applications awaiting Loan Officer review | Status-filtered application discovery | Review projection owns readiness, current-cycle evidence, durable assignment, and current-actor start availability |
+| Applications awaiting recommendation | Status-filtered discovery plus case projection | Recommendation projection owns current-cycle assignment, recorded provenance, and current-actor availability |
+| Applications awaiting approval | Dedicated queue and case projection | Latest recommendation, safe actor provenance, and maker-checker-safe decision facts are authoritative |
+| Contracts awaiting preparation or readiness | Dedicated queue | Server-owned `CONTRACT_PENDING` membership and backend-derived preparation, acknowledgment, blocker, or confirm stage |
+| Disbursements awaiting transfer confirmation | Dedicated queue | Server-owned `DISBURSEMENT_PENDING` membership with exact ready-contract and masked-destination evidence |
+| Active or overdue LoanAccounts | Purpose-specific queue | Staff servicing index owns `ACTIVE` / `OVERDUE` membership, server paging, product/status filters, and PII-minimized balances |
+| Accounts eligible for settlement or closure | Purpose-specific queues | Loan owns eligible state, reconciliation, product filtering, deterministic paging, and PII-minimized rows |
+| Direct application-number lookup | Outside the accepted discovery surface | Application discovery provides supported product/status filters, not free-text or application-number search |
 
-There is no assignment model in the current backend. Labels such as “My work,” “Assigned to me,” ownership SLA, reassignment, and workload balancing must not appear until assignment semantics and an authoritative projection exist. Initial queues are capability-based pending work.
+First review start establishes durable Loan Officer stewardship; later review cycles retain it. Only the assigned officer may restart review or recommend where backend policy requires it. Intake, verification, document, and correction work does not establish assignment. Queue membership remains capability-based pending work: there is no generic claim, reassignment, workload-balancing, or SLA workspace. “My work” or “Assigned to me” queue labels must not imply those absent capabilities.
 
 ### 8.2 Case Workspace Projection
 
@@ -319,9 +307,9 @@ Purpose-owned document and correction projections remain separate reads. Later o
 - current offer/contract summary needed for contract operations without using Customer-only reads;
 - current LoanAccount and servicing summary when activated;
 - server-derived available actions or blockers where the backend can prove them;
-- safe action-specific history beyond the application transitions returned by CP2.
+- safe action-specific history, separate from general application transitions.
 
-The projection must retain bounded-context ownership. Loan does not query Customer, Approval, or Document persistence directly merely to build a convenient DTO; the backend must compose through narrow public contracts or purpose-owned query adapters.
+MER-ARCH-001 and MER-ARCH-006 own projection composition and context boundaries. The client consumes the composed purpose-limited response without reconstructing its missing facts.
 
 ### 8.3 Queue Contract Quality
 
@@ -383,11 +371,11 @@ internal-web/                         # shared Internal Web application root
 
 Rules:
 
-- Staff Web features must not import future Back-Office Administration feature internals, or vice versa.
+- Staff Web features must not import Back-Office Administration feature internals, or vice versa.
 - Shared code contains technical primitives and genuinely repeated presentation, not permission-specific business policy.
 - Navigation groups are permission-aware, but direct routes remain guarded.
 - The client does not eagerly fetch all data for all visible role groups.
-- MER-FE-003 owns Back-Office Administration pages, route inventory, and delivery checkpoints.
+- MER-FE-003 owns Back-Office Administration pages, routes, and capability boundaries.
 
 ### 9.5 Security Implications
 
@@ -395,13 +383,13 @@ One Internal Web application does not grant one internal authority level. Login 
 
 Code delivered in the browser cannot be treated as confidential authorization policy. Lazy Staff Web and Back-Office Administration route chunks reduce loading and accidental data access but are not a security boundary. Sensitive resources are fetched only after the current actor has the route capability and explicitly enters the relevant workspace.
 
-### 9.6 Required Now, Useful Later, and Unnecessary Complexity Today
+### 9.6 Topology Constraints
 
-| Timing | Topology capability |
+| Classification | Topology capability |
 |---|---|
-| Required now | One Internal Web auth/session, route-level capability metadata, Staff Web and Back-Office Administration feature boundaries, lazy route loading, permission-scoped queries, separate navigation groups, cache clearing on session change |
-| Useful later | Workspace package only after real duplication, independent route build chunks, feature ownership checks, shared visual regression harness, per-area telemetry budgets |
-| Unnecessary today | Microfrontends, module federation, separate Staff Web and Back-Office Administration deployments, separate identity clients, shared Customer Web/Internal Web design-system package, monorepo orchestration beyond actual need |
+| Required | One Internal Web auth/session, route-level capability metadata, Staff Web and Back-Office Administration feature boundaries, lazy route loading, permission-scoped queries, separate navigation groups, cache clearing on session change |
+| Requires separate evidence | Workspace package only after real duplication, additional build isolation or feature ownership tooling, shared visual regression harness, per-area telemetry budgets |
+| Outside the accepted topology | Microfrontends, module federation, separate Staff Web and Back-Office Administration deployments, separate identity clients, shared Customer Web/Internal Web design-system package, monorepo orchestration beyond actual need |
 
 ### 9.7 Reconsideration Triggers
 
@@ -434,15 +422,15 @@ Staff Web should use the proven Customer Web foundation unless implementation ev
 | Tables | Semantic HTML table plus local composition first; add a grid library only after executable queue needs prove it |
 | Dates and money | Centralized `Intl` formatting with explicit locale and VND rules |
 
-No Redux or another general state store is planned. TanStack Query, the auth provider, form state, URL state, and local component state cover the verified needs.
+Internal Web does not require a general state store. TanStack Query, the auth provider, form state, URL state, and local component state cover the verified needs.
 
 ### 10.1 Dependency Rules
 
-- Add a dependency only when a current checkpoint has a concrete use that local composition cannot meet safely.
+- Add a dependency only when an accepted feature has a concrete use that local composition cannot meet safely.
 - Prefer accessible native controls and repository-owned primitives over wrapper stacks.
 - Do not introduce a data-grid package for a two-filter list. Reconsider when queues require verified column pinning, virtualization, server sorting, and large-data accessibility.
 - Do not generate an API client until generated output ownership, regeneration, response validation, and review noise are resolved.
-- Do not extract Customer Web code into a shared package before Staff implementation proves stable duplication. Reusing decisions is required; sharing code is evidence-driven.
+- Do not extract Customer Web code into a shared package before actual consumers prove stable duplication. Reusing decisions is required; sharing code is evidence-driven.
 - Keep feature-specific enums and DTO schemas with the feature. Do not create a global catalogue that silently couples unrelated backend contexts.
 
 ---
@@ -478,8 +466,8 @@ It does not own case data, forms, queue filters, selected application, or busine
 
 ### 11.3 Route Behavior
 
-- Public `/login` redirects an active Staff session to the first permitted operational destination.
-- Protected routes wait for session restoration before rendering or redirecting.
+- Public `/login` redirects an accepted internal session to its safe requested area or default: `/staff` for Staff capability (including dual-capability actors), `/admin` for admin-only capability, and the safe Staff no-access state for neither. Preserve only router-derived internal path/query destinations for an authorized area. Reject external URLs, scheme-relative URLs, feature-like prefixes such as `/administrator`, and inaccessible areas; fall back to the actor’s default destination.
+- Protected routes wait for session restoration before rendering or redirecting. Anonymous protected entry redirects to `/login` with a safe intended destination; authenticated actors do not use Login as an area selector.
 - A session with no Staff Web capabilities receives a dedicated “No operational access” page with logout, not an empty dashboard.
 - Expired access initiates one refresh and one replay. A second `401`, a failed refresh, or invalid actor facts ends the session.
 - Account or permission changes discovered through refresh cause route and query capability re-evaluation.
@@ -671,7 +659,7 @@ The backend owns advisory locks, row locks, transaction boundaries, expected-ver
 | Settlement | LoanAccount, repayment history, settlement/closure queues |
 | Closure | LoanAccount and closure queue |
 
-Where a required read contract does not exist, the command checkpoint remains blocked or must ship with a deliberately designed, backend-supported command-result query. A transient POST response alone is not a durable operational workspace.
+Every enabled command requires its authoritative reconciliation read or an explicitly supported backend command-result query. A transient POST response alone is not a durable operational workspace.
 
 ### 15.3 Time
 
@@ -811,7 +799,7 @@ Copy changes must preserve evidence-version distinctions, maker-checker restrict
 | Template | Purpose | Representative routes |
 |---|---|---|
 | Auth layout | Focused credential entry and session errors | `/login` |
-| Queue layout | Title, saved-in-URL filters, table/list, count/continuation, empty and stale states | document review, Staff corrections, future verification/approval/servicing queues |
+| Queue layout | Title, saved-in-URL filters, table/list, count/continuation, empty and stale states | documents, corrections, credit decisions, contracts, disbursements, servicing, settlement, closure |
 | Case workspace | Persistent safe case header, section navigation, evidence canvas, contextual action rail | application verification, review, decision, contract |
 | Financial operation | Full-width authoritative summary, value-date/reference form, confirmation step, reconciliation result | disbursement, repayment, settlement, closure |
 | Access state | No capability, forbidden, missing case, unresolved result | protected fallbacks |
@@ -820,18 +808,18 @@ Copy changes must preserve evidence-version distinctions, maker-checker restrict
 
 Desktop shell:
 
-- left navigation grouped into Work, Lending, Servicing, and Administration;
-- Back-Office Administration appears only when executable `/admin/*` routes and exact permissions exist;
+- persistent capability-aware navigation for Staff work and a separate Administration area;
+- authorized cross-area links expose Staff Operations and Back-Office Administration without a persona switcher; each area supplies separate navigation metadata and accessible labels;
 - top bar contains current Staff identity summary, environment label when non-production, session menu, and optional global application search only after its API exists;
 - main content has a bounded readable width for forms and a wider mode for queues and side-by-side evidence.
 
-The shell does not display decorative dashboard metrics without an authoritative aggregation endpoint.
+The shell owns Meridian identity, actor email/Staff-session label, logout, skip-to-main, responsive desktop navigation and mobile Sheet, and authorized cross-area links. It does not preload another area’s data or display decorative dashboard metrics without an authoritative aggregation endpoint. The `/staff` landing is an entry surface, not a redirect to a queue or a business dashboard.
 
 ### 18.3 Queue Navigation
 
 Queue filters and pagination live in the URL so a safe view is refreshable and shareable among authorized Staff. The current document and correction endpoints permit only their documented status and page/size parameters; the client must not show unsupported product, owner, date, sort, or free-text filters.
 
-No local “saved views” are planned until server-side filter contracts stabilize. A saved view must never serialize sensitive case data.
+Saved operational views are outside the accepted surface; filter and paging state uses only supported safe URL parameters and never serializes sensitive case data.
 
 ### 18.4 Case Workspace Navigation
 
@@ -899,7 +887,7 @@ When a command changes durable state, success focus moves to a heading that name
 - Consequential confirmations repeat safe case identity, product, current state, expected version, amount, and value date returned or entered for that command.
 - Confirmation copy describes the real outcome. Contract readiness does not transfer funds; settlement records a full payment; closure does not alter balances.
 - Reject, failed verification, replacement request, and return actions require their controlled reason and instruction inputs before confirmation.
-- The client never invents reason codes. Options come from an explicit stable contract or a versioned frontend map backed by the API specification for that checkpoint.
+- The client never invents reason codes. Options come from an explicit stable contract or a versioned frontend map backed by the operation’s API specification.
 - Successful commands end on a persistent result panel after authoritative refetch, not a toast-only message.
 
 ### 20.2 Financial Confirmation
@@ -920,7 +908,7 @@ Settlement confirmation must show the locked/current expected full outstanding a
 | Start verification or review | Workflow transition | Exact current evidence summary; no automatic retry after uncertainty |
 | Complete verification | Workflow transition; failed outcome receives destructive emphasis | Outcome-specific confirmation and authoritative cycle reconciliation |
 | Upload or review document, complete correction task | Evidence mutation within workflow | Exact version/task, stable UUID where supported, proof refetch |
-| Convert assisted UCL intake | Workflow transition | Confirm selected Customer, paper evidence, and requested terms; reconcile uncertainty by case GET only and never auto-repeat POST |
+| Convert assisted UCL or Collateral intake | Workflow transition | Confirm selected Customer, paper evidence, and requested terms; reconcile uncertainty by case GET only and never auto-repeat POST |
 | Request correction or resubmit | Workflow transition | Structured plan/task summary, cycle identity, post-command case refetch |
 | Recommend approval/rejection | Workflow transition | Clearly labeled as recommendation, never final approval |
 | Approve or return | Workflow transition | Strong independent-decision review and maker-checker context |
@@ -953,7 +941,7 @@ Rows do not contain action forms. The operator opens the case or dedicated actio
 
 ### 21.2 Document-Review Queue
 
-This is executable now for `AWAITING_REVIEW` current versions.
+The document-review queue lists `AWAITING_REVIEW` current versions.
 
 | Element | Decision |
 |---|---|
@@ -968,17 +956,17 @@ The endpoint returns a list rather than a page envelope. “Next” may be shown
 
 ### 21.3 Staff-Correction Queue
 
-This is executable now for `OPEN` Staff tasks.
+The Staff-correction queue lists `OPEN` Staff tasks.
 
 Rows may show task ID, application ID, scope, document type, status, safe instruction, creation time, and baseline version identity where returned. They must not infer that proof exists from a local upload or document view; completion asks the backend to validate persisted proof.
 
 The queue must explain the maker-checker possibility. Because the task response does not provide every creator fact needed for pre-validation, the final backend result remains authoritative.
 
-### 21.4 Future Queues
+### 21.4 Workflow and Financial Queues
 
-Verification, review, recommendation, approval, contract, disbursement, servicing, settlement, and closure queues require backend projections before UI implementation. Each must be independently permissioned and paged. A single mega-queue is not the initial design because the actors, urgency, evidence, and actions differ.
+The Approver queue uses server-owned `APPROVAL_PENDING` membership, product filtering, deterministic paging, and exact `approval:decide`. Contract and disbursement queues use their separate work contracts under Section 25.4. Servicing, settlement, and closure discovery follow Section 26.5. Every queue retains its own permissions, evidence, and case destination; the browser does not merge them into a policy-derived mega-queue.
 
-An optional “All permitted work” landing may aggregate counts only after the backend exposes a purpose-built summary. It must not fetch every queue merely to count rows.
+Verification and Loan Officer review/recommendation use the application index’s supported status filters and dedicated case routes. `/staff/work/verifications` and `/staff/work/reviews` are unsupported and return safe not-found outcomes. No queue-count or “All permitted work” summary is synthesized by fetching every queue or counting local rows.
 
 ---
 
@@ -1008,15 +996,15 @@ The business application number is the primary visible identity when the authori
 | Section | Purpose | Required authority |
 |---|---|---|
 | Overview | Safe application, Customer readiness, permission-gated current contact, and Collateral Loan facts | Staff case projection; `customer:read` additionally gates contact |
-| Product verification | Salary Advance snapshot summary or UCL/Collateral manual cycle evidence | New Staff verification read |
-| Documents | Checklist, current versions, readiness, reviews, content actions | New Staff checklist/history read plus existing queue/content actions |
-| Corrections | Active request, Customer/Staff tasks, proof, completion and resubmission | Expanded correction projection plus current queue/commands |
-| Review | Current review cycle, Loan Officer evidence and recommendation | New review/recommendation read plus current commands |
-| Decision | Latest recommendation, separation-of-duties evidence, decision form/history | New approval-evidence read plus current decision command |
-| Contract | Current masked contract, versions, acknowledgment/readiness, preparation | Existing direct contract/readiness reads plus discovery/case projection |
+| Product verification | Salary Advance snapshot summary or UCL/Collateral manual cycle evidence | Purpose-limited Staff verification read |
+| Documents | Checklist, current versions, readiness, reviews, content actions | Staff checklist/history read plus queue/content actions |
+| Corrections | Active request, Customer/Staff tasks, proof, completion and resubmission | Staff correction case/history plus separate task commands |
+| Review | Current review cycle, Loan Officer evidence and recommendation | Staff review and Approval recommendation reads plus current commands |
+| Decision | Latest recommendation, separation-of-duties evidence, decision form/history | Approval-owned decision/evidence read plus independent command |
+| Contract | Current masked contract/version, acknowledgment/readiness, preparation | Existing direct contract/readiness reads plus discovery/case projection |
 | Disbursement | Ready-contract facts, controlled reveal, transfer confirmation | Existing direct commands plus discovery/case projection |
 | LoanAccount | Final schedule, balances, installment progress, repayments | Existing direct account/history reads |
-| History | Ordered safe LoanApplication status-transition evidence | Executable CP2 Staff case projection; action-specific histories remain future dependencies |
+| History | Ordered safe LoanApplication status-transition evidence | Staff case lifecycle history; verification, documents, corrections, review/decision, handoff, and servicing retain their separate specialized histories |
 
 ### 22.3 Evidence Freshness
 
@@ -1036,11 +1024,11 @@ Opening a confirmation freezes only the displayed review snapshot. Submission st
 
 ### 23.1 Product Verification
 
-| Product | Current backend fact | Staff Web implication |
+| Product | Product evidence | Staff Web implication |
 |---|---|---|
-| Salary Advance | Product verification is created during submission from Partner/employment evidence; there is no separate Staff verification command | The executable CP4 projection shows the immutable application-owned summary and no manual action or live Partner value |
-| UCL | Loan Officer can start and complete manual verification with `VERIFIED`, `FAILED`, or `REQUIRES_MORE_INFORMATION` | The executable CP4 projection returns the current cycle and ordered history for action gating and lost-response reconciliation |
-| Collateral | Loan Officer starts numbered verification, receives restricted Collateral facts, and completes the exact `expectedVerificationId` | The executable CP4 projection keeps the assessment snapshot and authoritative cycle together; a stale ID preserves the form, refetches, disables action, and requires explicit re-review |
+| Salary Advance | Product verification is created during submission from Partner/employment evidence; there is no separate Staff verification command | The verification projection shows the immutable application-owned summary and no manual action or live Partner value |
+| UCL | Loan Officer can start and complete manual verification with `VERIFIED`, `FAILED`, or `REQUIRES_MORE_INFORMATION` | The verification projection returns the current cycle and ordered history for action gating and lost-response reconciliation |
+| Collateral | Loan Officer starts numbered verification, receives restricted Collateral facts, and completes the exact `expectedVerificationId` | The verification projection keeps the assessment snapshot and authoritative cycle together; a stale ID preserves the form, refetches, disables action, and requires explicit re-review |
 
 The Loan Review workspace organizes Documents → Product Assessment / Verification → Credit Review → Recommendation → Review / Decision history. Document readiness links to the Document workspace without duplicating its review controls. Verification outcomes remain separate from credit review, recommendation, and the independent Approver decision; `VERIFIED` means evidence sufficiency for credit review, not credit approval.
 
@@ -1076,7 +1064,7 @@ For Staff-assisted applications, a separate read-only Signed Customer action evi
 
 Document/correction/signed metadata queries use `gcTime: 0`. Restricted notes, filenames, form metadata, and bytes remain in memory and never enter browser persistence, URLs, query keys, logs, analytics, or exports. Object URLs are revoked on close, version/application change, unmount, logout, or actor/authority change; late responses after cleanup do not create retained blobs. Query failures hide restricted evidence until an authoritative read succeeds.
 
-Manual review remains authoritative. Staff Web can explicitly request OCR for an exact current intake-evidence version, monitor the safe job status, review allowlisted suggestions with confidence, correct or omit values, and finalize one immutable review. Only a `REVIEWED` result exposes the explicit application action. That action copies permitted values into existing route-local Customer, bank-account, UCL, or Collateral form inputs; it does not invoke a mutation, alter consent, or bypass the existing Save, Add, Create, validation, permission, confirmation, or uncertain-result behavior.
+OCR-assisted intake follows Section 7.6; it does not establish checklist acceptance or replace manual document review.
 
 ### 23.3 Staff Correction Tasks
 
@@ -1087,7 +1075,7 @@ The current task workspace shows origination channel, responsible party, scope, 
 - `DOCUMENT_REVIEW` links to the exact review workspace.
 - Staff-owned completion and assisted Customer-task completion use distinct endpoints with one stable `completionRequestId`; the client never marks proof complete locally. Maker-checker applies only to Staff-owned tasks.
 - Staff-only, mixed, or eligible assisted Customer-only resubmission uses a stable `resubmissionRequestId` only after the backend reports every task complete and Staff resubmission available.
-- Mixed corrections remain blocked until both Customer and Staff work is complete.
+- Mixed corrections remain blocked until both Customer and Staff work is complete. Upload, task completion, resubmission, and evidenced cancellation retain separate action-specific unresolved identities; none substitutes for another.
 - Requested amount and term remain immutable through current correction flows.
 - UCL and Collateral product restrictions are rendered from the supported command contract, not generalized into arbitrary task construction.
 
@@ -1193,7 +1181,7 @@ The workspace presents:
 - safe bank and account-holder facts with masked account number;
 - Customer acknowledgment state;
 - point-in-time readiness and blocker codes;
-- version history only when a future authorized projection exposes it;
+- current operational contract evidence only; no inferred historical-version browser;
 - current action eligibility from authoritative state.
 
 The shared Customer panel displays the phone as Current phone in both contract and disbursement workspaces. It remains operational contact information, separate from immutable contract and handoff evidence, and excludes Identity Reference. It uses the existing Accounting case response without a separate Customer query or broader profile access.
@@ -1249,9 +1237,9 @@ The full destination exists only in workspace component memory after an explicit
 
 One disbursement confirmation uses one stable request UUID. Unknown Network or 5xx results persist only the actor-bound operation type, application resource, request UUID, payload digest, and unresolved timestamp. The raw external transfer reference and full destination never enter browser storage or query cache. Same-page recovery retains the exact payload only in component memory; after reload, the operator must re-enter a digest-matching payload before Staff Web may reuse the original request UUID. A `DISBURSED` GET result cannot prove that request identity, so exact backend replay remains the authoritative recovery proof.
 
-### 25.4 Operational Read Dependencies
+### 25.4 Queue Membership and Case Reads
 
-The contract, disbursement, ordinary-repayment servicing, settlement, and closure queues and their case reads are executable. Loan owns membership, server paging, product filtering, consistency checks, and any projection stage. The servicing queue contains only `ACTIVE` and `OVERDUE` LoanAccounts and supports an optional serviceable-status filter. Settlement discovery separately selects coherent `ACTIVE` or `OVERDUE` accounts with positive outstanding. Closure discovery selects fully reconciled `SETTLED` accounts with contractual-payoff or approved-settlement provenance. The browser must not derive membership or work stage by scanning or reinterpreting application statuses.
+Contract, disbursement, ordinary-repayment servicing, settlement, and closure use separate queues and case reads. Loan owns membership, server paging, product filtering, consistency checks, and any projection stage. The servicing queue contains only `ACTIVE` and `OVERDUE` LoanAccounts and supports an optional serviceable-status filter. Settlement discovery separately selects coherent `ACTIVE` or `OVERDUE` accounts with positive outstanding. Closure discovery selects fully reconciled `SETTLED` accounts with contractual-payoff or approved-settlement provenance. The browser must not derive membership or work stage by scanning or reinterpreting application statuses.
 
 ---
 
@@ -1289,6 +1277,8 @@ Ordinary repayment entry is a financial operation. The intended seeded operator 
 - After success, render returned allocations and outcomes, then refetch LoanAccount and repayment history.
 - Exact replay may return the original result even after later servicing state changes; label replay using the response's `idempotentReplay` fact.
 - Overpayment, invalid value date, non-serviceable state, duplicate reference, and evidence inconsistency are backend outcomes, not client-calculated guards.
+
+A fresh coherent account read gates repayment. Safe cached balances may remain visible after a failed refetch, but repayment stays locked. One repayment uses one stable UUID bound to application, canonical trimmed/uppercased payment reference, exact whole-VND amount, and value date. Network/5xx uncertainty persists only actor-bound `REPAYMENT_RECORDING` metadata and a SHA-256 semantic digest; the reference and complete payload remain in same-page component memory. Reload requires digest-matching re-entry before exact replay. A changed balance, new history row, or later `SETTLED`/`CLOSED` state cannot prove request identity. Present the replayed historical outcome separately from the refetched current account.
 
 ### 26.3 Administrative Full-Balance Settlement
 
@@ -1371,40 +1361,44 @@ The file object and preview remain memory-only. A successful upload refetches th
 
 ## 28. Route Map
 
-Routes are conceptual implementation targets. “API dependency” means the route must not ship as a fabricated experience.
+The routes below are registered Internal Web surfaces. Exact route permission and role gates are distinct from additional query/command requirements. A route grant never authorizes a denied feature query or action.
 
-| Route | Capability | Availability |
+| Route | Purpose | Route gate and additional rules |
 |---|---|---|
-| `/login` | Internal authentication | Executable foundation |
-| `/staff` | Redirect to first permitted work area | Executable after shell exists; no invented dashboard |
-| `/staff/origination` | Open assisted-origination intake | Executable with `loan:originate:staff` |
-| `/staff/origination/:assistedOriginationCaseId` | Customer selection/maintenance, paper intake evidence, and UCL or Collateral conversion | Executable with capability-gated Customer and Document operations; completed intake links to the application document workspace |
-| `/staff/work/documents` | Document-review queue | Executable narrow queue |
-| `/staff/work/corrections` | Staff-correction queue | Executable narrow queue |
-| `/staff/work/verifications` | Pending UCL/Collateral verification | API dependency |
-| `/staff/work/reviews` | Pending Loan Officer review/recommendation | API dependency |
-| `/staff/work/approvals` | Pending independent decisions | Executable with `approval:decide` |
-| `/staff/work/contracts` | Contract preparation/readiness | Executable with `loan:contract:read`; operational read also requires Accounting Officer role |
-| `/staff/work/disbursements` | Ready external-transfer confirmations | Executable with `loan:disburse`; operational read also requires Accounting Officer role |
-| `/staff/work/servicing` | Active/overdue ordinary repayment work | Executable with `loan:read`; server-owned membership and paging |
-| `/staff/work/settlements` | Active/overdue full-balance settlement work | Executable with `loan:settlement:approve` and Approver role; server-owned membership and paging |
-| `/staff/work/closures` | Settled administrative-closure work | Executable with `loan:account:close` and Accounting Officer role; server-owned membership and paging |
-| `/staff/applications` | Staff application search/filter | Executable |
-| `/staff/applications/:loanApplicationId` | Case overview | Executable with purpose-limited readiness and lifecycle history |
-| `/staff/applications/:loanApplicationId/verification` | Product verification | Executable with `loan:review`; does not require `loan:read` |
-| `/staff/applications/:loanApplicationId/documents` | Document evidence/review | Executable |
-| `/staff/applications/:loanApplicationId/corrections` | Correction tasks/proof/resubmission | Executable |
-| `/staff/applications/:loanApplicationId/review` | Review start, current cycle, and capability-gated recommendation | Executable with `loan:review`; recommendation controls additionally require `approval:recommend` |
-| `/staff/applications/:loanApplicationId/decision` | Independent decision | Executable with `approval:decide` |
-| `/staff/applications/:loanApplicationId/contract` | Current contract/readiness | Executable Staff case projection with `loan:contract:read`; operational read also requires Accounting Officer role |
-| `/staff/applications/:loanApplicationId/disbursement` | Reveal, external-transfer confirmation, and activation result | Executable with `loan:disburse`; operational read also requires Accounting Officer role |
-| `/staff/applications/:loanApplicationId/loan-account` | Account/schedule/history | Executable with `loan:read`; capability-gated settlement/closure navigation and read-only `CLOSED` state |
-| `/staff/applications/:loanApplicationId/repayments/new` | Record repayment | Executable with `repayment:update`; authoritative reads require `loan:read` |
-| `/staff/applications/:loanApplicationId/settlement` | Exact full-balance settlement | Executable with `loan:read`, `loan:settlement:approve`, and Approver role |
-| `/staff/applications/:loanApplicationId/closure` | Administrative closure | Executable with `loan:read`, `loan:account:close`, and Accounting Officer role |
-| `/admin` | Back-Office Administration feature boundary | Capability-guarded foundation defined by MER-FE-003; child routes follow its delivery checkpoints |
+| `/login` | Shared internal login | Public; safe destination resolution under Section 11.3 |
+| `/set-password` | One-time Staff password setup | Public fragment-token handling under MER-FE-003 Section 12 |
+| `/` | Internal entry | Protected; resolves the capability-based default area |
+| `/staff` | Staff Operations landing | Any exact Staff operational capability; no invented dashboard |
+| `/staff/origination` | Assisted intake discovery | `loan:originate:staff` |
+| `/staff/origination/:assistedOriginationCaseId` | Selected Customer, paper evidence, UCL/Collateral conversion | `loan:originate:staff`; Customer and Document actions retain separate exact authorities |
+| `/staff/customer-access` | Enable an existing Customer’s digital access | `customer:intake:manage`; exact Customer search/read retains its own authority |
+| `/staff/customer-identity-verifications` | Identity verification queue | `customer:identity:verify` |
+| `/staff/customer-identity-verifications/:verificationId` | Identity evidence and decision | `customer:identity:verify`; no stored-reference reveal |
+| `/staff/applications` | Product/status-filtered application discovery | `loan:read`; no free-text search |
+| `/staff/applications/:loanApplicationId` | Case overview and lifecycle history | `loan:read`; contact and identity reveal are separately gated |
+| `/staff/work/documents` | Document-review queue | `document:review` |
+| `/staff/work/corrections` | Staff-correction queue | `loan:correction:staff` |
+| `/staff/work/approvals` | Independent-decision queue | `approval:decide` |
+| `/staff/work/contracts` | Contract/readiness queue | `loan:contract:read`; operational read also requires Accounting Officer role |
+| `/staff/work/disbursements` | Transfer-confirmation queue | `loan:disburse`; operational read also requires Accounting Officer role |
+| `/staff/work/servicing` | Ordinary servicing queue | `loan:read` |
+| `/staff/work/settlements` | Full-balance settlement queue | `loan:settlement:approve` and Approver role |
+| `/staff/work/closures` | Administrative closure queue | `loan:account:close` and Accounting Officer role |
+| `/staff/applications/:loanApplicationId/documents` | Checklist, history, content, authorized review/upload | `document:review` or `approval:decide`; mutation/upload gates remain separate |
+| `/staff/applications/:loanApplicationId/corrections` | Tasks, proof, history, resubmission, assisted UCL cancellation | `loan:correction:staff`; action-specific upload/role/permission gates remain mandatory |
+| `/staff/applications/:loanApplicationId/verification` | Product verification | `loan:review`; no `loan:read` prerequisite |
+| `/staff/applications/:loanApplicationId/review` | Review start and recommendation | `loan:review`; recommendation additionally requires `approval:recommend` and assigned-officer availability |
+| `/staff/applications/:loanApplicationId/decision` | Independent decision/history | `approval:decide` |
+| `/staff/applications/:loanApplicationId/offer-response` | Record evidenced Customer offer response | `loan:offer:respond:staff` and Loan Officer role; signed upload separately requires `document:upload:assisted-action` |
+| `/staff/applications/:loanApplicationId/contract` | Contract/readiness and assisted acknowledgment | `loan:contract:read`; operational read requires Accounting Officer role; preparation/readiness/acknowledgment retain distinct permissions |
+| `/staff/applications/:loanApplicationId/disbursement` | Protected reveal, confirmation, activation result | `loan:disburse`; operational read also requires Accounting Officer role |
+| `/staff/applications/:loanApplicationId/loan-account` | Account/schedule/progress/history | `loan:read`; financial action navigation remains capability-gated |
+| `/staff/applications/:loanApplicationId/repayments/new` | Ordinary repayment | `repayment:update`; account/history reads also require `loan:read` |
+| `/staff/applications/:loanApplicationId/settlement` | Full-balance settlement | `loan:settlement:approve` and Approver role; account/history reads also require `loan:read` |
+| `/staff/applications/:loanApplicationId/closure` | Administrative closure | `loan:account:close` and Accounting Officer role; account reads also require `loan:read` |
+| `/admin` and supported children | Administration | Exact area/route capabilities under MER-FE-003 |
 
-The current servicing APIs are application-scoped, so routes retain `loanApplicationId`. Do not pretend the path parameter is a LoanAccount ID. A future LoanAccount search may introduce a canonical account route with an explicit redirect strategy.
+Servicing routes retain `loanApplicationId` because their APIs are application-scoped. It is not a LoanAccount ID. Unsupported children use the safe not-found view; no speculative queue, page, or action placeholder is rendered.
 
 ### 28.1 Route Ownership and State
 
@@ -1420,7 +1414,7 @@ The current servicing APIs are application-scoped, so routes retain `loanApplica
 | Repayment | Accounting Officer with `repayment:update`; account reads need `loan:read` | LoanAccount, repayment command, and history endpoints | Record externally received payment and inspect outcome | `ACTIVE`, `OVERDUE`, `SETTLED`; Accounting records ordinary repayment, backend allocates |
 | Settlement | Approver role plus `loan:settlement:approve`; account/history reads also need `loan:read` | Settlement queue, Staff LoanAccount/history, approved-settlement recovery read, and settlement command | Record exact full-balance settlement | `ACTIVE` or `OVERDUE` to `SETTLED`; Approver owns settlement, no concession path |
 | Closure | Accounting Officer role plus `loan:account:close`; account read also needs `loan:read` | Closure queue, Staff LoanAccount read, and closure command | Record administrative terminal closure | `SETTLED` to `CLOSED`; Accounting owns closure, no financial mutation |
-| Back-Office Administration | Future administrative capabilities | Future administration APIs and MER-FE-003 | Platform administration | No Staff Web lending action is moved here merely because one actor has the Back-Office Admin role |
+| Back-Office Administration | Exact administrative capabilities | Supported Partner, Loan Product, and Internal User APIs under MER-FE-003 | Bounded administration | No Staff Web lending action is moved here merely because one actor has the Back-Office Admin role |
 
 ### 28.2 Route Metadata
 
@@ -1438,30 +1432,29 @@ Each protected route declares:
 
 ## 29. Page Inventory
 
-| Page | Delivery class | Primary data | Primary action | Required exceptional states |
-|---|---|---|---|---|
-| Login | Executable now | Session status | Authenticate | invalid credentials, throttled, unverified/inactive safe response, session restore |
-| Assisted origination index | Executable | Open UCL and Collateral intake | Start or reopen intake | empty, loading, forbidden, query failure |
-| Customer digital access | Executable | Exact Customer search and protected access status | Enable access for a verified existing Customer | no selection, missing/inactive Customer, identity mismatch, email conflict, already enabled, unknown result, loading/error/retry |
-| Assisted origination workspace | Executable | Intake, selected Customer/profile, masked bank accounts, intake evidence versions, and completed application link | Select/create/maintain Customer, upload/replace evidence, convert eligible UCL, abandon | exact-search miss, duplicate identity/account, missing paper application, stale evidence version, competing completion, result unknown, terminal case, partial permission, loading/error |
-| Document queue | Executable now | Awaiting-review list | Open exact version | empty, best-effort continuation, row no longer pending |
-| Document review | Foundation exists but projection missing | Exact version metadata/content and safe case facts | Record review outcome | content failure, stale version, waiver forbidden, result unknown |
-| Staff correction queue | Executable now | Open Staff tasks | Open task | empty, task completed elsewhere, pagination uncertainty |
-| Staff correction task | Foundation exists but projection missing | Task, baseline, proof, correction state | Upload/review/complete | maker-checker, proof missing, stale version, mixed work incomplete |
-| Application search | API dependency | Staff operational index | Open case | API unavailable, no results, invalid filters |
-| Case overview | API dependency | Consolidated safe case projection | Navigate to eligible work | partial dependency, stale case, forbidden/not found |
-| Verification | Foundation exists but projection missing | Current product cycle and evidence | Complete exact outcome | readiness blocker, stale cycle, unresolved no-UUID command |
-| Review/recommendation | Executable | Review cycle, readiness, correction options, and durable recommendation | Submit recommendation | stale cycle, invalid task plan, unresolved command |
-| Decision | Executable | Latest recommendation, maker-checker relation, decision history, and resulting Loan state | Submit decision | maker-checker, stale recommendation or cycle, unresolved command |
-| Contract | Executable | Authoritative queue/case, current masked contract, accepted terms/items, and advisory readiness | Prepare/regenerate/confirm | stale version, acknowledgment or readiness blockers, replay conflict, contradictory or unknown evidence |
-| Disbursement | Executable | Authoritative queue/case, ready contract, memory-only reveal, transfer evidence, activated account, and final schedule | Confirm disbursement | reveal unavailable, stale contract, duplicate reference, invalid dates, result unknown/replay, confirmed refresh unavailable |
-| LoanAccount | Executable | Server-owned serviceable index, account, balances, final schedule, and history | Inspect account or open ordinary repayment | unavailable account, history paging failure, stale cached evidence, inconsistent state |
-| Repayment | Executable | Authoritative account summary, immutable history, and entered payment | Record repayment | overpayment, invalid date, duplicate reference, replay/result unknown, confirmed refresh unavailable |
-| Settlement | Executable | Authoritative queue/account/history, immutable recovery evidence, and entered payment date/reference | Apply exact full-balance settlement | wrong role, stale amount, non-serviceable state, protected-reference mismatch, replay/result unknown, confirmed refresh unavailable |
-| Closure | Executable | Authoritative queue and reconciled settled account | Close account without financial input | wrong role, not settled, competing operation, replay/result unknown, confirmed refresh unavailable |
-| Generic audit page | Deferred | No authorized query exists | None | do not synthesize audit evidence |
-| Back-Office Administration pages | Deferred to MER-FE-003 | Future administration projections | Future administrative actions | no placeholder management forms |
-| No access | Executable now | Session capability facts | Logout | permission change |
+| Page | Primary data | Primary action | Required exceptional states |
+|---|---|---|---|
+| Login | Session status | Authenticate | invalid credentials, throttled, unverified/inactive safe response, session restore |
+| Assisted origination index | Open UCL and Collateral intake | Start or reopen intake | empty, loading, forbidden, query failure |
+| Customer digital access | Exact Customer search and protected access status | Enable access for a verified existing Customer | no selection, missing/inactive Customer, identity mismatch, email conflict, already enabled, unknown result, loading/error/retry |
+| Assisted origination workspace | Intake, selected Customer/profile, masked bank accounts, intake evidence versions, and completed application link | Select/create/maintain Customer, upload/replace evidence, convert eligible UCL or Collateral, abandon | exact-search miss, duplicate identity/account, missing paper application, stale evidence version, competing completion, result unknown, terminal case, partial permission, loading/error |
+| Document queue | Awaiting-review list | Open exact version | empty, best-effort continuation, row no longer pending |
+| Document review | Exact version metadata/content and safe case facts | Record review outcome | content failure, stale version, waiver forbidden, result unknown |
+| Staff correction queue | Open Staff tasks | Open task | empty, task completed elsewhere, pagination uncertainty |
+| Staff correction task | Task, baseline, proof, correction state | Upload/review/complete | maker-checker, proof missing, stale version, mixed work incomplete |
+| Application discovery | Staff operational index | Open case | API unavailable, no results, invalid filters |
+| Case overview | Consolidated safe case projection | Navigate to eligible work | partial dependency, stale case, forbidden/not found |
+| Verification | Current product cycle and evidence | Complete exact outcome | readiness blocker, stale cycle, unresolved no-UUID command |
+| Review/recommendation | Review cycle, readiness, correction options, and durable recommendation | Submit recommendation | stale cycle, invalid task plan, unresolved command |
+| Decision | Latest recommendation, maker-checker relation, decision history, and resulting Loan state | Submit decision | maker-checker, stale recommendation or cycle, unresolved command |
+| Contract | Authoritative queue/case, current masked contract, accepted terms/items, and advisory readiness | Prepare/regenerate/confirm | stale version, acknowledgment or readiness blockers, replay conflict, contradictory or unknown evidence |
+| Disbursement | Authoritative queue/case, ready contract, memory-only reveal, transfer evidence, activated account, and final schedule | Confirm disbursement | reveal unavailable, stale contract, duplicate reference, invalid dates, result unknown/replay, confirmed refresh unavailable |
+| LoanAccount | Server-owned serviceable index, account, balances, final schedule, and history | Inspect account or open ordinary repayment | unavailable account, history paging failure, stale cached evidence, inconsistent state |
+| Repayment | Authoritative account summary, immutable history, and entered payment | Record repayment | overpayment, invalid date, duplicate reference, replay/result unknown, confirmed refresh unavailable |
+| Settlement | Authoritative queue/account/history, immutable recovery evidence, and entered payment date/reference | Apply exact full-balance settlement | wrong role, stale amount, non-serviceable state, protected-reference mismatch, replay/result unknown, confirmed refresh unavailable |
+| Closure | Authoritative queue and reconciled settled account | Close account without financial input | wrong role, not settled, competing operation, replay/result unknown, confirmed refresh unavailable |
+| Back-Office Administration pages | Supported Partner, Loan Product, and Internal User reads under MER-FE-003 | Bounded administrative commands | no speculative management forms |
+| No access | Session capability facts | Logout | permission change |
 
 No page derives a missing index from browser history or local storage.
 
@@ -1483,7 +1476,7 @@ Button, link, input, textarea, select, checkbox, radio group, date input, dialog
 | `QueueAge` | Safe relative plus exact timestamp presentation |
 | `CaseHeader` | Stable safe application identity and durable status |
 | `WorkspaceNavigation` | Capability/state-aware case sections |
-| `CustomerSummary` | Purpose-limited Staff-safe Customer readiness facts from a future case projection |
+| `CustomerSummary` | Purpose-limited Staff-safe Customer readiness facts from the authorized case projection |
 | `ApplicationFacts` | Requested terms, product, submission, and immutable application evidence |
 | `EvidencePanel` | Labeled facts with source/freshness context |
 | `StatusBadge` | Centralized enum label, icon, and semantic treatment |
@@ -1533,7 +1526,7 @@ Empty states name the scope: “No Staff correction tasks are open” rather tha
 | `503` | Protected capability unavailable; preserve non-sensitive draft when safe |
 | Other `5xx` | Unexpected failure banner, result-unknown treatment for mutations, and safe support correlation |
 
-Parse backend status, code, safe message, details, and correlation defensively. `MER-FU-043` records that some executable identifiers do not yet have one canonical status/message. Staff Web must not hardcode a universal status from an identifier until that backend conformance work is complete.
+Parse backend HTTP status, `errorCode`, safe message, details, and correlation defensively. Status/message mappings may be endpoint- or context-specific. Staff Web must use status plus `errorCode`, must not infer a universal status from an identifier, and must not parse message text as a business contract. MER-API-001 and MER-ARCH-004 own exact mappings.
 
 Staff pages may show an operational resolution returned by the backend, but “internal” does not authorize raw exception detail or undisclosed state. Copy remains bounded by the safe error envelope.
 
@@ -1551,9 +1544,9 @@ Unknown errors show a safe generic message and response correlation. Raw excepti
 
 ## 32. Audit and Evidence Presentation
 
-Meridian records PII-safe business audit evidence, but no generic audit-query controller currently exists. Staff Web must not label browser event history or current-status inference as an audit log.
+Meridian records PII-safe business audit evidence; generic audit exploration is outside the Staff surface. Staff Web must not label browser event history or current-status inference as an audit log.
 
-When a future authorized case history is exposed:
+Authorized application, verification, document, correction, review/decision, Accounting handoff, and servicing histories follow these presentation rules:
 
 - preserve backend ordering and immutable timestamps;
 - distinguish application transition, verification, document review, recommendation, decision, contract, disbursement, payment, settlement, and closure concepts;
@@ -1566,55 +1559,26 @@ An `OperationStatusPanel` is client recovery state, not audit evidence.
 
 ---
 
-## 33. Consolidated API Dependency Inventory
+## 33. Read Authority and Capability Limits
 
-### 33.1 Blocking Dependencies
+Purpose-specific case reads and indexes support the accepted workspaces in Sections 7, 8, and 21–29. A general case header does not grant verification, document, recommendation, decision, contract, or servicing access. Action-specific evidence and replay remain governed by their owning feature and MER-API-001; runtime transaction and consistency mechanics remain with MER-ARCH-006.
 
-| Dependency | Experiences blocked | Required safe outcome |
-|---|---|---|
-| Expanded Staff case projections | evidence context for CP3+ action workspaces | PII-minimized current facts composed across context-owned contracts beyond the CP2 header/readiness/history foundation |
-| Contract/disbursement operational indexes | Accounting discovery | Current version/status/readiness blockers and ready cases |
-| Expanded action histories beyond recommendation and decision evidence | later action timelines and reliable no-UUID reconciliation | Ordered safe immutable evidence beyond CP2 LoanApplication transitions and CP5 Approval history |
+The client must not compensate for an unavailable read by:
 
-### 33.2 Useful but Non-Blocking Enhancements
-
-- page envelopes with totals or cursors for document and correction queues;
-- server sort and product/date filters based on observed operations;
-- server-returned available actions and blocker summaries;
-- purpose-built queue-count summary for a landing page;
-- direct safe lookup by application number or account number;
-- command-status resource where a natural durable read cannot reconcile a no-UUID command.
-
-### 33.3 Explicitly Deferred
-
-- generic audit search;
-- assignment, reassignment, workload, and SLA tracking;
-- configurable approval workflow;
-- automated risk or collateral valuation;
-- discounted settlement, reversal/refund, suspense, write-off, or reconciliation;
-- analytics, reporting, and executive dashboards;
-- Back-Office Administration owned by MER-FE-003.
-
-### 33.4 Do Not Solve Missing Reads in the Browser
-
-The client must not compensate by:
-
-- retaining every opened application ID;
-- scanning application IDs or calling known-detail endpoints in bulk;
-- reusing Customer-owned indexes or offers;
+- retaining every opened application ID or scanning known-detail endpoints in bulk;
+- reusing Customer-owned indexes, offers, or self-service commands;
 - joining Partner, Customer, Approval, Document, and Loan endpoints into a hidden browser database;
-- inferring histories from current status;
+- inferring histories or queue membership from current status or copied workflow rules;
 - using a POST response as the only durable recommendation or decision ledger;
-- calculating queue membership from copied workflow rules;
 - polling every case to construct dashboard counts.
 
-Missing operational reads are backend API dependencies. They remain visible in delivery planning rather than being disguised as frontend state.
+A failed required read locks its dependent command; unrelated safe evidence may remain available. An absent contract requires an explicit capability boundary rather than a browser substitute. TRACK owns requests for richer lookup, queue pagination/filtering, aggregation, action evidence, or command-status resources; those enhancements are not prerequisites missing from already-supported workspaces.
 
 ---
 
 ## 34. Testing and Verification Strategy
 
-Each future checkpoint runs lint, TypeScript checking, unit/component tests, and a production build. Tests should cover behavior rather than component internals.
+Frontend changes run lint, TypeScript checking, unit/component tests, and a production build. Tests should cover behavior rather than component internals.
 
 ### 34.1 Foundation Tests
 
@@ -1644,135 +1608,20 @@ Each future checkpoint runs lint, TypeScript checking, unit/component tests, and
 
 Mocked frontend fixtures must come from current OpenAPI/API examples and remain PII-safe. Contract tests should prove that Staff Web fails closed when required versions, balances, actor evidence, or state fields are absent.
 
-Consequential checkpoints should add browser-level flows against a controlled test backend once the project selects and installs an end-to-end tool. This blueprint does not select or add that dependency.
+Consequential frontend changes should include browser-level flows against a controlled test backend using approved test tooling. This blueprint does not select or add that dependency.
 
 ---
 
-## 35. Delivery Checkpoints
+## 35. Staff Capability Exclusions
 
-Each checkpoint is a complete vertical frontend increment with its required backend read dependency, permission coverage, recovery behavior, responsive states, accessibility, and tests. A checkpoint does not ship command forms against a knowingly unreconcilable API.
+The accepted Staff Web boundary excludes:
 
-Staff FE checkpoints deliver the Staff Web feature area inside `internal-web/`. Future Back-Office Administration checkpoints may modify the same physical application, but they do not rename or alter the Staff FE checkpoint sequence.
-
-### Paper Origination CP2 — Manual UCL Paper Origination
-
-- preserve `CUSTOMER_DIGITAL` and `STAFF_ASSISTED` as immutable LoanApplication channels and keep Salary Advance digital-only;
-- atomically convert one eligible open UCL assisted-intake case into one application, checklist, pending verification, lifecycle evidence, case link, and PII-safe audit outcome;
-- expose completed-case reconciliation and navigate to the ordinary Staff application/document workspace;
-- permit only the initial Staff-assisted checklist upload under `document:upload:assisted`, while preserving separate intake and correction upload authorities;
-- block Customer-owned correction, cancellation, offer-response, contract-acknowledgment, and checklist-mutation commands for Staff-assisted applications; offer response, contract acknowledgment, correction completion/resubmission, and evidenced UCL Customer-requested cancellation use separate Staff-mediated workspaces, while unsupported product/action combinations and generic checklist mutation remain fail-closed;
-- reconcile conversion uncertainty through GET without automatic POST retry, and preserve exact document-upload replay only for the unchanged operation and file.
-
-This checkpoint is executable for UCL. Paper Origination CP3 extends the same controlled workflow to Collateral Loan conversion. The assisted-intake workspace also places explicit OCR extraction, active-only polling, controlled failure/manual fallback, and immutable Staff review/correction beside each current evidence version. Staff may explicitly copy finalized reviewed values into the existing unsaved Customer, bank-account, UCL, and Collateral forms. Replacing the source evidence removes untouched OCR-applied values, and persistence still requires the existing owning command.
-
-### Staff FE-CP1 — Internal Foundation
-
-- establish the shared Internal Web application foundation at `internal-web/` and preserve Staff Web and Back-Office Administration feature boundaries;
-- strict TypeScript, routing, Query, forms, validation, tokens, primitives, formatting, and testing foundation;
-- Staff-only login, in-memory access token, rotating refresh cookie, single refresh, logout, and private-cache cleanup;
-- permission-aware shell, route metadata, access states, error/correlation model, and operation-status foundation;
-- no Back-Office Administration pages.
-
-### Staff FE-CP2 — Operational Discovery and Case Read Foundation
-
-- deliver the backend Staff application index/search and consolidated case projection first;
-- add permission-scoped queue and case query schemas;
-- implement application search, safe case header, overview, workspace navigation, evidence freshness, and lifecycle/history only where returned;
-- keep assignment and aggregate dashboards deferred.
-
-### Staff FE-CP3 — Documents and Staff Corrections
-
-- document-review and Staff-correction queues;
-- exact-version memory-only document viewer;
-- accept, waive, replacement, Staff upload when authorized, task completion, and resubmission;
-- exact operation identities, stale-version handling, proof reconciliation, and correction maker-checker;
-- complete the Staff checklist/correction projection dependencies needed by the workspace.
-
-The CP3 routes and their purpose-limited read contracts are executable in Internal Web. CP4 product verification and review start, CP5 recommendation and decision, CP6 contract/readiness operations, and CP7 disbursement/activation operations are also executable. Servicing remains a separate later checkpoint.
-
-MER-FU-046 CP3 extends this existing workspace for Staff-assisted UCL and Collateral Customer-sourced tasks: it displays the channel and Customer instruction, uploads against the exact task baseline under `document:upload:assisted-correction`, records completion through the purpose-specific Customer-task route, and enables Staff resubmission only from backend-derived readiness. MER-FU-046 CP4 adds the separate evidenced Customer-requested cancellation action for the exact active correction of an eligible Staff-assisted UCL. The unresolved upload, completion, resubmission, and cancellation operation identities remain action-specific. Customer-digital tasks retain their separate Customer path.
-
-### Staff FE-CP4 — Product Verification and Loan Officer Review
-
-- Salary Advance immutable verification summary;
-- queryable UCL and Collateral current/history cycles;
-- start/complete verification and safe lost-response reconciliation;
-- review start and current review-cycle evidence;
-- product-specific evidence panels without client pricing, LTV, or eligibility rules.
-
-The two CP4 case routes are executable in Internal Web. Verification GET also supports read-only `approval:decide` access for the shared assessment panel; the mutation route and review GET retain exact `loan:review`. They operate without `loan:read`, use backend-derived action availability, reconcile no-business-UUID commands through GET without automatic POST retry, and keep restricted assessment notes in memory only. CP5 adds recommendation controls only for actors who also hold `approval:recommend`; review-start rules remain unchanged. Specialized verification/review queues remain later scope.
-
-### Staff FE-CP5 — Recommendation and Independent Decision
-
-- durable latest recommendation and decision read contracts;
-- Loan Officer recommendation actions and structured correction plans;
-- Approver queue and decision workspace;
-- visible maker-checker, current-cycle, verification, document, and restricted-note boundaries;
-- safe no-UUID command reconciliation and atomic-outcome presentation.
-
-The CP5 recommendation and independent-decision workspaces are executable. Approval-owned reads expose the durable recommendation, decision history, backend-derived maker-checker relation, action availability, and safe Loan-owned readiness evidence through narrow boundary contracts. The Approver queue uses server-side `APPROVAL_PENDING` membership, product filtering, paging, and deterministic ordering. Recommendation controls additionally require `approval:recommend` without changing CP4 `loan:review` route access; the queue and decision route require exact `approval:decide`. Every confirmation carries the displayed review cycle and, for a decision, the displayed recommendation as expected-state evidence. A stale conflict preserves in-memory input and requires explicit re-review. Unknown command results remain locked until a successful authoritative refresh, and neither command automatically retries its POST.
-
-### Staff FE-CP6 — Contract and Readiness Operations
-
-- contract operational queue;
-- masked current contract and accepted-term presentation;
-- prepare/regenerate with exact version and stable request identity;
-- advisory readiness, blockers, confirmation, and post-command reconciliation;
-- clear separation between ready, confirmed, and disbursed.
-
-The CP6 queue and workspace are executable in Internal Web. Loan owns queue membership and work-stage derivation; the browser renders the masked current contract, immutable accepted terms and items, and canonical point-in-time readiness without recreating policy. Preparation/regeneration and readiness confirmation bind one stable request UUID to the displayed semantic payload; an unknown result is never automatically posted again, and only an explicit exact retry may reuse that UUID and payload. Definite command success followed by read failure retries only authoritative GETs. Unknown or contradictory evidence disables consequential actions. Customer acknowledgment remains Customer-owned, while destination reveal, transfer confirmation, and activation remain CP7.
-
-### Staff FE-CP7 — Disbursement and Activation
-
-- ready-disbursement queue;
-- local-memory destination reveal and cleanup;
-- external-transfer evidence form, financial confirmation, exact replay, and uncertain-result recovery;
-- activated LoanAccount and final-schedule reconciliation.
-
-The CP7 queue and workspace are executable in Internal Web. Loan owns exact `DISBURSEMENT_PENDING` queue membership and the repeatable-read pending/completed case projection. Staff Web keeps a revealed destination and unresolved exact payload only in component memory, persists digest-only recovery metadata, never infers request success from a completed GET, and uses explicit same-request replay for authoritative recovery. Definite success clears sensitive input and reveal state, removes the queue item through authoritative refetch, and presents the persisted LoanAccount and final schedule without exposing servicing controls.
-
-### Staff FE-CP8 — LoanAccount and Repayment Servicing
-
-- Staff LoanAccount index/search and serviceable-state filters;
-- account, immutable schedule, installment progress, and paged repayment history;
-- Accounting repayment operation, returned allocation outcomes, replay, and refetch;
-- overdue state presentation without a manual evaluation command.
-
-The CP8 servicing queue, LoanAccount workspace, and ordinary repayment workspace are executable in Internal Web. Loan owns `ACTIVE` / `OVERDUE` membership, product/status filters, deterministic paging, current account evidence, immutable schedule/progress, immutable repayment history, and repayment allocation/outcome calculation. Staff Web never calculates overdue, allocation, overpayment, payoff, resulting balance, or product exposure. A fresh coherent account read gates the command UI; a later failed refetch keeps safe cached evidence visible but locks repayment.
-
-One repayment uses one stable request UUID bound to the application ID, canonical trimmed/uppercased external payment reference, exact whole-VND amount, and payment value date. Network and 5xx outcomes persist only actor-bound `REPAYMENT_RECORDING` metadata and a SHA-256 payload digest. The protected reference remains in same-page component memory only and never enters browser storage, query cache, URL, or history. A changed account or new history row cannot prove request identity. Exact same-request replay resolves the operation and is presented as a historical operation outcome separately from the refetched current LoanAccount.
-
-### Staff FE-CP9 — Settlement and Administrative Closure
-
-- Approver settlement eligibility queue and exact full-balance operation;
-- Accounting closure eligibility queue and non-financial terminal confirmation;
-- explicit role boundaries, competing-operation conflicts, replay after closure, and reconciled histories;
-- no concessions, write-off, reversal, suspense, or reconciliation UI.
-
-The CP9 queues and workspaces are executable in Internal Web. Loan owns separate settlement and closure membership, product filtering, deterministic paging, consistency validation, immutable settlement recovery evidence, and every financial or terminal state transition. Staff Web copies the full outstanding amount from a fresh coherent account read, collects only payment date and protected reference for settlement, and provides no financial input for closure. Approver and Accounting Officer role requirements remain distinct from their exact permissions.
-
-Uncertain settlement and closure results retain one actor-bound UUID plus a SHA-256 semantic digest and require explicit exact replay. The settlement reference and full command remain in same-page memory; reload recovery uses the purpose-limited immutable settlement read and operator re-entry without persisting the reference. Neither terminal account state nor queue disappearance proves request identity. Definite success reconciles the account, repayment history where applicable, and affected queues through authoritative reads without repeating the POST.
-
-### 35.1 Checkpoint Sizing
-
-- Split by one coherent operator outcome, not by arbitrary page count.
-- Include the read model before the command UI that depends on it.
-- Finish success, validation, authority, stale state, unknown result, replay, empty, loading, responsive, accessibility, and test behavior inside the checkpoint.
-- Do not combine FE-CP5–FE-CP9 merely because their POST endpoints already exist.
-- A checkpoint may be split further when backend projections require independent review, but must not leave an enabled financial or workflow command without recovery.
-
----
-
-## 36. Deferred Staff Concerns
-
-The Staff Web planning baseline deliberately defers:
-
-- Back-Office Administration screens for product, Partner, Identity, role, permission, and configuration;
-- assignment, reassignment, SLA, escalation, and workload management;
+- administrative workspaces owned separately by MER-FE-003;
+- reassignment, generic work claiming, SLA, escalation, and workload management; durable Loan Officer review stewardship remains required under Sections 6.3 and 24;
 - global dashboards, analytics, reporting, exports, and generic audit search;
-- saved operational views until query contracts stabilize;
+- saved operational views;
 - notifications and real-time queue updates;
-- generalized Customer profile review until a purpose-limited API exists;
+- a generalized Customer directory or profile-administration surface; exact assisted-intake/access discovery and purpose-limited Customer context remain supported;
 - bulk actions;
 - repayment reversal/refund, suspense/unapplied cash, waiver/forgiveness/write-off, and discounted settlement;
 - external bank/payment/payroll integrations and reconciliation;
@@ -1785,9 +1634,9 @@ The Staff Web planning baseline deliberately defers:
 
 ---
 
-## 37. Implementation Readiness Rules
+## 36. Workspace Acceptance Rules
 
-A future Staff page checkpoint is ready to implement when:
+A Staff workspace is complete only when:
 
 1. every displayed business fact has an authorized Staff response;
 2. every queue has authoritative server membership, paging, ordering, and supported filters;
@@ -1803,6 +1652,6 @@ A future Staff page checkpoint is ready to implement when:
 12. loading, empty, forbidden, concealed, conflict, business rejection, unknown result, replay, success, and responsive states are specified;
 13. keyboard, focus, labels, status semantics, contrast, and narrow-layout evidence order meet Section 19;
 14. frontend contract fixtures match current API/source evidence and remain PII-safe;
-15. the checkpoint has focused tests and passes lint, type checking, tests, and production build.
+15. the workspace has focused tests and passes lint, type checking, tests, and production build.
 
 If an operational read is missing, implementation stops at the dependency or ships an honest unavailable state. It must not use local resource history, Customer-owned queries, copied backend rules, or transient command responses as a substitute authority.

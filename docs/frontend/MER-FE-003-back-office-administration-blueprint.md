@@ -8,15 +8,15 @@
 | Product | Meridian Lending Platform |
 | Document Type | Back-Office Administration frontend rulebook and implementation blueprint |
 | Version | 1.0 |
-| Status | Planning baseline |
+| Status | Maintained frontend authority |
 | Author | Dong Duy |
-| Scope | Back-Office Administration feature area within Internal Web for product, Partner, import, internal-user, role-assignment, and later configuration administration |
+| Scope | Back-Office Administration feature area within Internal Web for product, Partner, import, internal-user, and predefined role-assignment administration |
 
 ---
 
 ## 2. Purpose and Authority
 
-This document defines the stable frontend decisions for Back-Office Administration inside Meridian's shared `internal-web` application: feature ownership, source and route boundaries, authentication and capability-aware entry, navigation, state ownership, presentation, API dependencies, and delivery sequence.
+This document defines the stable frontend decisions for Back-Office Administration inside Meridian's shared `internal-web` application: feature ownership, source and route boundaries, authentication and capability-aware entry, navigation, state ownership, presentation, supported interactions, and capability exclusions.
 
 It does not define lending rules, Partner eligibility, product-policy invariants, role assignments, permission semantics, audit policy, or HTTP contracts. Those rules remain with their existing authorities.
 
@@ -24,20 +24,13 @@ It does not define lending rules, Partner eligibility, product-policy invariants
 |---|---|
 | Intended actors, administrative responsibilities, Partner rules, product policies, and business outcomes | [MER-BIZ-001](../business/MER-BIZ-001-business-requirements-and-workflows.md) |
 | HTTP methods, paths, requests, responses, authorization, concealment, and errors | [MER-API-001](../api/MER-API-001-endpoints-and-postman-scenarios.md) and generated OpenAPI |
-| Executable backend behavior | Backend source, security configuration, Flyway migrations, and tests |
+| Executable behavior | Internal Web routes, feature code, API modules, and tests; backend source, security configuration, migrations, and tests for server behavior |
 | Bounded-context ownership and dependency direction | [MER-ARCH-001](../architecture/MER-ARCH-001-bounded-contexts.md), [MER-ARCH-003](../architecture/MER-ARCH-003-dependency-rules.md), and [MER-ARCH-006](../architecture/MER-ARCH-006-api-request-flow-and-dependencies.md) |
-| Staff lending-operations frontend architecture | [MER-FE-002](MER-FE-002-staff-web-blueprint.md) |
-| Deferred backend and frontend work | [MER-TRACK-001](../project/MER-TRACK-001-follow-up-register.md) |
+| Staff lending operations and shared Internal Web operator conventions | [MER-FE-002](MER-FE-002-staff-web-blueprint.md) |
+| Follow-up status, sequencing, and future work | [MER-TRACK-001](../project/MER-TRACK-001-follow-up-register.md) |
 | Back-Office Administration presentation and client implementation rules | This document |
 
-The blueprint distinguishes four kinds of statement:
-
-- **Backend fact** describes verified executable behavior on which Back-Office Administration may rely.
-- **Frontend decision** is a rule established by this blueprint.
-- **API dependency** is required before the named administration experience can be complete.
-- **Deferred decision** is intentionally outside this milestone.
-
-An API dependency does not authorize the browser to query persistence, call a Customer-owned endpoint, reconstruct missing management state, or fabricate a command contract.
+This blueprint defines the accepted Partner, Loan Product, and Internal User administration surfaces. It does not authorize persistence access, Customer self-service impersonation, browser-derived management policy, or fabricated command contracts. Frontend source and routes establish the executable administration surface; backend endpoint existence alone is insufficient. MER-ARCH-006 owns transaction, lock, replay, and rollback mechanics; MER-API-001 owns exact HTTP schemas and endpoint-specific errors.
 
 ---
 
@@ -56,16 +49,7 @@ Identity uses `STAFF` as the `userType` for internal actors. `STAFF` does not gr
 
 ### 3.1 Staff Web and Back-Office Administration Ownership
 
-Staff Web owns lending work:
-
-- application and case operations;
-- product verification and document review;
-- Customer and Staff correction operations;
-- Loan Officer review and recommendation;
-- independent Approver decisions;
-- contract preparation and readiness;
-- disbursement and LoanAccount activation;
-- repayment, settlement, and closure.
+Staff Web owns lending operations under [MER-FE-002 Section 4](MER-FE-002-staff-web-blueprint.md#4-staff-web-and-back-office-administration-boundary), including assisted intake, evidence/review/decision, contract, disbursement, and servicing work.
 
 Back-Office Administration owns administrative work:
 
@@ -73,8 +57,9 @@ Back-Office Administration owns administrative work:
 - Partner Company administration;
 - Partner Employee administration and imports;
 - internal-user administration;
-- assignment of predefined backend-owned roles;
-- later operational or system configuration with an approved use case.
+- assignment of predefined backend-owned roles.
+
+Generic operational or system configuration is outside the accepted Administration boundary.
 
 A lending command stays under `/staff/*` even when an actor also has Back-Office capabilities. The `document:upload:staff` permission remains a narrow Staff correction capability; it does not establish Back-Office membership.
 
@@ -115,11 +100,11 @@ Top-level Back-Office access requires exact membership in at least one of these 
 | `partner:read` | Partner administration discovery |
 | `partner:manage` | Partner administration commands |
 | `identity:user:manage` | Internal-user status and role assignment |
-| `admin:config` | A later approved configuration use case |
+| `admin:config` | Administrative-area entry only; no generic configuration route or command |
 
 The client must not use the `BACK_OFFICE_ADMIN` role name, permission prefixes, wildcard-looking strings, `audit:read` alone, or `document:upload:staff` alone as the top-level membership test.
 
-Identity supports composable role assignments, so a user may receive administrative capabilities through more than one role. `audit:read` is also assigned to the Approver role, while a generic audit explorer is deferred. `document:upload:staff` authorizes a Staff correction task rather than administrative data access.
+Identity supports composable role assignments, so a user may receive administrative capabilities through more than one role. `audit:read` is also assigned to the Approver role, while a generic audit explorer is outside the accepted boundary. `document:upload:staff` authorizes a Staff correction task rather than administrative data access.
 
 The seeded Back-Office Admin role combines the five administrative-area capabilities with `audit:read` and `document:upload:staff`. That seed is a backend role assignment, not a frontend persona definition.
 
@@ -143,27 +128,20 @@ Session restoration and refresh replace the actor's current permission set. A pe
 
 ### 5.1 Administration Routes
 
-| Route | Purpose | Delivery |
+| Route | Purpose | Required capability |
 |---|---|---|
-| `/admin` | Back-Office landing and capability-scoped entry | Back-Office FE-CP1 |
-| `/admin/partners` | Partner Company administration and discovery | Back-Office FE-CP2 |
-| `/admin/partners/:partnerCompanyId` | Company detail, employees, import history, and controlled administration | Back-Office FE-CP2 |
-| `/admin/partner-eligibility-reviews` | Shared Partner eligibility review queue, detail, and controlled decision | Back-Office FE-CP2 |
-| `/admin/products` | Loan Product administration | Back-Office FE-CP3 |
-| `/admin/users` | Internal-user administration and predefined role assignment | Back-Office FE-CP4 |
+| `/admin` | Back-Office landing | Any exact administrative-area capability from Section 4.1 |
+| `/admin/partners` | Company discovery and supported creation | `partner:read`; creation also needs `partner:manage` |
+| `/admin/partners/:partnerCompanyId` | Company detail, current employees, import history, management | `partner:read`; mutation also needs `partner:manage` |
+| `/admin/partner-eligibility-reviews` | Pending queue, selected detail, controlled decision | `partner:read`; decision also needs `partner:manage` |
+| `/admin/products` | Active/inactive Loan Product discovery, limits, activation | `loan:product:manage` |
+| `/admin/users` | Internal Users and predefined-role assignments | `identity:user:manage` |
 
-`/admin`, `/admin/partners`, `/admin/partners/:partnerCompanyId`, `/admin/partner-eligibility-reviews`, `/admin/products`, and `/admin/users` are executable. Other unimplemented child paths return the normal safe not-found view. The client does not render placeholder pages, fake records, disabled forms, or speculative API contracts for deferred capabilities.
+Route authorization precedes all feature queries. Other children return the safe not-found view without placeholder records, disabled speculative forms, or inferred contracts. The public `/set-password` route belongs to the shared authentication boundary and follows Section 12.
 
-### 5.2 Deferred Routes
+### 5.2 Unsupported Routes
 
-The milestone does not define executable routes for:
-
-- `/admin/permissions`;
-- `/admin/roles`;
-- `/admin/configuration`;
-- `/admin/audit`.
-
-These paths remain unavailable unless a later approved requirement establishes a supported use case and its backend contract. The existence of `admin:config` does not create a configuration product.
+`/admin/permissions`, `/admin/roles`, `/admin/configuration`, and `/admin/audit` have no accepted executable surface. `admin:config` alone grants administrative-area entry, not a configuration product. Any expansion requires an approved use case and its authorized backend contract.
 
 ### 5.3 Route Metadata
 
@@ -173,45 +151,15 @@ Each executable administration route declares a path, label, and exact required 
 
 ## 6. Authentication and Destination Resolution
 
-Staff Web and Back-Office Administration use the same internal login, in-memory access token, rotating HttpOnly refresh cookie, session restoration, and logout lifecycle defined by MER-FE-002.
-
-### 6.1 Default Destination
-
-| Authenticated capability | Default destination |
-|---|---|
-| At least one Staff operational capability | `/staff` |
-| Back-Office capability and no Staff operational capability | `/admin` |
-| Both feature-area capability sets | `/staff` |
-| Neither supported feature-area capability set | Safe Staff no-access outcome |
-
-The Staff destination keeps precedence for dual-capability actors to preserve established Staff behavior. `/admin` remains directly reachable when the actor has a Back-Office capability.
-
-### 6.2 Requested Destination
-
-An anonymous request for `/staff` or a child path is preserved only for an actor with Staff Web access. An anonymous request for `/admin` or a child path is preserved only for an actor with Back-Office access. The preserved value contains only the router-derived pathname and query.
-
-The destination resolver must reject external URLs, scheme-relative URLs, feature-like prefixes such as `/administrator`, and requests for an area the authenticated actor cannot access. Rejected destinations fall back to the actor's default destination.
-
-Protected routes wait for session restoration. Anonymous actors redirect to `/login`; authenticated actors never use the login form as an area selector.
+Shared internal session acceptance, in-memory access, refresh/logout, cleanup, and safe requested/default destination resolution follow [MER-FE-002 Section 11](MER-FE-002-staff-web-blueprint.md#11-authentication-and-session). `/admin` remains reachable for administrative capability; admin-only actors default here, while dual-capability actors default to `/staff`. Area membership never bypasses a child route’s exact permission.
 
 ---
 
 ## 7. Shared Internal Web Shell
 
-The authenticated Staff and Back-Office route trees use one Internal Web shell. The shell owns:
+[MER-FE-002 Sections 17–20](MER-FE-002-staff-web-blueprint.md#17-visual-language-and-operational-density) own shared operator language, density, shell/navigation, responsive layouts, accessibility, and confirmation patterns. Administration supplies separate route metadata and the accessible label **Administration navigation**; Staff retains **Staff navigation**. Authorized cross-area links represent capability unions without role switching.
 
-- the Meridian identity and shared visual language;
-- responsive desktop and mobile navigation mechanics;
-- the actor's email and Staff-session label;
-- logout;
-- the skip-to-main-content target;
-- authorized cross-area links.
-
-Each area supplies its own route metadata and accessible navigation label. Staff uses `Staff navigation`; Back-Office Administration uses `Administration navigation`.
-
-An actor who may enter both areas sees lightweight links to **Staff Operations** and **Back-Office Administration**. An actor sees no link to an unauthorized area. These links represent capability unions, not role switching.
-
-The shell must not display invented counts or preload data for another area. Entering `/admin` does not run Partner, Product, Identity-administration, audit, or configuration requests.
+The shell does not preload another feature area. Entering `/admin` runs no Partner, Product, Internal User, audit, or configuration request. Administrative data loads only after the corresponding feature route guard succeeds.
 
 ---
 
@@ -219,9 +167,9 @@ The shell must not display invented counts or preload data for another area. Ent
 
 ### 8.1 Back-Office Landing
 
-The `/admin` landing confirms that Internal Web accepted an authorized administrative session and explains that later workspaces remain capability-scoped. It contains no Partner, Product, or User records, metrics, charts, forms, or API-backed summaries.
+The `/admin` landing introduces Partner records/eligibility, lending products, and Staff access, with capability-scoped navigation to their workspaces. It contains no Partner, Product, or User records, metrics, charts, forms, or API-backed summaries.
 
-The landing uses the shared route-heading and focus convention. Its content remains useful before the later administration workspaces exist without pretending those workspaces are executable.
+The landing uses the shared route-heading and focus convention. Its introductory content does not substitute for the feature-specific queries or imply broader administration authority.
 
 ### 8.2 No Administrative Access
 
@@ -252,14 +200,14 @@ Administrative pages must not place raw identity references, employee codes, sal
 
 ---
 
-## 10. Partner Administration Target
+## 10. Partner Administration
 
-### 10.1 Intended Surface
+### 10.1 Supported Surface
 
-Back-Office FE-CP2 covers:
+Partner Administration provides:
 
 - Partner Company discovery;
-- Partner Company detail;
+- Partner Company detail and supported create/update commands;
 - Partner status management;
 - Partner Employee list;
 - employee import history;
@@ -268,7 +216,7 @@ Back-Office FE-CP2 covers:
 
 Partner owns company, employee, import-batch, employment, status, and freshness rules. The browser presents returned states and command outcomes. It does not calculate Salary Advance eligibility or select the latest valid `COMPLETED` batch for the current UTC effective month.
 
-### 10.2 Backend Facts and Dependencies
+### 10.2 Authority, Imports, and Eligibility Review
 
 | Classification | Statement |
 |---|---|
@@ -300,14 +248,14 @@ Loan Product Administration provides a narrow product-owned surface under `/admi
 | Backend fact | `LoanProduct` owns product code, product type, name, description, active state, minimum amount, and maximum amount. |
 | Backend fact | Public `/api/v1/loan-products` reads return active products with Customer-safe policy presentation and remain separate from administration. |
 | Backend fact | Protected `GET /api/v1/admin/loan-products` requires exact `loan:product:manage` and returns active and inactive products in backend-owned product-code order. |
-| Backend fact | Protected limit and activation `PUT` commands require exact `loan:product:manage`, lock the product row, and treat the same target state as a no-op without another audit effect. |
+| Backend fact | Protected limit and activation `PUT` commands require exact `loan:product:manage` and return backend-confirmed target state; an unchanged target does not create another business change. |
 | Frontend decision | Product code and product type remain stable identifiers and do not become casual edit controls. |
 | Frontend decision | Name and description remain read-only. The amount form and activation action remain visually distinct and refresh the protected administration query after confirmed success. |
 | Frontend decision | Deactivation requires confirmation that the product will leave Customer discovery and reject future submissions while historical lending records remain unchanged. Activation remains a direct target-state command. |
 | Frontend decision | Internal Web does not optimistically apply product commands or retry them automatically after an unknown transport result. The operator refreshes authoritative state before an explicit same-target retry. |
-| Deferred decision | Returned policy presentation may be shown read-only; its presence does not make the policy administratively editable. |
+| Frontend decision | Returned policy presentation may be shown read-only; its presence does not make policy administratively editable. |
 
-Back-Office Administration does not provide an arbitrary JSON editor. Pricing algorithms, interest-calculation internals, repayment algorithms, exposure rules, settlement rules, overdue rules, allocation order, document-checklist builders, and generic workflow engines remain outside FE-CP3.
+Back-Office Administration does not provide an arbitrary JSON editor. Pricing algorithms, interest-calculation internals, repayment algorithms, exposure rules, settlement rules, overdue rules, allocation order, document-checklist builders, and generic workflow engines remain outside the editable administration boundary.
 
 ---
 
@@ -327,10 +275,10 @@ Identity owns User status, roles, permissions, credential state, and authorizati
 |---|---|
 | Backend fact | Protected `GET /api/v1/admin/internal-users` requires exact `identity:user:manage` and returns only Staff Users in deterministic normalized-email and stable-ID order. |
 | Backend fact | Protected `GET /api/v1/admin/internal-users/assignable-roles` returns predefined non-Customer roles in deterministic role-code order; it does not expose a role or permission editor. |
-| Backend fact | Protected creation accepts email, display name, and at least one assignable Staff role. Identity creates an active Staff User with no Customer association and sends a one-time setup link to Internal Web after the durable transaction. The administrator receives no password or raw token. |
-| Backend fact | Protected password-setup resend applies only to active, verified Staff Users. It replaces an older unused reset/setup token and sends after commit; Customer Users cannot be targeted. |
-| Backend fact | Status and per-role target-state `PUT` commands require exact `identity:user:manage`, lock the target Staff User, and treat the same target state as a no-op without timestamp, authorization-version, refresh-session, or audit effects. |
-| Backend fact | A real status or role-assignment change increments Identity's authorization version. Older access JWTs fail as `401 INVALID_TOKEN` before their embedded authority is installed. |
+| Backend fact | Protected creation accepts email, display name, and at least one assignable Staff role. Identity creates an active Staff User with no Customer association and sends a one-time setup link to Internal Web. The administrator receives no password or raw token. |
+| Backend fact | Protected password-setup resend applies only to active, verified Staff Users. The administrator explicitly requests a replacement link; Customer Users cannot be targeted. |
+| Backend fact | Status and per-role target-state commands require exact `identity:user:manage`. The browser waits for confirmed target state and does not claim another business change for an unchanged target. |
+| Backend fact | A real status or role-assignment change invalidates stale access authority. The protected transport handles `401 INVALID_TOKEN` through the shared refresh/session boundary. |
 | Backend fact | Role changes leave active refresh sessions usable so refresh can issue current authority. Suspension or disablement revokes all target-User refresh sessions; reactivation does not restore them. |
 | Frontend decision | The page displays only User ID-bound safe facts, status, and backend-returned role codes. Email never enters URL state, query keys, browser persistence, operation recovery, logs, or telemetry. |
 | Frontend decision | User and assignable-role queries have zero retention after unmount and clear through the shared session boundary. Route authorization succeeds before either query runs. |
@@ -342,22 +290,15 @@ When the target is the current actor, the normal protected refresh path observes
 
 The anonymous `/set-password` route captures a one-time token from the URL fragment, immediately removes the fragment, and retains the token only in memory until confirmation. It posts the token and a 12–72 character password to Identity's existing reset-confirmation contract. The form requires matching confirmation, clears local token state after success, and directs the Staff member to `/login`. Invalid or expired links direct the Staff member to request an administrator-issued replacement. Token values do not enter browser persistence, query keys, logs, telemetry, or request-correlation UI. `DISABLED` remains deprovisioning; no hard-delete control appears.
 
-`MER-FU-019` records the delivered user-management surface. `MER-FU-022` keeps full permission management deferred.
+Staff creation can succeed durably even when setup-email delivery fails. Refresh the User list before deciding whether another create is appropriate, and use explicit setup-link resend/recovery for the existing User; do not infer a failed creation from mail delivery or an unknown POST response.
 
 ---
 
 ## 13. Accessibility and Presentation
 
-Back-Office Administration uses the Internal Web visual language and targets the same WCAG 2.2 AA baseline as Staff Web.
+Administration follows the shared Internal Web operator conventions in [MER-FE-002 Sections 17–20](MER-FE-002-staff-web-blueprint.md#17-visual-language-and-operational-density), including its WCAG 2.2 AA target, route/confirmation focus, keyboard and Sheet navigation, semantic tables, status text, evidence-before-action order, and responsive layouts. These are shared requirements, not a claim of formal certification.
 
-Back-Office Administration must follow the shared Internal Web operator-language and copy rules in [MER-FE-002 Section 17.4](MER-FE-002-staff-web-blueprint.md#174-operator-language-and-copy). Back-Office features retain ownership of their administrative business terminology.
-
-- Route changes move focus to the page heading without removing visible focus.
-- Desktop navigation becomes the existing responsive Sheet at narrow widths.
-- Navigation groups have distinct accessible labels.
-- Permission-denied, empty, loading, error, and not-found states use text and structure rather than color alone.
-- Administrative forms appear only after an executable command contract exists and expose every backend validation or conflict outcome needed for recovery.
-- Tables use semantic headings, an accessible name, and only backend-supported filters, paging, and sorting.
+Administrative features retain their business terminology and show only supported filters, paging, and sorting. Company availability reductions, product deactivation, and User suspension/disablement retain the explicit confirmations defined in Sections 10–12. Activation/reactivation and predefined-role changes keep their specific direct target-state interactions; shared confirmation patterns do not add blanket confirmation to them. Every form retains validation, conflict, stale, unknown-result, and backend-confirmed success behavior.
 
 ---
 
@@ -375,55 +316,13 @@ Back-Office frontend tests prove the boundary rather than a seeded persona:
 - unimplemented `/admin/*` children and unrelated paths remain safe not-found results;
 - shared desktop/mobile chrome, logout, route focus, and accessible labels remain intact.
 
-Each later checkpoint adds contract, query, command, error, responsive, and accessibility tests for its own surface. Frontend checks remain lint, TypeScript compilation, Vitest, and the production build.
+Each administrative surface requires contract, query, command, error, responsive, and accessibility coverage. Frontend checks remain lint, TypeScript compilation, Vitest, and the production build.
 
 ---
 
-## 15. Delivery Checkpoints
+## 15. Administration Capability Exclusions
 
-### Back-Office FE-CP1 — Blueprint and Foundation
-
-- establish MER-FE-003;
-- make `/admin` an executable capability-guarded landing;
-- define the exact administrative-area capability model;
-- share Internal Web chrome while keeping Staff and Administration navigation distinct;
-- add administrative no-access and cross-area navigation behavior;
-- preserve safe requested destinations and Staff-first default routing;
-- add boundary tests and align documentation;
-- require no administration data API.
-
-### Back-Office FE-CP2 — Partner Administration
-
-- Partner Company list and detail;
-- Partner Employee list;
-- employee import history;
-- controlled company management;
-- effective-month employee import after the required backend commands exist.
-- shared eligibility-review queue and detail;
-- controlled `partner:manage` approval or rejection with authoritative reconciliation.
-
-### Back-Office FE-CP3 — Loan Product Administration
-
-- protected administrative product projection;
-- controlled activation and minimum/maximum amount management;
-- read-only policy presentation where it helps an authorized administrator;
-- required backend management contract and invariant coverage.
-
-### Back-Office FE-CP4 — Internal-User Administration
-
-- internal-user discovery and safe status presentation;
-- supported internal-user status management;
-- predefined backend-owned role assignment;
-- Staff User creation with one-time password setup and explicit link recovery;
-- required Identity management use cases and APIs.
-
-The delivered Back-Office milestone stops after FE-CP4. Generic permission, configuration, and audit products and advanced Loan Product policy builders require separate decisions.
-
----
-
-## 16. Deliberately Deferred Functionality
-
-This milestone does not define or authorize:
+The accepted Administration boundary excludes:
 
 - arbitrary role creation;
 - permission creation, editing, deletion, or a permission-matrix builder;
@@ -441,13 +340,13 @@ This milestone does not define or authorize:
 - analytics or reporting dashboards;
 - OCR execution or OCR-result review.
 
-OCR remains a separate milestone tracked by `MER-FU-033`. `admin:config` remains an available permission, not evidence that any generic configuration workflow or API exists.
+OCR extraction, review, and application of reviewed values belong to the separate Staff-assisted intake workspace under MER-FE-002. `admin:config` remains an available permission, not evidence that a generic configuration workflow or API exists.
 
 ---
 
-## 17. Checkpoint Readiness
+## 16. Administrative Surface Acceptance
 
-An additional Back-Office capability is ready to implement only when:
+An administrative surface is complete only when:
 
 1. every list and detail view has a purpose-limited authorized response;
 2. every command has an executable use case, exact permission, validation rules, conflict behavior, audit outcome, and safe response;
@@ -459,4 +358,4 @@ An additional Back-Office capability is ready to implement only when:
 8. frontend fixtures match current API and source evidence;
 9. focused tests and the complete Internal Web verification suite pass.
 
-When a required contract is absent, the checkpoint stops at the dependency. It does not replace the backend with browser rules, fake data, or an inferred management API.
+When a required contract is absent, the capability remains unavailable. It does not replace the backend with browser rules, fake data, or an inferred management API.
