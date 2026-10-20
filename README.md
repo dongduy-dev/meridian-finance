@@ -2,7 +2,7 @@
 
 ## Meridian Lending Platform
 
-Meridian is a multi-product lending platform built around a common lending lifecycle and product-specific policies. Salary Advance is the flagship workflow, with streamlined Unsecured Consumer Loan and Collateral Loan workflows built on the same lending core.
+Meridian is a fictional engineering portfolio/demo of a multi-product lending platform built around a common lending lifecycle and product-specific policies. Salary Advance is the flagship workflow, with streamlined Unsecured Consumer Loan and Collateral Loan workflows built on the same lending core.
 
 Meridian helps lending teams manage the full journey from application through servicing and closure. Product workflows combine automated processing with controlled human review where business decisions or document verification require it. The platform is designed around practical financial software concerns such as auditability, security, data integrity, controlled state transitions, maker-checker controls, document traceability, and clear operational ownership.
 
@@ -21,6 +21,13 @@ The deployed portfolio serves [Customer Web](https://meridianfinance.dev) and [I
 * **Collateral Loan**: Uses structured Collateral information with Document-owned ownership evidence and manual verification.
 
 All three products use Meridian's common application, approval, contract, activation, servicing, and closure lifecycle while retaining product-specific rules.
+
+```text
+Customer-digital / Staff-assisted origination → evidence and verification
+→ Loan Officer review and recommendation → independent Approver decision
+→ offer and Customer response → contract and readiness
+→ manual disbursement and activation → servicing and repayment → settlement and closure
+```
 
 ### Platform Capabilities
 
@@ -115,7 +122,7 @@ Useful local endpoints:
 
 Historical demo credentials are disabled by Flyway V73. Register Customer demo accounts through Customer Web and verify their email in Mailpit. Establish the first Back-Office Admin through the opt-in [Identity bootstrap procedure](docs/deployment/MER-DEP-001-identity-bootstrap-and-demo-boundary.md), then create Staff accounts through `/admin/users` and their emailed password-setup links. No shared Staff password is provided.
 
-The separate [Cloudflare edge and AWS runtime contract](docs/deployment/MER-DEP-002-cloudflare-edge-and-aws-runtime.md) defines deployed hostnames, Tunnel-only API access, private container storage/networking, and operator validation. The Compose instructions below remain for local development.
+The separate [Cloudflare edge and AWS runtime contract](docs/deployment/MER-DEP-002-cloudflare-edge-and-aws-runtime.md) defines deployed hostnames, Tunnel-only API access, private container storage/networking, and operator validation. These Compose instructions are for local development.
 
 The OCR worker is opt-in:
 
@@ -129,10 +136,12 @@ The profile mounts the Document volume read-only and remains not-ready without t
 
 `customer-web/` contains Meridian's responsive Customer Web application. [MER-FE-001](docs/frontend/MER-FE-001-customer-web-blueprint.md) defines its frontend architecture, state ownership, visual language, and accessibility baseline.
 
+Both frontends require Node.js 22 and npm 10 or newer. Copy each package's `.env.example` to `.env` for the separate Vite servers below. Without `VITE_API_BASE_URL`, requests use relative `/api/v1` on the frontend origin.
+
 ```bash
 cd customer-web
 npm ci
-# Copy .env.example to .env when local configuration is needed.
+# Copy .env.example to .env for the local backend API.
 npm run dev
 ```
 
@@ -147,13 +156,15 @@ Customer Web uses `http://localhost:5173` by default and calls the local backend
 ```bash
 cd internal-web
 npm ci
-# Copy .env.example to .env when local configuration is needed.
+# Copy .env.example to .env for the local backend API.
 npm run dev
 ```
 
 Internal Web uses `http://localhost:5174` and calls the same local backend through `VITE_API_BASE_URL=http://localhost:8080/api/v1`.
 
 For either frontend, verification commands are `npm run lint`, `npm run typecheck`, `npm test`, and `npm run build`.
+
+Use separate browser profiles for simultaneous Customer and Internal sessions; the shared API refresh-cookie family can terminate the other portal's session ([MER-FU-049](docs/project/MER-TRACK-001-follow-up-register.md#mer-fu-049---isolate-customer-web-and-internal-web-browser-sessions)).
 
 <details>
 <summary>Local secret generation and runtime notes</summary>
@@ -211,7 +222,7 @@ Stop the backend environment with `docker compose down`. Named PostgreSQL and Do
 ```text
 ┌──────────────────────────────────────────────────────────────────────────────┐
 │                                   CLIENTS                                    │
-│        React/Vite Customer Web  ·  Internal Web  ·  Mobile (Future)         │
+│                   React/Vite Customer Web  ·  Internal Web                    │
 └──────────────────────────────────────┬───────────────────────────────────────┘
                                        │ HTTPS
                                        ▼
@@ -238,7 +249,7 @@ Stop the backend environment with `docker compose down`. Named PostgreSQL and Do
 │  └─────────────────────────────────────────────────────────────────────┘    │
 │                                                                             │
 │  ┌─────────────────────────────────────────────────────────────────────┐    │
-│  │ Notification · Templates · Delivery requests · Channels · Status    │    │
+│  │ Notification · Controlled Identity security email over SMTP        │    │
 │  └─────────────────────────────────────────────────────────────────────┘    │
 │                                                                             │
 │       Public contracts · Transaction-aware coordination · Events            │
@@ -256,6 +267,8 @@ Stop the backend environment with `docker compose down`. Named PostgreSQL and Do
       └──────────────────┘   └────────────────┘   └──────────────────────┘
 ```
 
+The diagram shows implemented platform components. The public portfolio runtime omits the OCR service; Mobile and broader Notification capabilities belong to the future roadmap.
+
 ### Bounded Contexts
 
 | Context | Responsibility |
@@ -267,7 +280,7 @@ Stop the backend environment with `docker compose down`. Named PostgreSQL and Do
 | **Approval Workflow** | Immutable Loan Officer recommendations, independent Approver decisions, decision authority, and maker-checker evidence. |
 | **Document Management** | Checklists, uploads, immutable versions, manual document review, readiness, storage, and advisory OCR-assisted processing. |
 | **Audit & Compliance Controls** | Append-only, PII-safe evidence of important business actions and compliance-oriented history. |
-| **Notification** | Message templates, delivery requests, channels, and delivery status. |
+| **Notification** | Controlled rendering and post-commit SMTP delivery for Identity security email. Broader channels, preferences, durable delivery status, and retry management belong to future scope. |
 
 ---
 
@@ -277,7 +290,7 @@ Stop the backend environment with `docker compose down`. Named PostgreSQL and Do
 
 | Technology | Purpose                                                                                    |
 |---|--------------------------------------------------------------------------------------------|
-| **Java 25** | LTS runtime with virtual threads and pattern matching                                      |
+| **Java 25** | Backend runtime                                                                           |
 | **Spring Boot 4.1.0** | Application framework                                                                      |
 | **Spring Modulith 2.1.0** | Module organization, observability support, and transactional event-publication persistence |
 | **Spring Security** | Authentication & authorization                                                             |
@@ -327,7 +340,11 @@ Stop the backend environment with `docker compose down`. Named PostgreSQL and Do
 
 ## Roadmap
 
-### Phase 1 — Core Lending MVP
+The accepted Meridian MVP is complete across all three lending products, Customer Web, Staff Web, Back-Office Administration, and OCR-assisted intake. OCR remains disabled in the public portfolio runtime. Future items below are hardening and expansion considerations, not delivery commitments or missing core MVP functionality. The [follow-up register](docs/project/MER-TRACK-001-follow-up-register.md) owns detailed item status, priority, rationale, and remaining scope.
+
+### Delivered MVP Milestones
+
+#### Phase 1 — Core Lending MVP
 
 - [x] Common loan application lifecycle with state machine, product catalog, and product-policy framework
 - [x] Customer profile and bank-account readiness, Partner employment evidence, and Salary Advance eligibility and exposure foundations
@@ -344,7 +361,7 @@ Stop the backend environment with `docker compose down`. Named PostgreSQL and Do
 - [x] Structured JSON logging with request and business correlation
 - [x] Generated OpenAPI documentation, Swagger UI, and explicit frontend CORS configuration
 
-### Phase 2 — OCR-Assisted Document Processing
+#### Phase 2 — OCR-Assisted Document Processing
 
 - [x] Containerized provider-neutral Python FastAPI OCR service with health/readiness endpoints
 - [x] Google Document AI Enterprise Document OCR provider adapter
@@ -353,32 +370,40 @@ Stop the backend environment with `docker compose down`. Named PostgreSQL and Do
 - [x] Authorized Staff review/correction experience for OCR-assisted results
 - [x] Application of explicitly reviewed suggestions through existing Customer and Loan commands
 
-### Phase 3 — Customer and Internal Web Experience
+#### Phase 3 — Customer and Internal Web Experience
 
 - [x] Customer Web for profile, applications, documents, offers, and loan tracking
 - [x] Staff Web lending operations inside Internal Web for review, approval, correction, disbursement, repayment, settlement, and administrative closure
 - [x] Back-Office Administration inside Internal Web for products, Partner administration, and internal users
-- [ ] Generic Back-Office configuration administration after an approved use case and contract exist
 
-### Phase 4 — Operational Maturity
+#### Delivered Operational Maturity
 
 - [x] Customer-level manual identity verification with immutable evidence and new Salary Advance, UCL, and Collateral origination readiness
 - [x] Public portfolio document controls: mandatory private ClamAV scanning with fail-closed uploads, persistent document storage on encrypted EBS, and matched backup/recovery procedures with isolated restore acceptance
+
+### Future Hardening — Remaining Phase 4 Scope
+
 - [ ] Broader production document hardening: production-grade object storage, formal retention, legal hold, retirement/purge, key lifecycle, and production-grade disaster recovery ([MER-FU-032](docs/project/MER-TRACK-001-follow-up-register.md#mer-fu-032---harden-document-storage-scanning-and-retention))
 - [ ] Evaluate Redis for distributed rate limiting, session controls, and short-lived caching
 - [ ] Prometheus metrics and Grafana dashboards
 - [ ] OpenTelemetry distributed tracing
 - [ ] Performance profiling, load testing, and security hardening
+- [ ] Stronger mechanical module-boundary enforcement ([MER-FU-042](docs/project/MER-TRACK-001-follow-up-register.md#mer-fu-042---enforce-meridian-public-module-boundaries-in-source-and-architecture-tests))
+- [ ] Executable API error semantic normalization ([MER-FU-043](docs/project/MER-TRACK-001-follow-up-register.md#mer-fu-043---normalize-executable-api-error-identifier-semantics))
+- [ ] Same-browser Customer/Internal session isolation ([MER-FU-049](docs/project/MER-TRACK-001-follow-up-register.md#mer-fu-049---isolate-customer-web-and-internal-web-browser-sessions))
 
-### Phase 5 — Analytics and Risk
+### Future Product and Platform Expansion
+
+#### Phase 5 — Analytics and Risk
 
 - [ ] Evaluate Elasticsearch-backed loan search and audit-log analytics
 - [ ] Reporting dashboards
 - [ ] Rule-based risk assessment engine
 - [ ] Loan eligibility scoring
 
-### Future Considerations
+#### Product and Integration Considerations
 
+- Generic Back-Office configuration administration after an approved use case and contract exist
 - Extend Notification beyond Identity security email to SMS and in-app messages, preferences, durable delivery status, and retry management
 - Mobile application support
 - Payroll provider, employer API, payment gateway, bank transfer, and credit-bureau integrations
@@ -386,7 +411,7 @@ Stop the backend environment with `docker compose down`. Named PostgreSQL and Do
 - Multi-level and configurable approval workflows
 - Selective service extraction where justified, with Kafka considered only when durable cross-service streaming needs emerge
 
-### Future — Financial Ledger and Accounting
+#### Financial Ledger and Accounting
 
 - Double-entry accounting ledger
 - Journal-entry engine with debit and credit posting
