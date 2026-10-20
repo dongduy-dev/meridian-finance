@@ -52,7 +52,7 @@ graph TB
 
 Business contexts may publish PII-safe auditable facts to Audit & Compliance Controls.
 
-Business contexts may publish notification-triggering events to Notification without transferring workflow ownership.
+Identity invokes Notification through purpose-limited contracts after its security outcome commits. Secret-bearing messages remain transient rather than durable event payloads. Notification does not acquire workflow ownership.
 
 ---
 
@@ -72,7 +72,7 @@ Business contexts may publish notification-triggering events to Notification wit
 |---|---|
 | **Responsibilities** | User registration, authentication, access-token issuance and validation, refresh-token and session lifecycle, logout and revocation, account status and security controls, roles, permissions, role assignments, and authorization facts. |
 | **Owns** | User accounts, credentials and credential metadata, role and permission definitions, role assignments, session records, refresh-token records, account-security state, and the association between a user account and an optional Customer identity. |
-| **Public Capabilities** | Authenticate a principal; issue, refresh, validate, and revoke sessions or tokens; resolve the authenticated actor; query authorization facts; resolve purpose-limited batched Staff display summaries; manage users, roles, permissions, and account status. |
+| **Public Capabilities** | Register Customer access or enable it for an existing Customer; authenticate a principal; verify email; reset or set up a password; issue, refresh, validate, and revoke sessions or tokens; resolve the authenticated actor and purpose-limited batched Staff display summaries; provision internal users, manage their status, and assign predefined roles. Role and permission definitions remain Identity-owned; this does not expose arbitrary role or permission administration. |
 | **Publishes** | Representative events include user registration, authentication success or failure, role assignment, session revocation, account suspension, and account reactivation. |
 | **Consumes** | A Customer identity identifier when associating a user account with a Customer; administrative inputs used to create or manage Staff accounts and role assignments. |
 | **Must Not Own** | Customer profile data, Partner employee data, Loan applications, approval decisions, documents, or lending permissions implemented as domain rules outside the authorization model. |
@@ -135,14 +135,14 @@ Salary Advance, Unsecured Consumer Loan, and Collateral Loan are product behavio
 |---|---|
 | **Responsibilities** | Loan product definitions and policy configuration; origination-channel policy; Staff-assisted pre-application intake; `LoanApplication` lifecycle; product-specific application data, eligibility, and verification snapshots; Salary Advance limit and exposure; review-cycle and correction workflow state; approved offers; operational contracts and readiness; disbursement evidence; `LoanAccount` activation; final repayment schedules; repayment transactions and allocations; overdue servicing; contractual payoff; Administrative Full-Balance Settlement; administrative closure; and application, account, and installment histories. |
 | **Owns** | `LoanProduct`, product-policy configuration, Staff-assisted intake state, origination-channel state, `LoanApplication`, product-specific application details, product verification snapshots, `SalaryAdvanceLimit` and limit movements, review cycles, correction requests and tasks, approved offers, operational loan contracts, immutable contract-bound destinations, disbursement evidence, `LoanAccount`, final repayment schedules, repayment transactions, allocations, servicing progress, contractual-payoff evidence, Administrative Full-Balance Settlement evidence, administrative-closure evidence, and lifecycle histories. Product-specific application details include one Collateral Loan asset's type, description, estimated value, ownership status, and condition facts. |
-| **Public Capabilities** | Query products and eligibility; manage Staff-assisted intake; create or save drafts; originate and submit applications through an allowed channel; query application state and Salary Advance limits; establish and enforce Loan Officer review stewardship; start Loan Officer review; manage correction workflows and resubmit completed corrections; apply recommendation and approval outcomes; view offers and record Customer-sourced responses through the allowed channel; prepare contracts and record Customer acknowledgment through the allowed channel; confirm contract readiness; record manual disbursement; query LoanAccounts and schedules; record and query repayments; evaluate overdue state; perform contractual payoff or Administrative Full-Balance Settlement; and close eligible settled accounts administratively. |
+| **Public Capabilities** | Query products and eligibility; manage Staff-assisted intake; originate and submit applications directly through an allowed channel; query application state and Salary Advance limits; establish and enforce Loan Officer review stewardship; start Loan Officer review; manage correction workflows and resubmit completed corrections; apply recommendation and approval outcomes; view offers and record Customer-sourced responses through the allowed channel; prepare contracts and record Customer acknowledgment through the allowed channel; confirm contract readiness; record manual disbursement; query LoanAccounts and schedules; record and query repayments; evaluate overdue state; perform contractual payoff or Administrative Full-Balance Settlement; and close eligible settled accounts administratively. |
 | **Publishes** | Representative events include Staff-assisted intake confirmed, application submitted, verification recorded, limit reserved or released, review started, correction requested, recommendation applied, application approved or rejected, offer generated or resolved, contract prepared or acknowledged, readiness confirmed, loan disbursed, repayment recorded, account status changed, account settled by contractual payoff or Administrative Full-Balance Settlement, and account closed administratively. |
 | **Consumes** | Customer readiness and purpose-limited Customer intake or bank-account facts; Partner employee-link and eligibility facts; Document intake-evidence references, checklist state, and processing-readiness facts; Approval recommendation and decision outcomes; authenticated actor and authorization facts. |
 | **Must Not Own** | User credentials, Customer source profile or bank-account aggregates, Partner Employee source records, document binaries or document-review decisions, or Approval's immutable recommendation and decision records. |
 
 ### LoanApplication and LoanAccount State Ownership
 
-`LoanApplication` governs origination from draft or submission through verification, document readiness, controlled review, approval, Customer acceptance, contract readiness, disbursement, and pre-disbursement terminal outcomes. It preserves the origination channel so later Customer-sourced corrections, offer responses, and contract acknowledgments follow the permitted interaction path without changing financial or approval authority.
+`LoanApplication` governs direct origination/submission through verification, document readiness, controlled review, approval, Customer acceptance, contract readiness, disbursement, and pre-disbursement terminal outcomes. Origination creates it in `SUBMITTED` or `DOCUMENTS_PENDING` according to product policy and upload completeness. The reserved `DRAFT` vocabulary does not establish a persistent save-and-return LoanApplication workflow. It preserves the origination channel so later Customer-sourced corrections, offer responses, and contract acknowledgments follow the permitted interaction path without changing financial or approval authority.
 
 After disbursement, `LoanAccount` becomes the authoritative servicing aggregate. It moves among `ACTIVE`, `OVERDUE`, `SETTLED`, and `CLOSED` according to repayment, overdue, contractual-payoff, Administrative Full-Balance Settlement, and administrative-closure policies.
 
@@ -251,7 +251,7 @@ Document must not create or submit a `LoanApplication`, mutate Staff-assisted in
 
 OCR-assisted processing belongs inside Document Management as an advisory document-processing capability rather than a separate top-level bounded context.
 
-Document Management may own OCR jobs, extracted text, parsed fields, confidence scores, and processing history for an exact immutable document version, whether the version belongs to Staff-assisted intake or an application workflow. OCR results remain Document-owned evidence.
+Document Management owns OCR jobs, protected extracted text and structured suggestions, confidence scores, processing history, and finalized Staff reviews for exact immutable intake-document versions. The supported OCR evidence boundary is defined in [MER-ARCH-005](MER-ARCH-005-ocr-architecture.md); ordinary application-checklist evidence is outside that boundary. OCR results and reviews remain Document-owned evidence.
 
 OCR must not independently:
 
@@ -271,9 +271,9 @@ Authorized review remains the source of checklist acceptance, replacement, waive
 
 | Aspect | Detail |
 |---|---|
-| **Responsibilities** | Immutable records of important business actions, actor and time evidence, compliance-oriented state-change history, and secure audit querying. Audit observes business outcomes and never becomes a workflow source of truth. |
-| **Owns** | Append-only audit events, PII-safe audit payloads, audit correlation identifiers, retention and archival policy, and compliance-oriented query models. |
-| **Public Capabilities** | Record an auditable business action; query authorized audit history; correlate actions belonging to one business operation; support retention, archival, and compliance review. |
+| **Responsibilities** | Immutable records of important business actions, actor and time evidence, and correlation of a business operation's audit entries. Audit observes business outcomes and never becomes a workflow source of truth. |
+| **Owns** | Append-only audit events, PII-safe audit payloads, audit correlation identifiers, and audit persistence. |
+| **Public Capabilities** | Record an auditable business action and correlate entries belonging to one business operation. A generic audit explorer, retention management, and archival are outside this application capability boundary; any such extension remains Audit-owned. |
 | **Consumes** | Explicit, PII-safe auditable facts published by business contexts. |
 | **Must Not Own** | `LoanApplication` state, balances, approval authority, document readiness, Customer evidence, Partner eligibility, or commands that change another context. |
 
@@ -289,13 +289,15 @@ For Staff-assisted actions, Audit records the authenticated Staff user as actor 
 
 | Aspect | Detail |
 |---|---|
-| **Responsibilities** | Message templates, notification requests, channel selection, delivery attempts, delivery status, retry policy, and Customer or Staff communication preferences. |
-| **Owns** | `Notification`, `NotificationTemplate`, delivery attempts, channel-specific delivery metadata, and notification status. |
-| **Public Capabilities** | Request a notification; render a template; select an eligible channel; deliver or retry a message; query delivery status. |
-| **Consumes** | Notification-triggering business events from Identity, Customer, Partner, Document, Approval, and Loan. |
+| **Responsibilities** | Controlled Identity/security email rendering and transport for Customer email verification, password reset, Staff password setup, and existing-Customer digital-access invitations. |
+| **Owns** | Purpose-specific message contracts, controlled templates, email-sender ports, and transport adapters. |
+| **Public Capabilities** | Render and deliver each supported Identity/security email through its purpose-specific application contract. |
+| **Consumes** | Transient recipient and security-link inputs from Identity after the owning Identity outcome commits. |
 | **Must Not Own** | Lending workflow state, approval decisions, eligibility, repayment balances, or the business rule that determines whether an event occurred. |
 
-A notification failure must not rewrite or reverse the business outcome that triggered the message. The publishing context remains authoritative for that outcome.
+Identity owns account and credential state, token issuance, validity, consumption, revocation, and supported resend/recovery commands. Notification owns rendering and transport, not token authority. Raw tokens must not enter durable events, audit payloads, or logs. Delivery occurs after the Identity transaction commits; delivery failure must not reverse the committed Identity or Customer outcome.
+
+Generic notification requests, channel selection, preferences, durable delivery status, and retry management are outside this public capability boundary. Any extension must preserve the originating context's business authority and the separation between committed state and external delivery. Notification must not decide lending transitions.
 
 ---
 
@@ -324,7 +326,7 @@ A notification failure must not rewrite or reverse the business outcome that tri
 | Customer-level identity files, Staff-assisted paper evidence, application checklists, document versions, review decisions, readiness | Document Management |
 | OCR jobs and extracted document evidence | Document Management |
 | Immutable cross-cutting audit evidence | Audit & Compliance Controls |
-| Templates and message-delivery state | Notification |
+| Controlled Identity/security email rendering and transport | Notification |
 
 ---
 
