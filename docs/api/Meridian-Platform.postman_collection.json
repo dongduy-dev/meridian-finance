@@ -1,7 +1,7 @@
 {
     "info":  {
                  "name":  "Meridian Platform API - v1 Scenario Collection",
-                 "description":  "JWT/RBAC Postman companion for the Meridian HTTP API v1 contract.\n\nRecommended run order:\n1. Optionally run Customer Registration and Email Verification. Registration generates a fresh fictional email. Copy the raw token manually from local Mailpit into emailVerificationToken before running confirmation; no token is stored in the collection.\n2. Run the Auth folder to capture role-specific Bearer tokens.\n3. Run Customer Identity Verification after profile setup and before any new digital Salary Advance, UCL, or Collateral submission. For paper Customers, pause before conversion to bind and manually review the current CUSTOMER_IDENTITY intake version; an existing verified Customer reuses verification. Run Paper Origination CP2 and CP3 to exercise Staff-assisted UCL and Collateral intake, atomic conversion, completed-case reconciliation, and initial checklist upload; choose fictional local PDFs for paperIntakeEvidenceFile and assistedApplicationEvidenceFile.\n4. Run Public and Partner Admin requests.\n5. Run Customer Profile and Bank Accounts, then Customer Identity Verification (03A), then Customer Employee Verification, then Salary Advance Application. Current verified Customer identity is required before all new Salary Advance, UCL, and Collateral origination; Salary Advance also requires separate Partner Employee verification.\n6. Run Loan Officer Review, Recommendation, Approval Decision, and Customer Approved Offer.\n7. For UCL, prepare and accept the required evidence, enable uclOfferScenarioEnabled, then run the UCL verification-through-offer requests in order. Separate prepared fixture variables enable FAILED, REQUIRES_MORE_INFORMATION, correction/re-verification, cancellation, and outstanding-debt examples.\n8. For Collateral Loan, originate the application, use the returned ownership checklist item with the common upload/review/completion requests, enable collateralVerificationScenarioEnabled, then run the lifecycle sequence through approval, exact offer and contract assertions, Customer acknowledgment, readiness, destination reveal, activation, replay, final schedule, partial repayment, history, exact settlement, and closure. Separate prepared fixture variables exercise the other Approver and offer-terminal outcomes.\n\nThe Salary Advance, UCL, and Collateral happy paths are duplicate-sensitive because the authenticated demo customer can have only one active application per product. Run them on a fresh local database, or reset test data before repeating a full happy-path flow.",
+                 "description":  "JWT/RBAC scenario companion to MER-API-001. Full prerequisites and selectable run order: MER-API-001 Section 9. Folder display order is not an unattended whole-collection plan.\n\nFresh install: V73 disables all five historical V13 credentials. No usable Customer/Staff login or shared password is supplied; do not reactivate those Users.\n- Customer: register, manually obtain the newest email token from local Mailpit (http://localhost:8025), and confirm email. Set private customerEmail/customerPassword inputs to that registered actor. Registration/reset password inputs are blank and require 12-72 characters. Secrets are never returned by these APIs or discovered by scripts.\n- First administrator: the operator follows MER-DEP-001 startup bootstrap, consumes the emailed password-setup link, then disables bootstrap before normal restart. There is no bootstrap HTTP request. Delivery failure leaves the User committed: disable bootstrap and use normal password recovery.\n- Staff: the administrator provisions separate LOAN_OFFICER, APPROVER, and ACCOUNTING_OFFICER Users through normal Internal User administration; each consumes emailed setup and chooses a password. Use the established administrator or another provisioned BACK_OFFICE_ADMIN for Back-Office examples. Set each blank actor email/password pair privately. Foreign-owner checks require a second separately registered/verified Customer and its transient otherCustomerAccessToken.\n\nRun Auth after setup. Keep Customer login, refresh, logout, and re-login together before Staff login replaces the shared refresh cookie. Bearer variables remain actor-specific. Never export/commit populated credentials, tokens, email links, or cookie jars.\n\nBefore lending, complete Customer profile, active primary bank account, and separate business identity verification. Do not run bank deactivation as preparation. VERIFY and its replay require deliberate entry of the exact fictional evidence reference. Salary Advance additionally needs a valid COMPLETED roster for the current UTC month matching the profile, on an ACTIVE Partner, then employment verification. Historical seed dates do not prove freshness; the Partner Admin import example deliberately stores FAILED, so prepare a separate valid roster.\n\nUCL/Collateral require accepted checklist evidence and manual verification before review. Select prepared branches and opt-in flags deliberately; failed verification, correction, decline/expiry, cancellation, overdue, payoff, settlement, and closure need separate eligible fixtures. Staff-assisted conversion additionally requires the matching signed paper form and verified Customer identity. OCR is optional/advisory; deployed portfolio OCR is disabled. Internal User mutation examples require a disposable ACTIVE Loan Officer without APPROVER and subsequent restoration/re-login. Section 9 defines manual file, fixture, scheduler, and repeat-run prerequisites.",
                  "schema":  "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
              },
     "auth":  {
@@ -78,10 +78,34 @@
                          "description":  "Local Meridian backend base URL."
                      },
                      {
-                         "key":  "demoPassword",
-                         "value":  "Meridian@123",
-                         "type":  "string",
-                         "description":  "Fictional local demo password for seeded Meridian users only."
+                         "key": "customerPassword",
+                         "value": "",
+                         "type": "string",
+                         "description": "Private local runtime password for the normally registered/provisioned customer actor. Complete email verification/setup first; never export or commit the value."
+                     },
+                     {
+                         "key": "loanOfficerPassword",
+                         "value": "",
+                         "type": "string",
+                         "description": "Private local runtime password for the normally registered/provisioned loanOfficer actor. Complete email verification/setup first; never export or commit the value."
+                     },
+                     {
+                         "key": "approverPassword",
+                         "value": "",
+                         "type": "string",
+                         "description": "Private local runtime password for the normally registered/provisioned approver actor. Complete email verification/setup first; never export or commit the value."
+                     },
+                     {
+                         "key": "accountingOfficerPassword",
+                         "value": "",
+                         "type": "string",
+                         "description": "Private local runtime password for the normally registered/provisioned accountingOfficer actor. Complete email verification/setup first; never export or commit the value."
+                     },
+                     {
+                         "key": "backOfficeAdminPassword",
+                         "value": "",
+                         "type": "string",
+                         "description": "Private local runtime password for the normally registered/provisioned backOfficeAdmin actor. Complete email verification/setup first; never export or commit the value."
                      },
                      {
                          "key":  "registrationEmail",
@@ -90,10 +114,10 @@
                          "description":  "Generated by the representative registration request."
                      },
                      {
-                         "key":  "registrationPassword",
-                         "value":  "Meridian-local-registration",
-                         "type":  "string",
-                         "description":  "Fictional local-only password for the generated registration scenario."
+                         "key": "registrationPassword",
+                         "value": "",
+                         "type": "string",
+                         "description": "Choose a private local 12-72 character password for this scenario; never export or commit it."
                      },
                      {
                          "key":  "emailVerificationToken",
@@ -108,35 +132,40 @@
                          "description":  "Manually copy the transient token from Mailpit. Never save a real token into the checked-in collection."
                      },
                      {
-                         "key":  "passwordResetNewPassword",
-                         "value":  "Meridian-local-reset-password",
-                         "type":  "string",
-                         "description":  "Fictional local-only replacement password for the generated registration scenario."
+                         "key": "passwordResetNewPassword",
+                         "value": "",
+                         "type": "string",
+                         "description": "Choose a private local 12-72 character password for this scenario; never export or commit it."
                      },
                      {
-                         "key":  "customerEmail",
-                         "value":  "customer.demo@meridian.local",
-                         "type":  "string"
+                         "key": "customerEmail",
+                         "value": "",
+                         "type": "string",
+                         "description": "Private local runtime email of the registered/provisioned actor; no historical V13 account is supplied."
                      },
                      {
-                         "key":  "loanOfficerEmail",
-                         "value":  "loan.officer@meridian.local",
-                         "type":  "string"
+                         "key": "loanOfficerEmail",
+                         "value": "",
+                         "type": "string",
+                         "description": "Private local runtime email of the registered/provisioned actor; no historical V13 account is supplied."
                      },
                      {
-                         "key":  "approverEmail",
-                         "value":  "approver@meridian.local",
-                         "type":  "string"
+                         "key": "approverEmail",
+                         "value": "",
+                         "type": "string",
+                         "description": "Private local runtime email of the registered/provisioned actor; no historical V13 account is supplied."
                      },
                      {
-                         "key":  "accountingOfficerEmail",
-                         "value":  "accounting.officer@meridian.local",
-                         "type":  "string"
+                         "key": "accountingOfficerEmail",
+                         "value": "",
+                         "type": "string",
+                         "description": "Private local runtime email of the registered/provisioned actor; no historical V13 account is supplied."
                      },
                      {
-                         "key":  "backOfficeAdminEmail",
-                         "value":  "backoffice.admin@meridian.local",
-                         "type":  "string"
+                         "key": "backOfficeAdminEmail",
+                         "value": "",
+                         "type": "string",
+                         "description": "Private local runtime email of the registered/provisioned actor; no historical V13 account is supplied."
                      },
                      {
                          "key":  "customerAccessToken",
@@ -177,7 +206,7 @@
                          "key":  "internalUserCreatedId",
                          "value":  "",
                          "type":  "string",
-                         "description":  "New Staff User ID for password-setup resend; separate from the seeded internalUserTargetId and cleared after resend."
+                         "description":  "New Staff User ID for password-setup resend; separate from the prepared internalUserTargetId and cleared after resend."
                      },
                      {
                          "key":  "accessToken",
@@ -1027,7 +1056,7 @@
                 "description": "Captures loanOfficerAccessToken for review and recommendation endpoints.",
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"email\": \"{{loanOfficerEmail}}\",\n  \"password\": \"{{demoPassword}}\"\n}",
+                  "raw": "{\n  \"email\": \"{{loanOfficerEmail}}\",\n  \"password\": \"{{loanOfficerPassword}}\"\n}",
                   "options": {
                     "raw": {
                       "language": "json"
@@ -1037,6 +1066,19 @@
               },
               "response": [],
               "event": [
+                  {
+                      "listen": "prerequest",
+                      "script": {
+                          "type": "text/javascript",
+                          "exec": [
+                              "const required = [\"loanOfficerEmail\", \"loanOfficerPassword\"];",
+                              "if (required.some(key => !pm.variables.get(key))) {",
+                              "    pm.execution.skipRequest();",
+                              "    throw new Error(\"Complete Section 9 actor setup and provide private local email/password inputs before login.\");",
+                              "}"
+                          ]
+                      }
+                  },
                 {
                   "listen": "test",
                   "script": {
@@ -1088,7 +1130,7 @@
                 "description": "Captures approverAccessToken for approval-decision and settlement requests.",
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"email\": \"{{approverEmail}}\",\n  \"password\": \"{{demoPassword}}\"\n}",
+                  "raw": "{\n  \"email\": \"{{approverEmail}}\",\n  \"password\": \"{{approverPassword}}\"\n}",
                   "options": {
                     "raw": {
                       "language": "json"
@@ -1098,6 +1140,19 @@
               },
               "response": [],
               "event": [
+                  {
+                      "listen": "prerequest",
+                      "script": {
+                          "type": "text/javascript",
+                          "exec": [
+                              "const required = [\"approverEmail\", \"approverPassword\"];",
+                              "if (required.some(key => !pm.variables.get(key))) {",
+                              "    pm.execution.skipRequest();",
+                              "    throw new Error(\"Complete Section 9 actor setup and provide private local email/password inputs before login.\");",
+                              "}"
+                          ]
+                      }
+                  },
                 {
                   "listen": "test",
                   "script": {
@@ -1149,7 +1204,7 @@
                 "description": "Captures accountingAccessToken for contract, disbursement, repayment, and closure requests.",
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"email\": \"{{accountingOfficerEmail}}\",\n  \"password\": \"{{demoPassword}}\"\n}",
+                  "raw": "{\n  \"email\": \"{{accountingOfficerEmail}}\",\n  \"password\": \"{{accountingOfficerPassword}}\"\n}",
                   "options": {
                     "raw": {
                       "language": "json"
@@ -1159,6 +1214,19 @@
               },
               "response": [],
               "event": [
+                  {
+                      "listen": "prerequest",
+                      "script": {
+                          "type": "text/javascript",
+                          "exec": [
+                              "const required = [\"accountingOfficerEmail\", \"accountingOfficerPassword\"];",
+                              "if (required.some(key => !pm.variables.get(key))) {",
+                              "    pm.execution.skipRequest();",
+                              "    throw new Error(\"Complete Section 9 actor setup and provide private local email/password inputs before login.\");",
+                              "}"
+                          ]
+                      }
+                  },
                 {
                   "listen": "test",
                   "script": {
@@ -1178,282 +1246,6 @@
                       "});"
                     ]
                   }
-                },
-                {
-                  "name": "13 Unsecured Consumer Loan Servicing",
-                  "description": "Uses the existing product-generic servicing endpoints. Configure the three UCL application variables with prepared fixtures, then run this folder in order. Overdue evaluation is an internal scheduled operation, so the overdue read uses a fixture already evaluated to OVERDUE.",
-                  "item": [
-                    {
-                      "name": "Record UCL repayment",
-                      "request": {
-                        "method": "POST",
-                        "header": [
-                          {
-                            "key": "Content-Type",
-                            "value": "application/json",
-                            "type": "text"
-                          }
-                        ],
-                        "url": "{{baseUrl}}/api/v1/loan-applications/{{uclServicingLoanApplicationId}}/repayments",
-                        "auth": {
-                          "type": "bearer",
-                          "bearer": [
-                            {
-                              "key": "token",
-                              "value": "{{accountingAccessToken}}",
-                              "type": "string"
-                            }
-                          ]
-                        },
-                        "description": "Records a partial or early UCL repayment without repricing or a product-exposure release.",
-                        "body": {
-                          "mode": "raw",
-                          "raw": "{\n  \"requestId\": \"{{uclRepaymentRequestId}}\",\n  \"externalPaymentReference\": \"{{uclRepaymentExternalReference}}\",\n  \"amount\": {{uclRepaymentAmount}},\n  \"paymentValueDate\": \"{{uclRepaymentValueDate}}\"\n}",
-                          "options": {
-                            "raw": {
-                              "language": "json"
-                            }
-                          }
-                        }
-                      },
-                      "response": [],
-                      "event": [
-                        {
-                          "listen": "prerequest",
-                          "script": {
-                            "type": "text/javascript",
-                            "exec": [
-                              "const fresh = () => pm.variables.replaceIn(\"{{$guid}}\");",
-                              "const runId = fresh().replace(/-/g, \"\").toUpperCase();",
-                              "pm.collectionVariables.set(\"uclRepaymentRequestId\", fresh());",
-                              "pm.collectionVariables.set(\"uclRepaymentExternalReference\", `MER-UCL-PAY-${runId}`);"
-                            ]
-                          }
-                        },
-                        {
-                          "listen": "test",
-                          "script": {
-                            "type": "text/javascript",
-                            "exec": [
-                              "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
-                              "const json = pm.response.json();",
-                              "pm.test(\"UCL distinguishes allocation from exposure release\", () => { pm.expect(json.principalAllocated).to.be.a(\"number\"); pm.expect(json.principalReleased).to.eql(0); });",
-                              "pm.test(\"Result contains servicing evidence\", () => { pm.expect(json.allocations).to.be.an(\"array\").that.is.not.empty; pm.expect(json.affectedInstallments).to.be.an(\"array\").that.is.not.empty; });"
-                            ]
-                          }
-                        }
-                      ]
-                    },
-                    {
-                      "name": "Read UCL repayment history",
-                      "request": {
-                        "method": "GET",
-                        "header": [],
-                        "url": "{{baseUrl}}/api/v1/loan-applications/{{uclServicingLoanApplicationId}}/repayments?page=0&size=20",
-                        "auth": {
-                          "type": "bearer",
-                          "bearer": [
-                            {
-                              "key": "token",
-                              "value": "{{customerAccessToken}}",
-                              "type": "string"
-                            }
-                          ]
-                        },
-                        "description": "Reads immutable UCL repayment and allocation evidence without evaluating overdue state."
-                      },
-                      "response": [],
-                      "event": [
-                        {
-                          "listen": "test",
-                          "script": {
-                            "type": "text/javascript",
-                            "exec": [
-                              "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
-                              "const json = pm.response.json();",
-                              "pm.test(\"History contains UCL repayment\", () => pm.expect(json.items).to.be.an(\"array\").that.is.not.empty);",
-                              "pm.test(\"UCL history reports zero product exposure release\", () => json.items.forEach(item => pm.expect(item.principalReleased).to.eql(0)));"
-                            ]
-                          }
-                        }
-                      ]
-                    },
-                    {
-                      "name": "Read evaluated UCL overdue state",
-                      "request": {
-                        "method": "GET",
-                        "header": [],
-                        "url": "{{baseUrl}}/api/v1/loan-applications/{{uclOverdueLoanApplicationId}}/loan-account",
-                        "auth": {
-                          "type": "bearer",
-                          "bearer": [
-                            {
-                              "key": "token",
-                              "value": "{{customerAccessToken}}",
-                              "type": "string"
-                            }
-                          ]
-                        },
-                        "description": "Reads a UCL LoanAccount after date-driven overdue evaluation; the read itself is non-mutating."
-                      },
-                      "response": [],
-                      "event": [
-                        {
-                          "listen": "test",
-                          "script": {
-                            "type": "text/javascript",
-                            "exec": [
-                              "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
-                              "pm.test(\"Account is overdue\", () => pm.expect(pm.response.json().status).to.eql(\"OVERDUE\"));"
-                            ]
-                          }
-                        }
-                      ]
-                    },
-                    {
-                      "name": "Initialize UCL settlement amount",
-                      "request": {
-                        "method": "GET",
-                        "header": [],
-                        "url": "{{baseUrl}}/api/v1/loan-applications/{{uclSettlementLoanApplicationId}}/loan-account",
-                        "auth": {
-                          "type": "bearer",
-                          "bearer": [
-                            {
-                              "key": "token",
-                              "value": "{{accountingAccessToken}}",
-                              "type": "string"
-                            }
-                          ]
-                        },
-                        "description": "Reads locked-input truth for the separate UCL settlement and closure scenario."
-                      },
-                      "response": [],
-                      "event": [
-                        {
-                          "listen": "prerequest",
-                          "script": {
-                            "type": "text/javascript",
-                            "exec": [
-                              "const fresh = () => pm.variables.replaceIn(\"{{$guid}}\");",
-                              "const runId = fresh().replace(/-/g, \"\").toUpperCase();",
-                              "pm.collectionVariables.set(\"uclSettlementRequestId\", fresh());",
-                              "pm.collectionVariables.set(\"uclClosureRequestId\", fresh());",
-                              "pm.collectionVariables.set(\"uclSettlementExternalReference\", `MER-UCL-SET-${runId}`);"
-                            ]
-                          }
-                        },
-                        {
-                          "listen": "test",
-                          "script": {
-                            "type": "text/javascript",
-                            "exec": [
-                              "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
-                              "const json = pm.response.json();",
-                              "pm.test(\"UCL account is serviceable\", () => pm.expect([\"ACTIVE\",\"OVERDUE\"]).to.include(json.status));",
-                              "pm.collectionVariables.set(\"uclSettlementExpectedAmount\", json.servicing.totalOutstanding);"
-                            ]
-                          }
-                        }
-                      ]
-                    },
-                    {
-                      "name": "Apply UCL Administrative Full-Balance Settlement",
-                      "request": {
-                        "method": "POST",
-                        "header": [
-                          {
-                            "key": "Content-Type",
-                            "value": "application/json",
-                            "type": "text"
-                          }
-                        ],
-                        "url": "{{baseUrl}}/api/v1/loan-applications/{{uclSettlementLoanApplicationId}}/settlements",
-                        "auth": {
-                          "type": "bearer",
-                          "bearer": [
-                            {
-                              "key": "token",
-                              "value": "{{approverAccessToken}}",
-                              "type": "string"
-                            }
-                          ]
-                        },
-                        "description": "Records exact complete UCL outstanding as payment-backed settlement with zero product-exposure release.",
-                        "body": {
-                          "mode": "raw",
-                          "raw": "{\n  \"requestId\": \"{{uclSettlementRequestId}}\",\n  \"expectedSettlementAmount\": {{uclSettlementExpectedAmount}},\n  \"paymentValueDate\": \"{{uclSettlementPaymentValueDate}}\",\n  \"externalPaymentReference\": \"{{uclSettlementExternalReference}}\"\n}",
-                          "options": {
-                            "raw": {
-                              "language": "json"
-                            }
-                          }
-                        }
-                      },
-                      "response": [],
-                      "event": [
-                        {
-                          "listen": "test",
-                          "script": {
-                            "type": "text/javascript",
-                            "exec": [
-                              "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
-                              "const json = pm.response.json();",
-                              "pm.test(\"UCL settlement is exact and final\", () => { pm.expect(json.resultingLoanAccountStatus).to.eql(\"SETTLED\"); pm.expect(json.accountBalance.totalOutstanding).to.eql(0); pm.expect(json.principalAllocated).to.be.above(0); pm.expect(json.principalReleased).to.eql(0); });"
-                            ]
-                          }
-                        }
-                      ]
-                    },
-                    {
-                      "name": "Close settled UCL LoanAccount",
-                      "request": {
-                        "method": "POST",
-                        "header": [
-                          {
-                            "key": "Content-Type",
-                            "value": "application/json",
-                            "type": "text"
-                          }
-                        ],
-                        "url": "{{baseUrl}}/api/v1/loan-applications/{{uclSettlementLoanApplicationId}}/loan-account/closure",
-                        "auth": {
-                          "type": "bearer",
-                          "bearer": [
-                            {
-                              "key": "token",
-                              "value": "{{accountingAccessToken}}",
-                              "type": "string"
-                            }
-                          ]
-                        },
-                        "description": "Performs the separate administrative UCL SETTLED-to-CLOSED transition.",
-                        "body": {
-                          "mode": "raw",
-                          "raw": "{\n  \"requestId\": \"{{uclClosureRequestId}}\"\n}",
-                          "options": {
-                            "raw": {
-                              "language": "json"
-                            }
-                          }
-                        }
-                      },
-                      "response": [],
-                      "event": [
-                        {
-                          "listen": "test",
-                          "script": {
-                            "type": "text/javascript",
-                            "exec": [
-                              "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
-                              "const json = pm.response.json();",
-                              "pm.test(\"UCL account is closed\", () => { pm.expect(json.resultingStatus).to.eql(\"CLOSED\"); pm.expect(json.idempotentReplay).to.eql(false); });"
-                            ]
-                          }
-                        }
-                      ]
-                    }
-                  ]
                 }
               ]
             },
@@ -1486,7 +1278,7 @@
                 "description": "Captures backOfficeAccessToken for partner read endpoints.",
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"email\": \"{{backOfficeAdminEmail}}\",\n  \"password\": \"{{demoPassword}}\"\n}",
+                  "raw": "{\n  \"email\": \"{{backOfficeAdminEmail}}\",\n  \"password\": \"{{backOfficeAdminPassword}}\"\n}",
                   "options": {
                     "raw": {
                       "language": "json"
@@ -1496,6 +1288,19 @@
               },
               "response": [],
               "event": [
+                  {
+                      "listen": "prerequest",
+                      "script": {
+                          "type": "text/javascript",
+                          "exec": [
+                              "const required = [\"backOfficeAdminEmail\", \"backOfficeAdminPassword\"];",
+                              "if (required.some(key => !pm.variables.get(key))) {",
+                              "    pm.execution.skipRequest();",
+                              "    throw new Error(\"Complete Section 9 actor setup and provide private local email/password inputs before login.\");",
+                              "}"
+                          ]
+                      }
+                  },
                 {
                   "listen": "test",
                   "script": {
@@ -1547,7 +1352,7 @@
                 "description": "Captures customerAccessToken and sets accessToken by default.",
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"email\": \"{{customerEmail}}\",\n  \"password\": \"{{demoPassword}}\"\n}",
+                  "raw": "{\n  \"email\": \"{{customerEmail}}\",\n  \"password\": \"{{customerPassword}}\"\n}",
                   "options": {
                     "raw": {
                       "language": "json"
@@ -1557,6 +1362,19 @@
               },
               "response": [],
               "event": [
+                  {
+                      "listen": "prerequest",
+                      "script": {
+                          "type": "text/javascript",
+                          "exec": [
+                              "const required = [\"customerEmail\", \"customerPassword\"];",
+                              "if (required.some(key => !pm.variables.get(key))) {",
+                              "    pm.execution.skipRequest();",
+                              "    throw new Error(\"Complete Section 9 actor setup and provide private local email/password inputs before login.\");",
+                              "}"
+                          ]
+                      }
+                  },
                 {
                   "listen": "test",
                   "script": {
@@ -3766,7 +3584,7 @@
                                                         "script":  {
                                                                        "type":  "text/javascript",
                                                                        "exec":  [
-                                                                                    "const email = `checkpoint.${Date.now()}@example.com`;",
+                                                                                    "const email = `postman.${Date.now()}@example.com`;",
                                                                                     "pm.collectionVariables.set(\"registrationEmail\", email);",
                                                                                     "pm.collectionVariables.unset(\"emailVerificationToken\");"
                                                                                 ]
@@ -3969,6 +3787,7 @@
                  },
                  {
                      "name": "02B Internal User Administration - identity:user:manage",
+"description": "Requires a provisioned Back-Office Admin and a disposable ACTIVE Loan Officer target with LOAN_OFFICER and without APPROVER. Uses loanOfficerEmail to discover the prepared target. These mutations are not initial role provisioning; run restoration and re-login before subsequent lending. The created additional Staff setup email is a manual prerequisite if that User is later used for login.",
                      "item": [
                          {
                              "name": "GET /api/v1/admin/internal-users",
@@ -3986,7 +3805,7 @@
                                          }
                                      ]
                                  },
-                                 "description": "Lists only internal Staff Users and captures the seeded Loan Officer ID without placing email in a request URL."
+                                 "description": "Lists only internal Staff Users and captures the prepared Loan Officer ID without placing email in a request URL."
                              },
                              "response": [],
                              "event": [
@@ -3998,8 +3817,8 @@
                                              "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
                                              "const json = pm.response.json();",
                                              "pm.test(\"Staff users are deterministic and purpose-limited\", () => { const emails = json.map(item => item.email); pm.expect(emails).to.eql([...emails].sort()); json.forEach(item => { [\"userId\", \"email\", \"displayName\", \"status\", \"assignedRoleCodes\"].forEach(field => pm.expect(item).to.have.property(field)); [\"passwordHash\", \"failedLoginAttempts\", \"authorizationVersion\", \"customerId\"].forEach(field => pm.expect(item).not.to.have.property(field)); }); });",
-                                             "const target = json.find(item => item.email === pm.collectionVariables.get(\"loanOfficerEmail\"));",
-                                             "pm.test(\"Seeded Loan Officer is available for reversible scenarios\", () => { pm.expect(target).to.exist; pm.expect(target.status).to.eql(\"ACTIVE\"); pm.expect(target.assignedRoleCodes).to.include(\"LOAN_OFFICER\"); });",
+                                             "const target = json.find(item => item.email === pm.variables.get(\"loanOfficerEmail\"));",
+                                             "pm.test(\"Prepared Loan Officer is available for reversible scenarios\", () => { pm.expect(target).to.exist; pm.expect(target.status).to.eql(\"ACTIVE\"); pm.expect(target.assignedRoleCodes).to.include(\"LOAN_OFFICER\"); });",
                                              "pm.collectionVariables.set(\"internalUserTargetId\", target.userId);"
                                          ]
                                      }
@@ -4107,7 +3926,7 @@
                                          }
                                      ]
                                  },
-                                 "description": "Temporarily suspends the seeded Loan Officer. The following requests restore the seeded state and credentials.",
+                                 "description": "Temporarily suspends the prepared Loan Officer. The following requests restore the prepared target state and refresh its credentials.",
                                  "body": {
                                      "mode": "raw",
                                      "raw": "{\n  \"status\": \"SUSPENDED\"\n}",
@@ -4563,7 +4382,7 @@
                              ]
                          },
                          {
-                             "name": "Restore seeded Loan Officer credentials",
+                             "name": "Restore prepared Loan Officer credentials",
                              "request": {
                                  "method": "POST",
                                  "header": [
@@ -4580,7 +4399,7 @@
                                  "description": "Creates a fresh credential family after the reversible suspension scenario revoked the prior family.",
                                  "body": {
                                      "mode": "raw",
-                                     "raw": "{\n  \"email\": \"{{loanOfficerEmail}}\",\n  \"password\": \"{{demoPassword}}\"\n}",
+                                     "raw": "{\n  \"email\": \"{{loanOfficerEmail}}\",\n  \"password\": \"{{loanOfficerPassword}}\"\n}",
                                      "options": {
                                          "raw": {
                                              "language": "json"
@@ -4591,13 +4410,26 @@
                              "response": [],
                              "event": [
                                  {
+                                     "listen": "prerequest",
+                                     "script": {
+                                         "type": "text/javascript",
+                                         "exec": [
+                                             "const required = [\"loanOfficerEmail\", \"loanOfficerPassword\"];",
+                                             "if (required.some(key => !pm.variables.get(key))) {",
+                                             "    pm.execution.skipRequest();",
+                                             "    throw new Error(\"Complete Section 9 actor setup and provide private local email/password inputs before login.\");",
+                                             "}"
+                                         ]
+                                     }
+                                 },
+                                 {
                                      "listen": "test",
                                      "script": {
                                          "type": "text/javascript",
                                          "exec": [
                                              "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
                                              "const json = pm.response.json();",
-                                             "pm.test(\"Seeded Loan Officer authority is restored\", () => { pm.expect(json.roles).to.include(\"LOAN_OFFICER\"); pm.expect(json.roles).not.to.include(\"APPROVER\"); });",
+                                             "pm.test(\"Prepared Loan Officer authority is restored\", () => { pm.expect(json.roles).to.include(\"LOAN_OFFICER\"); pm.expect(json.roles).not.to.include(\"APPROVER\"); });",
                                              "pm.collectionVariables.set(\"loanOfficerAccessToken\", json.accessToken);"
                                          ]
                                      }
@@ -4619,10 +4451,10 @@
                                  "auth": {
                                      "type": "noauth"
                                  },
-                                 "description": "Leaves the shared Postman cookie jar on the Back-Office demo session after restoring all mutated seeded User state.",
+                                 "description": "Leaves the shared Postman cookie jar on the provisioned Back-Office session after restoring all mutated prepared User state.",
                                  "body": {
                                      "mode": "raw",
-                                     "raw": "{\n  \"email\": \"{{backOfficeAdminEmail}}\",\n  \"password\": \"{{demoPassword}}\"\n}",
+                                     "raw": "{\n  \"email\": \"{{backOfficeAdminEmail}}\",\n  \"password\": \"{{backOfficeAdminPassword}}\"\n}",
                                      "options": {
                                          "raw": {
                                              "language": "json"
@@ -4632,6 +4464,19 @@
                              },
                              "response": [],
                              "event": [
+                                 {
+                                     "listen": "prerequest",
+                                     "script": {
+                                         "type": "text/javascript",
+                                         "exec": [
+                                             "const required = [\"backOfficeAdminEmail\", \"backOfficeAdminPassword\"];",
+                                             "if (required.some(key => !pm.variables.get(key))) {",
+                                             "    pm.execution.skipRequest();",
+                                             "    throw new Error(\"Complete Section 9 actor setup and provide private local email/password inputs before login.\");",
+                                             "}"
+                                         ]
+                                     }
+                                 },
                                  {
                                      "listen": "test",
                                      "script": {
@@ -4649,6 +4494,7 @@
                  },
                  {
                      "name": "02 Partner Admin Commands - partner:manage",
+"description": "Representative company administration plus a deliberately invalid employee import and exact/conflicting replay. HTTP 201 with status FAILED is not a usable roster. Salary Advance prerequisites require a separate valid complete current-UTC-month roster on an ACTIVE company; see MER-API-001 Section 9.2.",
                      "item": [
                                   {
                                       "name": "POST /api/v1/partner-companies",
@@ -4863,6 +4709,7 @@
                  },
                  {
                      "name":  "00 Auth - Capture Bearer Tokens",
+"description": "Complete MER-API-001 Section 9 identity setup first. All actor email/password inputs are blank; use private local runtime values. Customer refresh/logout must immediately follow its login before Staff logins replace the shared refresh cookie. This folder does not provision any account.",
                      "item":  [
                                   {
                                       "name":  "Login as Customer",
@@ -4893,7 +4740,7 @@
                                                       "description":  "Captures customerAccessToken and sets accessToken by default.",
                                                       "body":  {
                                                                    "mode":  "raw",
-                                                                   "raw":  "{\n  \"email\": \"{{customerEmail}}\",\n  \"password\": \"{{demoPassword}}\"\n}",
+                                                                   "raw":  "{\n  \"email\": \"{{customerEmail}}\",\n  \"password\": \"{{customerPassword}}\"\n}",
                                                                    "options":  {
                                                                                    "raw":  {
                                                                                                "language":  "json"
@@ -4905,6 +4752,19 @@
 
                                                    ],
                                       "event":  [
+                                          {
+                                              "listen": "prerequest",
+                                              "script": {
+                                                  "type": "text/javascript",
+                                                  "exec": [
+                                                      "const required = [\"customerEmail\", \"customerPassword\"];",
+                                                      "if (required.some(key => !pm.variables.get(key))) {",
+                                                      "    pm.execution.skipRequest();",
+                                                      "    throw new Error(\"Complete Section 9 actor setup and provide private local email/password inputs before login.\");",
+                                                      "}"
+                                                  ]
+                                              }
+                                          },
                                                     {
                                                         "listen":  "test",
                                                         "script":  {
@@ -5062,7 +4922,7 @@
                                                       "description":  "Creates a new independent customer session after the representative logout scenario so later collection folders use fresh credentials.",
                                                       "body":  {
                                                                    "mode":  "raw",
-                                                                   "raw":  "{\n  \"email\": \"{{customerEmail}}\",\n  \"password\": \"{{demoPassword}}\"\n}",
+                                                                   "raw":  "{\n  \"email\": \"{{customerEmail}}\",\n  \"password\": \"{{customerPassword}}\"\n}",
                                                                    "options":  {
                                                                                    "raw":  {
                                                                                                "language":  "json"
@@ -5074,6 +4934,19 @@
 
                                                    ],
                                       "event":  [
+                                          {
+                                              "listen": "prerequest",
+                                              "script": {
+                                                  "type": "text/javascript",
+                                                  "exec": [
+                                                      "const required = [\"customerEmail\", \"customerPassword\"];",
+                                                      "if (required.some(key => !pm.variables.get(key))) {",
+                                                      "    pm.execution.skipRequest();",
+                                                      "    throw new Error(\"Complete Section 9 actor setup and provide private local email/password inputs before login.\");",
+                                                      "}"
+                                                  ]
+                                              }
+                                          },
                                                     {
                                                         "listen":  "test",
                                                         "script":  {
@@ -5125,7 +4998,7 @@
                                                       "description":  "Captures backOfficeAccessToken for partner read endpoints.",
                                                       "body":  {
                                                                    "mode":  "raw",
-                                                                   "raw":  "{\n  \"email\": \"{{backOfficeAdminEmail}}\",\n  \"password\": \"{{demoPassword}}\"\n}",
+                                                                   "raw":  "{\n  \"email\": \"{{backOfficeAdminEmail}}\",\n  \"password\": \"{{backOfficeAdminPassword}}\"\n}",
                                                                    "options":  {
                                                                                    "raw":  {
                                                                                                "language":  "json"
@@ -5137,6 +5010,19 @@
 
                                                    ],
                                       "event":  [
+                                          {
+                                              "listen": "prerequest",
+                                              "script": {
+                                                  "type": "text/javascript",
+                                                  "exec": [
+                                                      "const required = [\"backOfficeAdminEmail\", \"backOfficeAdminPassword\"];",
+                                                      "if (required.some(key => !pm.variables.get(key))) {",
+                                                      "    pm.execution.skipRequest();",
+                                                      "    throw new Error(\"Complete Section 9 actor setup and provide private local email/password inputs before login.\");",
+                                                      "}"
+                                                  ]
+                                              }
+                                          },
                                                     {
                                                         "listen":  "test",
                                                         "script":  {
@@ -5188,7 +5074,7 @@
                                                       "description":  "Captures loanOfficerAccessToken for review and recommendation endpoints.",
                                                       "body":  {
                                                                    "mode":  "raw",
-                                                                   "raw":  "{\n  \"email\": \"{{loanOfficerEmail}}\",\n  \"password\": \"{{demoPassword}}\"\n}",
+                                                                   "raw":  "{\n  \"email\": \"{{loanOfficerEmail}}\",\n  \"password\": \"{{loanOfficerPassword}}\"\n}",
                                                                    "options":  {
                                                                                    "raw":  {
                                                                                                "language":  "json"
@@ -5200,6 +5086,19 @@
 
                                                    ],
                                       "event":  [
+                                          {
+                                              "listen": "prerequest",
+                                              "script": {
+                                                  "type": "text/javascript",
+                                                  "exec": [
+                                                      "const required = [\"loanOfficerEmail\", \"loanOfficerPassword\"];",
+                                                      "if (required.some(key => !pm.variables.get(key))) {",
+                                                      "    pm.execution.skipRequest();",
+                                                      "    throw new Error(\"Complete Section 9 actor setup and provide private local email/password inputs before login.\");",
+                                                      "}"
+                                                  ]
+                                              }
+                                          },
                                                     {
                                                         "listen":  "test",
                                                         "script":  {
@@ -5251,7 +5150,7 @@
                                                       "description":  "Captures approverAccessToken for approval-decision and settlement requests.",
                                                       "body":  {
                                                                    "mode":  "raw",
-                                                                   "raw":  "{\n  \"email\": \"{{approverEmail}}\",\n  \"password\": \"{{demoPassword}}\"\n}",
+                                                                   "raw":  "{\n  \"email\": \"{{approverEmail}}\",\n  \"password\": \"{{approverPassword}}\"\n}",
                                                                    "options":  {
                                                                                    "raw":  {
                                                                                                "language":  "json"
@@ -5263,6 +5162,19 @@
 
                                                    ],
                                       "event":  [
+                                          {
+                                              "listen": "prerequest",
+                                              "script": {
+                                                  "type": "text/javascript",
+                                                  "exec": [
+                                                      "const required = [\"approverEmail\", \"approverPassword\"];",
+                                                      "if (required.some(key => !pm.variables.get(key))) {",
+                                                      "    pm.execution.skipRequest();",
+                                                      "    throw new Error(\"Complete Section 9 actor setup and provide private local email/password inputs before login.\");",
+                                                      "}"
+                                                  ]
+                                              }
+                                          },
                                                     {
                                                         "listen":  "test",
                                                         "script":  {
@@ -5314,7 +5226,7 @@
                                                       "description":  "Captures accountingAccessToken for contract, disbursement, repayment, and closure requests.",
                                                       "body":  {
                                                                    "mode":  "raw",
-                                                                   "raw":  "{\n  \"email\": \"{{accountingOfficerEmail}}\",\n  \"password\": \"{{demoPassword}}\"\n}",
+                                                                   "raw":  "{\n  \"email\": \"{{accountingOfficerEmail}}\",\n  \"password\": \"{{accountingOfficerPassword}}\"\n}",
                                                                    "options":  {
                                                                                    "raw":  {
                                                                                                "language":  "json"
@@ -5326,6 +5238,19 @@
 
                                                    ],
                                       "event":  [
+                                          {
+                                              "listen": "prerequest",
+                                              "script": {
+                                                  "type": "text/javascript",
+                                                  "exec": [
+                                                      "const required = [\"accountingOfficerEmail\", \"accountingOfficerPassword\"];",
+                                                      "if (required.some(key => !pm.variables.get(key))) {",
+                                                      "    pm.execution.skipRequest();",
+                                                      "    throw new Error(\"Complete Section 9 actor setup and provide private local email/password inputs before login.\");",
+                                                      "}"
+                                                  ]
+                                              }
+                                          },
                                                     {
                                                         "listen":  "test",
                                                         "script":  {
@@ -5345,87 +5270,6 @@
                                                                                     "});"
                                                                                 ]
                                                                    }
-                  },
-                  {
-                      "name":  "13 Unsecured Consumer Loan Servicing",
-                      "description":  "Uses the existing product-generic servicing endpoints. Configure the three UCL application variables with prepared fixtures, then run this folder in order. Overdue evaluation is an internal scheduled operation, so the overdue read uses a fixture already evaluated to OVERDUE.",
-                      "item":  [
-                                   {
-                                       "name":  "Record UCL repayment",
-                                       "request":  {
-                                                       "method":  "POST",
-                                                       "header":  [{"key":"Content-Type","value":"application/json","type":"text"}],
-                                                       "url":  "{{baseUrl}}/api/v1/loan-applications/{{uclServicingLoanApplicationId}}/repayments",
-                                                       "auth":  {"type":"bearer","bearer":[{"key":"token","value":"{{accountingAccessToken}}","type":"string"}]},
-                                                       "description":  "Records a partial or early UCL repayment without repricing or a product-exposure release.",
-                                                       "body":  {"mode":"raw","raw":"{\n  \"requestId\": \"{{uclRepaymentRequestId}}\",\n  \"externalPaymentReference\": \"{{uclRepaymentExternalReference}}\",\n  \"amount\": {{uclRepaymentAmount}},\n  \"paymentValueDate\": \"{{uclRepaymentValueDate}}\"\n}","options":{"raw":{"language":"json"}}}
-                                                   },
-                                       "response":  [],
-                                       "event":  [{"listen":"prerequest","script":{"type":"text/javascript","exec":["const fresh = () => pm.variables.replaceIn(\"{{$guid}}\");","const runId = fresh().replace(/-/g, \"\").toUpperCase();","pm.collectionVariables.set(\"uclRepaymentRequestId\", fresh());","pm.collectionVariables.set(\"uclRepaymentExternalReference\", `MER-UCL-PAY-${runId}`);"]}},{"listen":"test","script":{"type":"text/javascript","exec":["pm.test(\"Status is 200\", () => pm.response.to.have.status(200));","const json = pm.response.json();","pm.test(\"UCL distinguishes allocation from exposure release\", () => { pm.expect(json.principalAllocated).to.be.a(\"number\"); pm.expect(json.principalReleased).to.eql(0); });","pm.test(\"Result contains servicing evidence\", () => { pm.expect(json.allocations).to.be.an(\"array\").that.is.not.empty; pm.expect(json.affectedInstallments).to.be.an(\"array\").that.is.not.empty; });"]}}]
-                                   },
-                                   {
-                                       "name":  "Read UCL repayment history",
-                                       "request":  {
-                                                       "method":  "GET",
-                                                       "header":  [],
-                                                       "url":  "{{baseUrl}}/api/v1/loan-applications/{{uclServicingLoanApplicationId}}/repayments?page=0&size=20",
-                                                       "auth":  {"type":"bearer","bearer":[{"key":"token","value":"{{customerAccessToken}}","type":"string"}]},
-                                                       "description":  "Reads immutable UCL repayment and allocation evidence without evaluating overdue state."
-                                                   },
-                                       "response":  [],
-                                       "event":  [{"listen":"test","script":{"type":"text/javascript","exec":["pm.test(\"Status is 200\", () => pm.response.to.have.status(200));","const json = pm.response.json();","pm.test(\"History contains UCL repayment\", () => pm.expect(json.items).to.be.an(\"array\").that.is.not.empty);","pm.test(\"UCL history reports zero product exposure release\", () => json.items.forEach(item => pm.expect(item.principalReleased).to.eql(0)));"]}}]
-                                   },
-                                   {
-                                       "name":  "Read evaluated UCL overdue state",
-                                       "request":  {
-                                                       "method":  "GET",
-                                                       "header":  [],
-                                                       "url":  "{{baseUrl}}/api/v1/loan-applications/{{uclOverdueLoanApplicationId}}/loan-account",
-                                                       "auth":  {"type":"bearer","bearer":[{"key":"token","value":"{{customerAccessToken}}","type":"string"}]},
-                                                       "description":  "Reads a UCL LoanAccount after date-driven overdue evaluation; the read itself is non-mutating."
-                                                   },
-                                       "response":  [],
-                                       "event":  [{"listen":"test","script":{"type":"text/javascript","exec":["pm.test(\"Status is 200\", () => pm.response.to.have.status(200));","pm.test(\"Account is overdue\", () => pm.expect(pm.response.json().status).to.eql(\"OVERDUE\"));"]}}]
-                                   },
-                                   {
-                                       "name":  "Initialize UCL settlement amount",
-                                       "request":  {
-                                                       "method":  "GET",
-                                                       "header":  [],
-                                                       "url":  "{{baseUrl}}/api/v1/loan-applications/{{uclSettlementLoanApplicationId}}/loan-account",
-                                                       "auth":  {"type":"bearer","bearer":[{"key":"token","value":"{{accountingAccessToken}}","type":"string"}]},
-                                                       "description":  "Reads locked-input truth for the separate UCL settlement and closure scenario."
-                                                   },
-                                       "response":  [],
-                                       "event":  [{"listen":"prerequest","script":{"type":"text/javascript","exec":["const fresh = () => pm.variables.replaceIn(\"{{$guid}}\");","const runId = fresh().replace(/-/g, \"\").toUpperCase();","pm.collectionVariables.set(\"uclSettlementRequestId\", fresh());","pm.collectionVariables.set(\"uclClosureRequestId\", fresh());","pm.collectionVariables.set(\"uclSettlementExternalReference\", `MER-UCL-SET-${runId}`);"]}},{"listen":"test","script":{"type":"text/javascript","exec":["pm.test(\"Status is 200\", () => pm.response.to.have.status(200));","const json = pm.response.json();","pm.test(\"UCL account is serviceable\", () => pm.expect([\"ACTIVE\",\"OVERDUE\"]).to.include(json.status));","pm.collectionVariables.set(\"uclSettlementExpectedAmount\", json.servicing.totalOutstanding);"]}}]
-                                   },
-                                   {
-                                       "name":  "Apply UCL Administrative Full-Balance Settlement",
-                                       "request":  {
-                                                       "method":  "POST",
-                                                       "header":  [{"key":"Content-Type","value":"application/json","type":"text"}],
-                                                       "url":  "{{baseUrl}}/api/v1/loan-applications/{{uclSettlementLoanApplicationId}}/settlements",
-                                                       "auth":  {"type":"bearer","bearer":[{"key":"token","value":"{{approverAccessToken}}","type":"string"}]},
-                                                       "description":  "Records exact complete UCL outstanding as payment-backed settlement with zero product-exposure release.",
-                                                       "body":  {"mode":"raw","raw":"{\n  \"requestId\": \"{{uclSettlementRequestId}}\",\n  \"expectedSettlementAmount\": {{uclSettlementExpectedAmount}},\n  \"paymentValueDate\": \"{{uclSettlementPaymentValueDate}}\",\n  \"externalPaymentReference\": \"{{uclSettlementExternalReference}}\"\n}","options":{"raw":{"language":"json"}}}
-                                                   },
-                                       "response":  [],
-                                       "event":  [{"listen":"test","script":{"type":"text/javascript","exec":["pm.test(\"Status is 200\", () => pm.response.to.have.status(200));","const json = pm.response.json();","pm.test(\"UCL settlement is exact and final\", () => { pm.expect(json.resultingLoanAccountStatus).to.eql(\"SETTLED\"); pm.expect(json.accountBalance.totalOutstanding).to.eql(0); pm.expect(json.principalAllocated).to.be.above(0); pm.expect(json.principalReleased).to.eql(0); });"]}}]
-                                   },
-                                   {
-                                       "name":  "Close settled UCL LoanAccount",
-                                       "request":  {
-                                                       "method":  "POST",
-                                                       "header":  [{"key":"Content-Type","value":"application/json","type":"text"}],
-                                                       "url":  "{{baseUrl}}/api/v1/loan-applications/{{uclSettlementLoanApplicationId}}/loan-account/closure",
-                                                       "auth":  {"type":"bearer","bearer":[{"key":"token","value":"{{accountingAccessToken}}","type":"string"}]},
-                                                       "description":  "Performs the separate administrative UCL SETTLED-to-CLOSED transition.",
-                                                       "body":  {"mode":"raw","raw":"{\n  \"requestId\": \"{{uclClosureRequestId}}\"\n}","options":{"raw":{"language":"json"}}}
-                                                   },
-                                       "response":  [],
-                                       "event":  [{"listen":"test","script":{"type":"text/javascript","exec":["pm.test(\"Status is 200\", () => pm.response.to.have.status(200));","const json = pm.response.json();","pm.test(\"UCL account is closed\", () => { pm.expect(json.resultingStatus).to.eql(\"CLOSED\"); pm.expect(json.idempotentReplay).to.eql(false); });"]}}]
-                                   }
-                               ]
                   }
               ]
 }
@@ -6045,6 +5889,7 @@
                  },
                  {
                      "name":  "03 Customer Profile and Bank Accounts - customer:profile/customer:bank-account",
+"description": "Complete profile and add/make-primary an active account before identity verification and lending. Treat deactivation as a separate aggregate/negative example, not a happy-path prerequisite. Use fictional identity evidence matching the later manual verification and current-month employment roster.",
                      "item":  [
                                   {
                                       "name":  "GET own customer profile",
@@ -6338,6 +6183,7 @@
                  },
                  {
                      "name":  "04 Customer Employee Verification - partner:employee:verify:own",
+"description": "Requires business-verified Customer identity and an ACTIVE Partner with a valid COMPLETED full roster for the current UTC month, matching the fictional Customer reference. Set company/employee variables to that roster. Migration fixtures are dated. Run inactive/missing negatives separately or reconcile any pending review before Salary Advance submission.",
                      "item":  [
                                   {
                                       "name":  "POST active employee verification - captures link id",
@@ -11920,6 +11766,282 @@
                                       "event":  [{"listen":"test","script":{"type":"text/javascript","exec":["pm.test(\"Status is 409\", () => pm.response.to.have.status(409));","pm.test(\"Stable code\", () => pm.expect(pm.response.json().errorCode).to.eql(\"LOAN_ACCOUNT_CLOSURE_NOT_ALLOWED\"));"]}}]
                                   }
                               ]
-                 }
+                 },
+        {
+            "name": "13 Unsecured Consumer Loan Servicing",
+            "description": "Uses the existing product-generic servicing endpoints. Configure the three UCL application variables with prepared fixtures, then run this folder in order. Overdue evaluation is an internal scheduled operation, so the overdue read uses a fixture already evaluated to OVERDUE.",
+            "item": [
+                {
+                    "name": "Record UCL repayment",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json",
+                                "type": "text"
+                            }
+                        ],
+                        "url": "{{baseUrl}}/api/v1/loan-applications/{{uclServicingLoanApplicationId}}/repayments",
+                        "auth": {
+                            "type": "bearer",
+                            "bearer": [
+                                {
+                                    "key": "token",
+                                    "value": "{{accountingAccessToken}}",
+                                    "type": "string"
+                                }
+                            ]
+                        },
+                        "description": "Records a partial or early UCL repayment without repricing or a product-exposure release.",
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"requestId\": \"{{uclRepaymentRequestId}}\",\n  \"externalPaymentReference\": \"{{uclRepaymentExternalReference}}\",\n  \"amount\": {{uclRepaymentAmount}},\n  \"paymentValueDate\": \"{{uclRepaymentValueDate}}\"\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        }
+                    },
+                    "response": [],
+                    "event": [
+                        {
+                            "listen": "prerequest",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "const fresh = () => pm.variables.replaceIn(\"{{$guid}}\");",
+                                    "const runId = fresh().replace(/-/g, \"\").toUpperCase();",
+                                    "pm.collectionVariables.set(\"uclRepaymentRequestId\", fresh());",
+                                    "pm.collectionVariables.set(\"uclRepaymentExternalReference\", `MER-UCL-PAY-${runId}`);"
+                                ]
+                            }
+                        },
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+                                    "const json = pm.response.json();",
+                                    "pm.test(\"UCL distinguishes allocation from exposure release\", () => { pm.expect(json.principalAllocated).to.be.a(\"number\"); pm.expect(json.principalReleased).to.eql(0); });",
+                                    "pm.test(\"Result contains servicing evidence\", () => { pm.expect(json.allocations).to.be.an(\"array\").that.is.not.empty; pm.expect(json.affectedInstallments).to.be.an(\"array\").that.is.not.empty; });"
+                                ]
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Read UCL repayment history",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": "{{baseUrl}}/api/v1/loan-applications/{{uclServicingLoanApplicationId}}/repayments?page=0&size=20",
+                        "auth": {
+                            "type": "bearer",
+                            "bearer": [
+                                {
+                                    "key": "token",
+                                    "value": "{{customerAccessToken}}",
+                                    "type": "string"
+                                }
+                            ]
+                        },
+                        "description": "Reads immutable UCL repayment and allocation evidence without evaluating overdue state."
+                    },
+                    "response": [],
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+                                    "const json = pm.response.json();",
+                                    "pm.test(\"History contains UCL repayment\", () => pm.expect(json.items).to.be.an(\"array\").that.is.not.empty);",
+                                    "pm.test(\"UCL history reports zero product exposure release\", () => json.items.forEach(item => pm.expect(item.principalReleased).to.eql(0)));"
+                                ]
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Read evaluated UCL overdue state",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": "{{baseUrl}}/api/v1/loan-applications/{{uclOverdueLoanApplicationId}}/loan-account",
+                        "auth": {
+                            "type": "bearer",
+                            "bearer": [
+                                {
+                                    "key": "token",
+                                    "value": "{{customerAccessToken}}",
+                                    "type": "string"
+                                }
+                            ]
+                        },
+                        "description": "Reads a UCL LoanAccount after date-driven overdue evaluation; the read itself is non-mutating."
+                    },
+                    "response": [],
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+                                    "pm.test(\"Account is overdue\", () => pm.expect(pm.response.json().status).to.eql(\"OVERDUE\"));"
+                                ]
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Initialize UCL settlement amount",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": "{{baseUrl}}/api/v1/loan-applications/{{uclSettlementLoanApplicationId}}/loan-account",
+                        "auth": {
+                            "type": "bearer",
+                            "bearer": [
+                                {
+                                    "key": "token",
+                                    "value": "{{accountingAccessToken}}",
+                                    "type": "string"
+                                }
+                            ]
+                        },
+                        "description": "Reads locked-input truth for the separate UCL settlement and closure scenario."
+                    },
+                    "response": [],
+                    "event": [
+                        {
+                            "listen": "prerequest",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "const fresh = () => pm.variables.replaceIn(\"{{$guid}}\");",
+                                    "const runId = fresh().replace(/-/g, \"\").toUpperCase();",
+                                    "pm.collectionVariables.set(\"uclSettlementRequestId\", fresh());",
+                                    "pm.collectionVariables.set(\"uclClosureRequestId\", fresh());",
+                                    "pm.collectionVariables.set(\"uclSettlementExternalReference\", `MER-UCL-SET-${runId}`);"
+                                ]
+                            }
+                        },
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+                                    "const json = pm.response.json();",
+                                    "pm.test(\"UCL account is serviceable\", () => pm.expect([\"ACTIVE\",\"OVERDUE\"]).to.include(json.status));",
+                                    "pm.collectionVariables.set(\"uclSettlementExpectedAmount\", json.servicing.totalOutstanding);"
+                                ]
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Apply UCL Administrative Full-Balance Settlement",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json",
+                                "type": "text"
+                            }
+                        ],
+                        "url": "{{baseUrl}}/api/v1/loan-applications/{{uclSettlementLoanApplicationId}}/settlements",
+                        "auth": {
+                            "type": "bearer",
+                            "bearer": [
+                                {
+                                    "key": "token",
+                                    "value": "{{approverAccessToken}}",
+                                    "type": "string"
+                                }
+                            ]
+                        },
+                        "description": "Records exact complete UCL outstanding as payment-backed settlement with zero product-exposure release.",
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"requestId\": \"{{uclSettlementRequestId}}\",\n  \"expectedSettlementAmount\": {{uclSettlementExpectedAmount}},\n  \"paymentValueDate\": \"{{uclSettlementPaymentValueDate}}\",\n  \"externalPaymentReference\": \"{{uclSettlementExternalReference}}\"\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        }
+                    },
+                    "response": [],
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+                                    "const json = pm.response.json();",
+                                    "pm.test(\"UCL settlement is exact and final\", () => { pm.expect(json.resultingLoanAccountStatus).to.eql(\"SETTLED\"); pm.expect(json.accountBalance.totalOutstanding).to.eql(0); pm.expect(json.principalAllocated).to.be.above(0); pm.expect(json.principalReleased).to.eql(0); });"
+                                ]
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Close settled UCL LoanAccount",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json",
+                                "type": "text"
+                            }
+                        ],
+                        "url": "{{baseUrl}}/api/v1/loan-applications/{{uclSettlementLoanApplicationId}}/loan-account/closure",
+                        "auth": {
+                            "type": "bearer",
+                            "bearer": [
+                                {
+                                    "key": "token",
+                                    "value": "{{accountingAccessToken}}",
+                                    "type": "string"
+                                }
+                            ]
+                        },
+                        "description": "Performs the separate administrative UCL SETTLED-to-CLOSED transition.",
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"requestId\": \"{{uclClosureRequestId}}\"\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        }
+                    },
+                    "response": [],
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));",
+                                    "const json = pm.response.json();",
+                                    "pm.test(\"UCL account is closed\", () => { pm.expect(json.resultingStatus).to.eql(\"CLOSED\"); pm.expect(json.idempotentReplay).to.eql(false); });"
+                                ]
+                            }
+                        }
+                    ]
+                }
+            ]
+        }
              ]
 }
