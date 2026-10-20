@@ -8,6 +8,8 @@ It is a durable structural blueprint. Representative types and contracts show im
 
 This document covers `meridian-platform` only. Frontend and external OCR-service source structures are defined separately. Implementation status belongs in the project roadmap and follow-up register.
 
+[MER-ARCH-001](MER-ARCH-001-bounded-contexts.md) owns context responsibilities; the module examples below locate that code. [MER-ARCH-006](MER-ARCH-006-api-request-flow-and-dependencies.md) owns runtime orchestration, transactions, and failure timing.
+
 ---
 
 ## 1. Backend Project Root
@@ -61,7 +63,7 @@ com.meridian.platform/
 | `approval` | Loan Officer recommendations, Approver decisions, maker-checker controls, and decision records |
 | `document` | Checklists, document versions, review decisions, storage, readiness, and the backend OCR boundary |
 | `audit` | Append-only cross-cutting business audit records |
-| `notification` | Controlled message templates, delivery-provider contracts, and transport adapters; broader request/status management remains incremental |
+| `notification` | Controlled Identity/security email templates, purpose-specific delivery contracts, provider ports, and transport adapters |
 
 Salary Advance, Unsecured Consumer Loan, and Collateral Loan remain product behaviors inside `loan`. They do not become top-level product packages such as `salaryadvance`, `unsecuredloan`, or `collateralloan`.
 
@@ -116,7 +118,7 @@ A module contains only the packages it uses.
 | `infrastructure.security` | Concrete Spring Security and JWT implementation owned by Identity |
 | `infrastructure.config` | Module-specific technical wiring |
 
-Domain code remains pure Java. Application code must not depend on infrastructure. Controllers and persistence adapters must not implement lending rules. `MER-ARCH-003-dependency-rules.md` defines the enforceable dependency rules.
+Domain code remains pure Java. Application code must not depend on infrastructure. Controllers and persistence adapters must not implement lending rules. [MER-ARCH-003](MER-ARCH-003-dependency-rules.md) defines dependency law and distinguishes executable checks from review-governed rules.
 
 ---
 
@@ -173,13 +175,13 @@ Other modules use `CurrentUserProvider` and `AuthenticatedUser`; they do not imp
 
 ### Customer and Partner
 
-Customer owns source profile, identity, and bank-account data. Partner owns employment source data and reusable Customer–Partner Employee links.
+Customer profile, identity, and bank-account models and use cases belong under `customer`. Employment source models, imports, eligibility review, and reusable employee-link code belong under `partner`.
 
 Cross-context access uses narrow application contracts and infrastructure adapters. A module must not use another context's repositories or JPA entities.
 
 ### Loan
 
-Loan owns origination, review cycles, corrections, offers, contracts, activation, LoanAccount servicing, repayment, overdue evaluation, contractual payoff, Administrative Full-Balance Settlement, and administrative closure.
+Origination, review/correction, offer/contract, activation, and servicing code follows the Loan layer structure; Section 7 locates product-specific policy and lifecycle concerns.
 
 Loan infrastructure may use boundary-specific adapter packages:
 
@@ -200,7 +202,7 @@ Internal subpackages may group types for one lifecycle capability or policy fami
 
 ### Approval
 
-Approval owns recommendation and decision records. Loan owns `LoanApplication` transitions. Approval publishes structured outcomes; Loan consumes them through an inbound event adapter or another explicit application contract.
+Recommendation and decision models and use cases belong under `approval`. Structured outcome schemas belong to Approval's published application boundary; Loan receives them under `loan.infrastructure.adapter.in.event` and enters Loan application input ports. Their transaction participation is defined in ARCH-006.
 
 ### Document
 
@@ -212,7 +214,7 @@ Document-owned OCR job models, input ports, application services, and persistenc
 
 Business-audit and notification event listeners belong under `infrastructure.adapter.in.event` when a durable event is the selected collaboration. Persistence and delivery-provider implementations belong under the corresponding output-adapter packages.
 
-Secret-bearing notification commands must not be serialized as durable events. The Customer email-verification flow therefore enters Notification through its public application contract only after Identity registration or token replacement commits. Identity owns token validity and passes the raw token transiently through an Identity infrastructure boundary adapter; Notification owns controlled rendering and SMTP transport. Delivery failure cannot reverse committed Identity or Customer state.
+Identity's purpose-specific Notification output ports have adapters under `identity.infrastructure.adapter.out.notification`. Notification's public contracts and controlled renderers live in its application layer; the SMTP adapter lives under `notification.infrastructure.adapter.out.mail`. Secret-bearing commands must not be serialized as durable events. [MER-ARCH-006](MER-ARCH-006-api-request-flow-and-dependencies.md#10-identity-security-flows-and-post-commit-notification) defines commit and delivery timing for the four supported purposes.
 
 Neither Audit nor Notification may control the workflow that produced an event.
 
@@ -278,7 +280,7 @@ A boundary adapter may translate identifiers and immutable contract records. It 
 
 A module that consumes a published business event handles it through `infrastructure.adapter.in.event` and enters its own application layer through an explicit contract.
 
-Event intake is structurally different from a synchronous output-port call. Delivery may participate in the publisher's transaction or use durable asynchronous processing; `MER-ARCH-003-dependency-rules.md` owns those reliability choices and `MER-ARCH-006-api-request-flow-and-dependencies.md` documents representative runtime sequences.
+Event intake is structurally different from a synchronous output-port call. Delivery may participate in the publisher's transaction or use durable asynchronous processing; `MER-ARCH-003-dependency-rules.md` defines the legal reliability models and `MER-ARCH-006-api-request-flow-and-dependencies.md` owns concrete timing and failure semantics.
 
 Audit consumes business events through inbound event adapters. Notification may do the same for non-secret business events, while secret-bearing post-commit delivery uses the explicit synchronous output-port/public-contract pattern described above so durable `event_publication` state never contains the secret.
 
@@ -316,10 +318,10 @@ src/test/java/com/meridian/platform/
 ├── document/
 ├── audit/
 ├── notification/
-└── support/
+└── testsupport/
 ```
 
-Tests follow production ownership. Shared reusable fixtures and test support remain under `com.meridian.platform.support`.
+Tests follow production ownership. Shared reusable fixtures and test support remain under `com.meridian.platform.testsupport`.
 
 | Test type | Preferred location |
 |---|---|
@@ -329,7 +331,7 @@ Tests follow production ownership. Shared reusable fixtures and test support rem
 | Controller/security test | Web-adapter or Identity security test package |
 | Migration test | Context-owning persistence test package |
 | Cross-context workflow test | Orchestrating or consuming context |
-| Shared reusable fixture/support | `com.meridian.platform.support` |
+| Shared reusable fixture/support | `com.meridian.platform.testsupport` |
 | Architecture enforcement | Root `com.meridian.platform` package |
 
 Domain tests remain framework-free. Infrastructure tests verify persistence, migrations, security, storage, events, and external boundaries. Testing percentages and checkpoint-specific suite counts do not belong in this blueprint.

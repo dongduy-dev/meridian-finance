@@ -24,13 +24,13 @@ The logical model covers:
 
 Meridian uses one PostgreSQL database. Sharing a database does not create shared aggregate ownership: each bounded context owns its records and exposes cross-context facts through application contracts rather than persistence access.
 
-## 3. Current Physical Schema and Planned Concepts
+## 3. Persisted Model and Physical Authority
 
-The physical schema is the result of Flyway migrations V1 through V73. V68 is an intentional no-op; V69 defines Customer identity verification and Document-owned digital identity evidence. V70 seeds `customer:identity:reveal` only to Loan Officer and permits `CUSTOMER_IDENTITY_REFERENCE_REVEALED` in the append-only audit action constraint. V71 adds `CUSTOMER_IDENTITY_REFERENCE_CORRECTED` to that audit constraint without changing Customer columns, identity-verification history, or permission grants. V72 permits `PARTNER_EMPLOYEE_IMPORT_FAILED` for non-authoritative snapshot outcomes; it adds no Partner table or permission. V73 disables the five historical V13 Users, replaces their shared credential with discarded random-secret BCrypt hashes, increments authorization freshness, and revokes outstanding refresh, setup/reset, and email-verification tokens without deleting actor references or role assignments. Reveal and correction add no plaintext-history table; audit retains only safe Customer/application identifiers. The schema snapshot covers that range and includes the executable data foundations for all three lending products through LoanAccount closure, Staff-assisted UCL and Collateral intake conversion and downstream evidenced actions, Document-owned OCR processing and Staff review, protected Partner Company/import/eligibility-review, Loan Product, and Internal User administration, and Identity registration, existing-Customer digital activation, email verification, password reset, login, and session protection.
+The physical reference covers Flyway V1–V73. The logical model includes all three products through LoanAccount closure, Staff-assisted UCL and Collateral intake and evidenced actions, Customer identity verification, Document-owned OCR jobs/results/final reviews, Partner imports and eligibility review, and Identity/session/administration foundations. Exact physical evolution remains in Flyway; logical ownership and integrity meaning are described below.
 
 The logical ERD in Section 5 uses singular business concepts rather than exact table and column names. Section 6 maps those concepts to the important physical record groups. Exact columns, constraints, triggers, indexes, seed values, and migration preflight logic remain in Flyway and `MER-DB-CURRENT-SCHEMA.sql`.
 
-The Partner physical model contains eligibility reviews with current-month/source evidence, controlled terminal decisions, reviewer evidence, and one-pending-review uniqueness per Customer and Partner Company. Customer–Partner Employee links retain verified matching evidence, the selected employee and source batch, separate verification and refresh times, and historical `DISABLED` relationships. V64 permits at most one `VERIFIED` link per Customer globally. Partner uses the current record for synchronous import-time refresh without a new history table. The schema does not contain a background reconciliation job, Partner-owned Salary Advance limit refresh state, application of reviewed OCR values to Customer or Loan, a general ledger, external-payment reconciliation tables, or production compliance case-management tables. Section 11 separates planned concepts from the current model.
+Reviewed OCR suggestions are applied through existing Customer or Loan commands after explicit Staff form confirmation. This uses the owning records rather than an OCR-owned mutation or application table. Partner's synchronous import-time link refresh likewise uses its existing relationship record, not a background reconciliation job or Partner-owned Salary Advance limit state. Section 11 defines external data-model boundaries.
 
 The physical `event_publication` table is Spring Modulith infrastructure. It is omitted from the business ERD because it does not own lending state or redefine the synchronous transaction boundaries documented in `MER-ARCH-006-api-request-flow-and-dependencies.md`.
 
@@ -44,7 +44,7 @@ The physical `event_publication` table is Spring Modulith infrastructure. It is 
 6. Customer identity references, Customer bank-account numbers, and Loan-owned contract destinations use their purpose-specific protection models.
 7. Whole-VND and reconciliation invariants are enforced at the domain and database boundaries where a persistence defect could create inconsistent financial evidence.
 8. Audit records observe business outcomes; they do not replace the authoritative aggregate or financial record.
-9. Planned data concepts are labelled as planned and do not appear in the current ERD.
+9. Concepts outside the persisted model remain separate from the ERD and physical-schema claim.
 
 ## 5. High-Level Logical ERD
 
@@ -59,7 +59,7 @@ erDiagram
     USER ||--o{ EMAIL_VERIFICATION_TOKEN : verifies_with
     USER ||--o{ PASSWORD_RESET_TOKEN : resets_with
 
-    CUSTOMER ||--|| CUSTOMER_PROFILE : owns
+    CUSTOMER ||--o| CUSTOMER_PROFILE : owns
     CUSTOMER ||--o{ BANK_ACCOUNT : owns
     CUSTOMER ||--o{ CUSTOMER_IDENTITY_VERIFICATION : records
     CUSTOMER ||--o| CUSTOMER_IDENTITY_DOCUMENT : evidence_for
@@ -82,6 +82,10 @@ erDiagram
     ASSISTED_ORIGINATION_CASE o|--o| LOAN_APPLICATION : completes_as
     ASSISTED_ORIGINATION_CASE ||--o{ INTAKE_DOCUMENT : has
     INTAKE_DOCUMENT ||--|{ INTAKE_DOCUMENT_VERSION : versions
+    INTAKE_DOCUMENT_VERSION ||--o| OCR_JOB : extraction_for
+    OCR_JOB ||--o| OCR_RESULT : produces
+    OCR_RESULT ||--o| OCR_REVIEW : finalized_as
+    USER ||--o{ OCR_REVIEW : records_as_staff
 
     LOAN_APPLICATION ||--o{ PRODUCT_VERIFICATION : records
     LOAN_APPLICATION ||--o{ COLLATERAL_FACT : secures
@@ -144,6 +148,7 @@ Identity owns `users`, `roles`, `permissions`, `role_assignments`, `role_permiss
 - Refresh-token sessions store only a SHA-256 digest of each opaque token, its user and token-family relationship, issuance and expiry, and consumption or revocation state.
 - Successful rotation consumes one locked session and creates one replacement in the same family. Detected reuse revokes the family so no replacement session remains active.
 - Actor references from other contexts identify who performed an action; they do not make Identity the owner of the action's business evidence.
+- Credential retirement preserves User identifiers, role assignments, and historical actor references while invalidating credentials and outstanding refresh, setup/reset, and verification authority. It must not erase business provenance.
 
 ### 6.2 Customer
 
@@ -151,6 +156,7 @@ Customer owns `customers`, `customer_profiles`, and `customer_bank_accounts`.
 
 - The Customer record preserves aggregate status, verification status, and profile-completion state.
 - The profile preserves contact, employment, consent, and protected identity-reference evidence.
+- A newly registered Customer may have no profile; profile creation establishes at most one profile per Customer. Staff-assisted creation requires the identity-bearing profile in its atomic Customer command. Profile completeness and lending readiness remain separate guards.
 - Bank-account records preserve mutable source ownership, primary/active state, safe display fields, protected account number, and internal duplicate-detection fingerprint.
 - One Customer may own multiple bank accounts, but Customer enforces the primary-account invariant for active accounts.
 
@@ -173,6 +179,7 @@ Partner owns `partner_companies`, `partner_employee_import_batches`, `partner_em
 - A Partner eligibility review preserves the Customer and Partner Company, effective UTC month, optional source batch, trigger, requested employee code, state, and terminal reviewer evidence. It does not copy Customer identity evidence or salary data.
 - Approved reviews preserve the exact selected Partner Employee and import batch. Rejected reviews preserve no selected employee. Superseded reviews carry no terminal decision evidence.
 - A Customer–Partner Employee link records current or historical employment evidence; it is not a loan application and does not represent lending exposure. One Customer may have at most one `VERIFIED` link, while displaced `DISABLED` rows preserve prior evidence.
+- Each link retains the verified matching evidence, selected employee/source batch, and separate verification and refresh timestamps. Import-time refresh advances source evidence and refresh time while preserving the last verification instant; explicit re-verification or manual approval records a new verification instant.
 - Partner salary, employee code, source identity evidence, employment state, and import-batch evidence remain Partner-owned.
 
 Loan consumes a purpose-limited eligibility snapshot for Salary Advance. Loan owns the resulting application verification and Salary Advance exposure; Partner does not.
@@ -239,6 +246,9 @@ Document owns `document_checklists`, `document_checklist_items`, `documents`, `d
 - One OCR job may exist for one immutable intake-document version. The job snapshots only the assigned source object's opaque key, media type, SHA-256, controlled evidence type, queue/lease/retry state, and PII-free trace identifier.
 - One encrypted OCR result may exist for one job. It preserves provider/processor metadata, normalized confidence, disposition, processing duration, and AES-256-GCM envelopes for extracted text, normalized layout, and structured suggestions.
 - Pending and expired-lease indexes support atomic `SKIP LOCKED` claims and abandoned-worker recovery. Result insertion and the job's `COMPLETED` transition commit atomically.
+- One final `ocr_reviews` row may exist per OCR result. It retains the Staff reviewer, review time, pre-review disposition, and an encrypted allowlisted reviewed-field map. The review is immutable; finalization changes result disposition to `REVIEWED` and persists required audit in the same transaction.
+
+OCR jobs, results, and reviews remain advisory evidence. Explicit application copies finalized suggestions into route-local Staff form inputs for the exact current intake version; only the existing Customer or Loan command persists confirmed business facts. There is no separate OCR-owned business-application record. OCR cannot establish Customer consent, identity verification, document acceptance/waiver/readiness, product verification, recommendation, approval, offer response, or contract acknowledgment. [MER-ARCH-005](../architecture/MER-ARCH-005-ocr-architecture.md) owns OCR execution, review, stale-version, and failure semantics.
 
 Upload completeness and processing readiness are separate. Document owns document/version/review state; Loan owns product verification and application progression.
 
@@ -326,6 +336,7 @@ Audit events preserve operation, actor, action, entity, time, and a controlled P
 - An assisted-action evidence row has exactly one permitted target shape; a cancellation-request target contains only the correction-request ID, while offer and contract targets retain their own exact identity fields.
 - Review decisions target the exact current version where the operation requires current evidence.
 - Intake evidence types are controlled, one logical intake document exists per case and type, version numbers are unique and positive, upload request identities and storage keys are unique, and immutable versions cannot be updated or deleted.
+- Unique source-version/job/result relationships prevent competing OCR records for the same evidence. OCR execution state and result disposition remain distinct; one immutable final review retains the original disposition and encrypted reviewed fields. Current-version and open-intake guards govern new jobs/reviews without erasing historical results.
 
 ### 8.4 Offer, Contract, and Activation
 
@@ -379,17 +390,9 @@ Physical indexes belong in Flyway and the schema snapshot. The logical model req
 - bounded overdue candidates and account/installment progress;
 - application, account, installment, and audit histories ordered by their durable sequence/time keys.
 
-## 11. Planned Extensions
+## 11. External Data-Model Boundaries
 
-Planned concepts remain outside the current ERD and physical-schema claim.
-
-### 11.1 Application of Reviewed OCR Suggestions
-
-OCR job execution, encrypted result persistence, and immutable encrypted Staff review/correction records are part of the current Document model. Purpose-limited application of reviewed suggestions through Customer or Loan commands remains planned. OCR remains advisory and asynchronous; no OCR job, result, or review record is authoritative for Customer consent, identity verification, document acceptance, waiver, checklist readiness, product verification, or lending decisions.
-
-### 11.2 External Financial and Operational Records
-
-Payment-provider reconciliation, bank/payroll integration, general-ledger/journal records, collections, concessions/write-off, reversal/refund, suspense cash, production compliance case management, and broader analytics/read models require separately approved designs. They are not represented as deployed tables in this document.
+Payment-provider reconciliation, bank/payroll integration, general-ledger/journal records, collections, concessions/write-off, reversal/refund, suspense cash, production compliance case management, and broader analytics/read models require separately approved designs. They are outside this persisted-model and ERD claim; this document does not establish live deployment state.
 
 `../project/MER-TRACK-001-follow-up-register.md` owns delivery gaps and deferred-work status.
 

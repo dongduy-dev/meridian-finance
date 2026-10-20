@@ -9,11 +9,13 @@ This document defines representative API request flows, runtime collaboration, t
 | `MER-ARCH-001-bounded-contexts.md` | Business ownership and context collaboration |
 | `MER-ARCH-002-project-structure.md` | Source and package placement |
 | `MER-ARCH-003-dependency-rules.md` | Legal Java source dependencies and architecture enforcement |
-| `MER-ARCH-004-api-error-catalog.md` | Canonical API error identifiers, statuses, and default messages |
+| `MER-ARCH-004-api-error-catalog.md` | Error vocabulary and intended semantics; endpoint/context mappings may differ |
 | `MER-API-001-endpoints-and-postman-scenarios.md` | Exact endpoint contracts, request and response fields, authorization, pagination, and scenarios |
 | `MER-ARCH-006-api-request-flow-and-dependencies.md` | Runtime calls, transactions, locks, retries, and request-specific security behavior |
 
-The type and endpoint names below are representative of the intended runtime design. Source code remains authoritative for exact implementation names. Implementation status belongs in the roadmap and follow-up register.
+The types and operations below illustrate runtime design; this document is not an endpoint catalogue. Source code remains authoritative for exact implementation names. Implementation status belongs in the roadmap and follow-up register.
+
+Business lifecycle and policy belong in [MER-BIZ-001](../business/MER-BIZ-001-business-requirements-and-workflows.md). [MER-DB-001](../database/MER-DB-001-data-model-and-erd.md) owns logical relationships at rest. API-001 and ARCH-004 distinguish executable endpoint mappings from intended error semantics; an identifier does not imply one universal status or message.
 
 ---
 
@@ -143,7 +145,7 @@ The version read is a purpose-limited User-ID lookup; authentication does not re
 
 ---
 
-## 4. Representative Query Flows
+## 4. Read and Query Composition
 
 Simple queries share one runtime pattern:
 
@@ -165,231 +167,71 @@ flowchart LR
     Table --> Jpa --> Adapter --> Domain --> Service --> Mapper --> DTO --> Controller --> Client
 ```
 
-Representative variations:
+The query service pushes filtering and deterministic paging into persistence and validates a required parent before reading child collections. An absent required parent remains a missing-resource outcome rather than an empty collection. Public catalogue assembly selects active Loan Products; protected administration has a separate projection. Detailed Partner employment/salary evidence remains restricted to its authorized Staff purpose and must not be reused as a Customer DTO.
 
-| Request | Runtime rule |
-|---|---|
-| `GET /api/v1/loan-products` | The query service loads active products through the Loan-owned repository port and maps `LoanProduct` values to response DTOs. |
-| `GET /api/v1/partner-companies/{partnerCompanyId}` | An empty repository result becomes `PARTNER_COMPANY_NOT_FOUND` through the global error boundary. |
-| `GET /api/v1/partner-companies/{partnerCompanyId}/employees?activeOnly=true` | The protected query requires `partner:read`. The `activeOnly` condition is pushed into the persistence query rather than filtering a complete result in the controller. |
-| `GET /api/v1/partner-companies/{partnerCompanyId}/employee-import-batches` | The service verifies the Partner Company before loading its import batches, so a missing parent returns a Partner Company error rather than an empty child collection. |
-| `GET /api/v1/staff/loan-applications` | The Staff query requires exact `loan:read`, pushes optional product/status filtering and deterministic paging into Loan persistence, and returns only durable application facts. |
-| `GET /api/v1/staff/loan-applications/{loanApplicationId}` | The Staff case query composes Loan-owned application and ordered-transition evidence with purpose-limited Customer readiness through a consumer-owned port. |
-
-Detailed Partner Employee evidence and salary or limit fields remain restricted to authorized Staff responses. Customer-facing endpoints use purpose-limited DTOs and must not reuse the back-office representation.
-
----
-
-## 5. Administration Commands
-
-### 5.1 Partner Administration
-
-Partner Company create, update, and status commands require exact `partner:manage`. Partner serializes update and status mutations through a locked company read. Company code remains stable after creation, database uniqueness is the final create boundary, and a same-status request produces no duplicate save or audit effect.
-
-The effective-month import command uses this transaction order:
-
-1. acquire the operation-scoped advisory lock for `requestId`;
-2. return the stored outcome for an exact semantic fingerprint, or reject conflicting reuse;
-3. lock the Partner Company and verify that it exists without treating inactive or suspended status as an import prohibition;
-4. validate every row in the complete effective-month roster, including duplicate employee codes;
-5. if any row is invalid, persist a `FAILED` batch with validation counts and safe rejection summary, publish `PARTNER_EMPLOYEE_IMPORT_FAILED`, and commit without employee writes or reconciliation; otherwise persist one `COMPLETED` batch and the entire roster;
-6. if the new batch is the deterministic latest `COMPLETED` batch for that Partner Company and current UTC month, load the company's existing `VERIFIED` links in deterministic Customer/link order;
-7. lock and re-read each candidate link, continue only when it remains the Customer's `VERIFIED` relationship for that Partner Company, and skip it when the Customer and Partner Company have a pending eligibility review;
-8. compare the remaining link's stored verified identity reference and employee code with employees in the new batch through the normal Partner matching policy;
-9. refresh the same link to the new employee and source batch only for `MATCHED_ACTIVE`, leaving missing, ambiguous, inactive, or displaced matches unchanged and therefore stale or historical;
-10. publish one PII-safe business audit outcome before committing the complete import result.
-
-The Partner Company row remains the import reconciliation serialization boundary. The import path does not acquire the Customer-wide or Customer–Partner advisory lock after that row lock and does not mutate pending review rows; verification and review decisions acquire Customer-wide, then Customer–Partner, then company locks. A failure after a link refresh rolls back the batch, employees, link changes, rejection summary, and audit outcome in the same transaction.
-
-Request replay evidence stores the UUID and a SHA-256 semantic fingerprint rather than the raw command. Exact replay returns before reconciliation, so it does not advance link refresh timestamps or repeat audit effects. Multiple batches for the same company and month remain historical evidence. Each completed batch is a complete snapshot, and deterministic latest-completed selection replaces the previous snapshot without merging rows. A failed command cannot displace that authority. Valid/invalid counts describe validated rows; a failed batch contains no employee records. Exact replay also preserves a failed result; corrected input needs a new request ID. Only the deterministic latest completed current-month batch may refresh links. Partner mutates only the Partner-owned relationship. It does not create or change LoanApplications, Salary Advance limits, movements, or exposure. Loan readiness projects the current effective limit from Partner eligibility, and Loan persists its own limit refresh during submission when required.
-
-### 5.2 Loan Product Administration
-
-Protected Loan Product discovery and commands use `/api/v1/admin/loan-products` and require exact `loan:product:manage`. The public `/api/v1/loan-products/**` matcher remains unchanged and exposes only active Customer-safe catalogue responses.
-
-```mermaid
-flowchart LR
-    Web["Internal Web"]
-    Controller["AdminLoanProductController"]
-    InPort["Loan Product administration input port"]
-    Service["Loan application service"]
-    RepoPort["LoanProductRepository"]
-    Adapter["Loan Product persistence adapter"]
-    Table["loan_products"]
-    Audit["Business audit"]
-
-    Web --> Controller --> InPort --> Service --> RepoPort --> Adapter --> Table
-    Service --> Audit
-```
-
-The administration query loads active and inactive products in deterministic product-code order without requiring an active pricing or checklist policy. The protected projection contains product identity and presentation facts plus activation and amount limits; it does not reuse the public policy assembly.
-
-An amount-limit or activation command opens one application transaction, locks the product row by stable product code, validates the target state, persists only the supported mutable facts, updates `updated_at`, and records the authenticated actor through the shared business-audit mechanism. A same-value target returns the locked current product without persistence, timestamp, or audit effects. Activation affects future catalogue discovery and submission only; historical lending evidence is not rewritten.
-
-### 5.3 Internal User Administration
-
-Protected Staff User and predefined-role discovery plus status and role-assignment commands use `/api/v1/admin/internal-users` and require exact `identity:user:manage`. Identity returns a purpose-limited Staff projection and excludes Customer Users and credential internals.
-
-Staff provisioning uses the same protected boundary. Identity validates an unused normalized email and predefined non-Customer roles, then persists a Staff User without a Customer association, its role assignments, a digest-only password-reset token, and actor-bound PII-safe creation and role-grant audit evidence in one transaction. The placeholder password is an unguessable hash. Administrative provisioning marks the Staff email verified in Identity; Customer email verification remains separate. After commit, Identity calls a purpose-limited Notification contract that sends the setup fragment link to Internal Web. An explicit Staff-only resend locks the User, replaces an older unused token, and sends after commit. Delivery failure does not reverse durable Identity state; the administrator can request another link. The existing password-reset confirmation consumes the token, replaces the password, and revokes refresh sessions.
-
-```mermaid
-flowchart LR
-    Web["Internal Web"]
-    Controller["InternalUserAdministrationController"]
-    InPort["Identity administration input port"]
-    Service["Identity application service"]
-    UserLock["Locked users row"]
-    State["Status or role assignment persistence"]
-    Version["Authorization-version increment"]
-    Refresh["Optional user-wide refresh revocation"]
-    Audit["PII-safe business audit"]
-
-    Web --> Controller --> InPort --> Service --> UserLock --> State --> Version
-    Version --> Refresh
-    Version --> Audit
-```
-
-Every status and role command locks the target User before validating that it is internal Staff and before touching `role_assignments`. A same-target request returns the current projection without persistence, timestamp, version, session, or audit effects. A real change updates `users.updated_at` and increments `authorization_version` once. Role changes retain refresh sessions for an active User; a status change to `SUSPENDED` or `DISABLED` revokes all target-User refresh sessions in the same transaction. Reactivation increments the version but never restores a revoked token family. The audit entry records the authenticated actor, `IDENTITY_USER` target ID, controlled action, and status or role code without email or credential data.
-
-### 5.4 Existing Customer Digital Access
-
-The protected Staff Customer-intake activation and status routes require exact `customer:intake:manage` and an authenticated Staff User without a Customer association. Identity owns the User link and credential state. Its consumer-owned Customer verification port calls a Customer public application contract; Customer locks the selected aggregate, requires `ACTIVE` and an identity-bearing profile, and matches the presented identity fingerprint without exposing stored raw evidence. An incomplete business profile does not block this identity proof. The submitted reference remains transient and never enters an audit or response.
-
-Identity creates one `CUSTOMER` User for the unchanged `customerId`, a `CUSTOMER` role assignment, an unguessable hashed placeholder secret, independent digest-only email-verification and password-setup tokens, and one actor-bound `IDENTITY_CUSTOMER_DIGITAL_ACCESS_ENABLED` audit outcome in one transaction. The Customer lock serializes competing activation attempts for that Customer, while unique normalized-email and Customer mapping constraints remain final database authorities. An insert conflict is classified without querying inside an aborted transaction. No Customer or Loan aggregate is written.
-
-After the creation transaction commits, Identity calls its Notification output port to deliver one purpose-specific Customer Web activation fragment link carrying both opaque secrets. Both tokens expire together under the email-verification lifetime; the setup token uses existing password-reset persistence. Delivery failure leaves the linked User and both tokens durable. Email confirmation precedes first-password setup through the existing password-reset confirmation, which requires verified email and owns password hashing, consumption, login-protection reset, and refresh-session revocation. No second credential mutation path or onboarding status is introduced; Staff never chooses or learns the Customer password. The Staff client reconciles an unknown command result with the protected digital-access GET and does not automatically replay the POST. Customer-owned Loan reads use the original `customerId`; historical `STAFF_ASSISTED` applications retain their channel and have no manufactured digital action.
-
----
-
-## 6. Partner Employee Verification
-
-`POST /api/v1/partner-companies/{partnerCompanyId}/employee-verifications` requires Bearer authentication and `partner:employee:verify:own`.
-
-The flow derives `customerId` from the authenticated Customer. The request supplies matching input such as `employeeCode`; it does not supply the trusted Customer identity. Partner obtains the required identity reference through a narrow Customer contract only for an active Customer with a complete profile and verified identity. An unverified or rejected identity returns `CUSTOMER_IDENTITY_VERIFICATION_REQUIRED` before employment matching. Manual review approval applies the same prerequisite. Current eligibility reads compare that identity with the link's preserved `verifiedIdentityRef`; mismatches return `NOT_VERIFIED` and cannot authorize Salary Advance.
-
-```mermaid
-flowchart LR
-    Client["Authenticated Customer"]
-    Controller["PartnerEmployeeVerificationController"]
-    InPort["VerifyPartnerEmployeeUseCase"]
-    Service["VerifyPartnerEmployeeService"]
-    Actor["CurrentUserProvider"]
-    CustomerPort["Customer identity-evidence port"]
-    CompanyRepo["PartnerCompanyRepository"]
-    BatchRepo["PartnerEmployeeImportBatchRepository"]
-    EmployeeRepo["PartnerEmployeeRepository"]
-    Policy["Partner employee verification policy"]
-    LinkRepo["CustomerPartnerEmployeeLinkRepository"]
-    Mapper["PII-safe response mapper"]
-    DTO["PartnerEmployeeVerificationDto"]
-
-    Client --> Controller --> InPort --> Service
-    Service --> Actor
-    Service --> CustomerPort
-    Service --> CompanyRepo
-    Service --> BatchRepo
-    Service --> EmployeeRepo
-    Service --> Policy
-    Policy --> LinkRepo
-    Service --> Mapper --> DTO --> Controller --> Client
-```
-
-Runtime rules:
-
-1. Partner Company existence and active status are checked before import-batch lookup, employee matching, link creation, or manual-review routing. Partner derives the current effective month from the shared UTC `Clock` and selects the latest valid `COMPLETED` batch for that Partner Company and exact month, ordered deterministically by creation time and identifier.
-2. Verification acquires the Customer-wide Partner-employment advisory lock before the narrower Customer–Partner Company lock. One active match creates the first relationship, refreshes the same current relationship when its evidence matches, or disables the current relationship and creates a fresh link when the proven employer differs.
-3. Different same-employer evidence and missing or ambiguous current-month evidence follow the authorized manual-review policy. A genuinely unresolved current-month pending review makes the current eligibility contract return `NOT_VERIFIED`, even when an older current link remains persisted. Exact `MATCHED_ACTIVE` verification and successful manual approval supersede all remaining pending reviews for that Customer and month in the same transaction. The Customer-wide employment lock serializes these writes across Partner Companies; no additional company or advisory lock is acquired for competing review rows. Import reconciliation does not perform supersession. `MATCHED_INACTIVE` resolves only the selected company's pending attempt. Unresolved and rejected attempts leave alternative reviews pending. `SUPERSEDED` reviews are excluded from Customer discovery and pending eligibility checks. A reused verified link whose source batch or employee batch is not authoritative fails closed as stale for lending eligibility.
-4. An inactive Partner Company or Partner Employee is a hard stop. Re-verification may restore eligibility only by refreshing the link to matching active evidence in the authoritative batch.
-5. The response may expose identifiers, outcome, link status, and whether manual review is required. It must not expose raw identity evidence, employee code, salary, Salary Advance limit, or matching evidence.
-
-A review bound to a replaced source batch returns `SOURCE_BATCH_REPLACED` with unavailable decisions. Its source evidence remains unchanged. Fresh Customer verification uses the authoritative batch and either establishes current employment or supersedes the obsolete same-company pending review before creating the correct current review. Page refresh does not retarget historical reviews.
-
-### 6.1 Partner Eligibility Manual Review
-
-Customer verification and Back-Office decisions acquire the Customer-wide Partner-employment advisory lock before the Customer–Partner Company boundary. This order serializes automatic and reviewed switches across different Partner Companies. Missing or ambiguous evidence creates or reuses one Partner-owned `PENDING` review. A changed source batch supersedes the obsolete pending review when fresh Customer verification creates a replacement; a successful automatic match supersedes it without requiring a hidden mutation from a read request.
-
-```mermaid
-flowchart LR
-    Customer["Authenticated Customer verification"]
-    Review["Partner eligibility review"]
-    Queue["Back-Office shared queue"]
-    Reviewer["Authorized Staff reviewer"]
-    Evidence["Current Customer identity and Partner source evidence"]
-    Link["Reusable Customer–Partner Employee link"]
-    Audit["PII-safe business audit"]
-
-    Customer --> Review --> Queue --> Reviewer
-    Reviewer --> Evidence
-    Evidence -->|Approve exact active employee| Link
-    Evidence -->|Reject| Review
-    Link --> Audit
-    Review --> Audit
-```
-
-Queue and detail reads require exact `partner:read`; the decision command requires exact `partner:manage`. The queue has no persisted assignment, claim, or reassignment state. Detail responses expose employee code and active employment facts needed for this restricted purpose, but exclude Customer identity references, salary, Salary Advance limit, and unrestricted notes.
-
-The decision transaction follows this order:
-
-1. locate the review, acquire the Customer-wide Partner-employment boundary followed by the Customer–Partner boundary, and lock the review row;
-2. return an exact persisted terminal replay or reject a different decision after resolution;
-3. lock and revalidate the Partner Company, effective UTC month, and authoritative latest `COMPLETED` import batch;
-4. for approval, obtain current usable Customer identity evidence and validate the selected active Partner Employee against the authoritative batch and identity;
-5. update the current same-employer link, or flush its transition to historical `DISABLED` before inserting a fresh different-employer `VERIFIED` link; rejection records `MANUAL_REVIEW_REJECTED` without a link mutation;
-6. persist the controlled reason, reviewer, decision time, selected employee/source evidence when approved, and PII-safe audit outcome in the same transaction.
-
-A prior-month review or a review bound to a replaced authoritative batch returns a stable stale-review conflict and requires fresh Customer verification. Import-time reconciliation never resolves or mutates a pending review. It keeps the Partner Company row as its first business lock, locks and re-reads each candidate link, and refreshes only a row that remains `VERIFIED` for that company. It does not acquire the Customer-wide advisory lock after the company lock, so an import cannot invert the verification lock order or restore a displaced historical relationship.
-
----
-
-## 7. Product Origination and Salary Advance Readiness
-
-### Origination Channel Boundary
-
-Customer-digital and Staff-assisted origination use separate inbound contracts because they resolve actor and Customer subject differently. Customer-digital commands derive the Customer from authentication. Staff-assisted commands authenticate Staff and carry the selected Customer as an explicit business subject. Both paths converge only after those trust-boundary checks and then apply the same Customer readiness, product policy, workflow, audit, and concurrency rules for the selected product.
-
-Salary Advance accepts only Customer-digital origination. UCL and Collateral Loan accept Customer-digital or Staff-assisted origination. A created `LoanApplication` records its origination channel so later Customer-sourced corrections, offer responses, and contract acknowledgments use the permitted interaction path without changing financial, review, approval, or maker-checker authority.
-
-A Customer self-service command must not be generalized by adding an optional Staff-selected `customerId`. Staff entry points use purpose-specific input ports and may share internal application or domain logic only after actor and subject resolution.
+Specialized composition follows the same input-port/output-port boundary. Consistent case/history projections use their declared read transaction; an advisory read never replaces command-time locked validation.
 
 ### Advisory Readiness Query
 
-`GET /api/v1/loan-products/salary-advance/readiness` requires an authenticated Customer with `loan:submit`. Loan derives the Customer from the actor, reads Customer readiness, product policy, the Partner-owned current eligibility assessment, current limit/exposure, blocking applications, and outstanding-account guard, then returns safe values and blocker codes. Partner owns the current-month authoritative-batch decision; Loan consumes only the purpose-limited status and eligible snapshot.
+The Salary Advance readiness query derives the Customer from the authenticated actor and reads Customer readiness, product policy, the Partner-owned current eligibility assessment, current limit/exposure, blocking applications, and outstanding-account guard, then returns safe values and blocker codes. Partner owns the current-month authoritative-batch decision; Loan consumes only the purpose-limited status and eligible snapshot.
 
 The query is read-only and non-locking. Partner returns at most one explicit current `VERIFIED` relationship, and returns `NOT_VERIFIED` while any current-month Partner eligibility review remains pending. Loan does not inspect Partner review persistence. The query does not initialize or refresh a persisted limit, reserve exposure, create a LoanApplication or verification, or append movements, history, or audit. A later submission command reacquires authoritative state and may reject after concurrent change.
 
 ### LoanApplication Status Query
 
-`GET /api/v1/loan-applications/{loanApplicationId}` returns a minimal durable status projection. Customers require `loan:read:own`, must own the application, and receive the same not-found result for missing and foreign-owned IDs. Staff require `loan:read`. The service returns application identity, product, requested terms, origination channel, status, and submission time without exposing structured Collateral facts, Customer, Partner, limit, verification, actor, audit/history, or financial-servicing evidence. It does not infer next actions or mutate workflow state.
+The shared status query returns a minimal durable Loan-owned projection and performs no mutation or next-action inference. The application service enforces Customer ownership concealment before mapping; Staff reads use their own authority. Structured Collateral, verification, actor, history, and servicing evidence remain separate purpose-limited queries defined in [MER-API-001](../api/MER-API-001-endpoints-and-postman-scenarios.md).
 
 ### Customer-own Collateral Facts Query
 
-`GET /api/v1/loan-applications/{loanApplicationId}/collateral` enters Loan through `CustomerCollateralController`, `QueryOwnCollateralUseCase`, and `QueryOwnCollateralService`. The read-only application transaction requires a Customer-shaped actor with Customer context and exact `loan:read:own`, proves application ownership through `LoanApplicationRepository`, and reads the single submitted fact through `CollateralRepository`. An inconsistent row count or application relationship fails closed. The service maps only submitted immutable facts into `CustomerCollateralDto`; the HTTP fields and errors are defined in [MER-API-001 Section 4.2.1.1](../api/MER-API-001-endpoints-and-postman-scenarios.md#4211-customer-own-submitted-collateral-facts).
+The Customer-owned Collateral read enters through its dedicated Loan input port and query service. The read-only application transaction requires a Customer-shaped actor with Customer context and exact `loan:read:own`, proves application ownership through `LoanApplicationRepository`, and reads the single submitted fact through `CollateralRepository`. An inconsistent row count or application relationship fails closed. The service maps only submitted immutable facts into `CustomerCollateralDto`; the HTTP fields and errors are defined in [MER-API-001 Section 4.2.1.1](../api/MER-API-001-endpoints-and-postman-scenarios.md#4211-customer-own-submitted-collateral-facts).
 
 Loan owns structured Collateral facts. Document owns ownership evidence and checklist/version/review state, which the Customer reads through the separate Document input contract. This flow accesses neither another context's persistence nor Staff verification/assessment projections. It acquires no workflow lock and writes no state, history, or audit. Either origination channel permits this own-data read without granting a digital action or changing historical channel identity. The shared LoanApplication status query remains minimal.
 
 ### Staff Discovery and Case Queries
 
-`GET /api/v1/staff/loan-applications` and `GET /api/v1/staff/loan-applications/{loanApplicationId}` use a dedicated Staff input port and query service. Controller and service authorization require an authenticated Staff actor with exact `loan:read`; Customer ownership reads remain separate.
-
-```mermaid
-flowchart LR
-    Controller["StaffLoanApplicationController"]
-    InPort["QueryStaffLoanApplicationsUseCase"]
-    Service["QueryStaffLoanApplicationsService"]
-    ApplicationRepo["LoanApplicationRepository"]
-    TransitionRepo["LoanApplicationStatusTransitionRepository"]
-    CustomerPort["CustomerReadinessPort"]
-    LoanPersistence["Loan persistence adapters"]
-    CustomerAdapter["CustomerReadinessAdapter"]
-    CustomerUseCase["QueryCustomerReadinessUseCase"]
-
-    Controller --> InPort --> Service
-    Service --> ApplicationRepo --> LoanPersistence
-    Service --> TransitionRepo --> LoanPersistence
-    Service --> CustomerPort --> CustomerAdapter --> CustomerUseCase
-```
+Staff application discovery and case reads use a dedicated Staff input port and query service. Controller and service authorization require an authenticated Staff actor with exact `loan:read`; Customer ownership reads remain separate.
 
 The index applies product/status predicates, `submittedAt DESC, id DESC` ordering, and page bounds in persistence. The case read is side-effect-free and composes the application header, the existing purpose-limited Customer readiness snapshot, and transitions loaded in authoritative sequence order. It neither reaches Customer persistence directly nor copies audit events into Loan's HTTP model. Exact fields, exclusions, and error behavior are defined in `MER-API-001`.
+
+### Staff Document Checklist and History Query
+
+The Staff Document checklist/history read uses a dedicated Staff Document input port and query service. It requires a Staff-only principal and exact `document:review` or `approval:decide` independently of the general `loan:read` case contract. The latter audience inspects documents read-only and acquires no command or queue capability.
+
+Document owns checklist, version, and review-history projection. It obtains only application existence and safe status through the purpose-limited Loan contract. Deterministic repository queries read the existing immutable version and review rows; no parallel history store is created. One batched `DocumentStaffActorDirectoryPort` lookup uses Identity's public Staff-summary contract. Exact review-version associations are validated before returning separately labeled reasons, Customer instructions, and authorized restricted Document notes. Checklist and signed-form metadata use read-only repeatable-read snapshots.
+
+### Correction and Signed-Form History Reads
+
+Loan owns the specialized correction history projection. `LoanCorrectionRepository` returns every request in creation-time/identifier order and tasks in sequence/identifier order. A purpose-limited `WorkflowActorDirectoryPort` resolves creator, completer, and exactly matched resubmitter associations in one batch. Loan validates Customer ownership and permitted self-service versus Staff-recorded semantics; it never returns Customer login identity.
+
+Resubmitter attribution requires a unique request timestamp and one same-application `RESUBMIT_CORRECTION` lifecycle transition at that exact timestamp, from `RETURNED_FOR_REVISION` to `SUBMITTED` or `UNDER_REVIEW`. Missing or ambiguous evidence yields an unavailable actor rather than inference. Stored task baseline links remain baselines because correction tasks do not retain an exact completion-proof version. The latest correction remains the action projection, and history does not change command locks, idempotency, maker-checker, audit, or transaction rules.
+
+Document's `ReadStaffAssistedActionEvidenceUseCase` provides permitted signed-form metadata and exact immutable content. The service reads its existing assisted-action document/version repository and validates application, evidence type, logical-document ownership, and version before opening `DocumentStoragePort`. Historical viewing does not call upload target authorization, because completed or superseded action targets must remain inspectable. Loan-owned action state continues to identify the consumed version through its existing public contracts. No new aggregate, file copy, history table, or generic evidence engine is introduced. Exact per-type read audiences and HTTP error/header contracts are defined in MER-API-001 Section 5.7.
+
+### Staff Product-Verification and Review Read Flow
+
+Product-verification and review reads are Loan-owned purpose-limited projections. They authorize an exact Staff `loan:review` capability in the web adapter and application service, then assemble only the evidence needed to verify a product or start/reconcile Loan Officer review.
+
+Loan does not read Document persistence or Customer persistence. Document resolves readiness and current immutable version targets behind `LoanDocumentChecklistPort`. The verification projection orders immutable product cycles by sequence and treats the latest as authoritative; Collateral additionally requires exactly one application-owned assessment snapshot. The review projection reads the latest Loan-owned review cycle and product result. Both reads are advisory presentation evidence: every mutation reacquires its established workflow/application locks and revalidates authoritative state.
+
+Because verification start/completion and review start have no client business UUID, Internal Web never automatically retries their POSTs. After a lost response it performs the corresponding purpose-limited GET and reports only what the refreshed durable state proves. Collateral completion carries the displayed `expectedVerificationId`; a stale conflict preserves the in-memory form, refreshes the latest cycle, and requires an explicit new confirmation.
+
+### Workflow Actor and Assisted Customer Action Reads
+
+Loan composes Staff application lifecycle actors under the existing repeatable-read `loan:read` query. Its workflow-actor output port calls Identity's batched public classification contract through an Identity adapter; Loan never reads Identity persistence. The query requires matching `user_type = CUSTOMER` and application Customer association before returning `CUSTOMER_SELF_SERVICE`, with no Customer login fields. Staff summaries remain purpose-limited, System requires no User record, and missing legacy Users produce `UNAVAILABLE`.
+
+Completed assisted offer-response and UCL cancellation reads compose existing Loan-owned action records, exact workflow transitions, Document-owned version metadata, and safe Staff recorder summaries. They validate subject/target, action/state, actor, time, operation correspondence, and consumed evidence version under the owning read transaction. Contradictions return `SYSTEM_STATE_CONFLICT`; the reads create no history, audit, or action records. Generic lifecycle history uses only validated high-level Customer decision/request wording. Detailed completed provenance stays in the offer-response and correction-case contracts. Accounting acknowledgment retains its existing contract-bound Customer/Staff distinction.
+
+---
+
+## 5. Origination and Customer Identity Evidence
+
+### Origination Channel Boundary
+
+Customer-digital and Staff-assisted origination use separate inbound contracts because they resolve actor and Customer subject differently. Customer-digital commands derive the Customer from authentication. Staff-assisted commands authenticate Staff and carry the selected Customer as an explicit business subject. Both paths converge only after those trust-boundary checks and then apply the same Customer readiness, product policy, workflow, audit, and concurrency rules for the selected product.
+
+Salary Advance accepts only Customer-digital origination. UCL and Collateral Loan accept Customer-digital or Staff-assisted origination. A created `LoanApplication` records its immutable origination channel so later Customer-sourced corrections, offer responses, and contract acknowledgments use the permitted interaction path without changing financial, review, approval, or maker-checker authority.
+
+A Customer self-service command must not be generalized by adding an optional Staff-selected `customerId`. Staff entry points use purpose-specific input ports and may share internal application or domain logic only after actor and subject resolution.
 
 ### Staff-Assisted Customer Intake
 
@@ -418,7 +260,7 @@ flowchart LR
 
 ### Staff-Assisted Pre-Application Intake and Paper Evidence
 
-Loan owns the temporary Staff-assisted intake lifecycle that exists before a UCL or Collateral Loan `LoanApplication`. The intake creates no financial exposure and does not enter product verification, review, or Approval. Loan may associate the intake with a selected Customer and product while Staff confirms Customer-provided structured facts.
+Direct origination creates a `LoanApplication` in `SUBMITTED` or `DOCUMENTS_PENDING`; there is no persisted save-and-return application-draft command. Loan owns the separate temporary Staff-assisted intake lifecycle that exists before a UCL or Collateral Loan `LoanApplication`. The intake creates no financial exposure and does not enter product verification, review, or Approval. Loan may associate the intake with a selected Customer and product while Staff confirms Customer-provided structured facts.
 
 Document owns paper intake evidence independently of application checklists. A Staff upload to pre-application intake uses a Document-owned input port. Document asks Loan through a purpose-limited boundary whether the intake is valid for the requested operation, then stores the immutable document version under Document ownership. Initial intake upload must not reuse correction-task authorization because no application correction exists yet.
 
@@ -446,76 +288,15 @@ flowchart LR
 
 The intake-to-application command serializes the intake before application creation and permits one resulting `LoanApplication`. It revalidates the selected Customer, allowed product and channel, readiness, amount, term, blocking application, and product-specific outstanding-account rules rather than trusting values captured earlier in the intake. If application creation requires Document to associate intake evidence with the application workflow, Loan uses a Document public contract; it does not rewrite Document persistence. Failure of a required association rolls back the conversion business outcome.
 
-### Staff Document Checklist and History Query
-
-`GET /api/v1/staff/loan-applications/{loanApplicationId}/documents` uses a dedicated Staff Document input port and query service. It requires a Staff-only principal and exact `document:review` or `approval:decide` independently of the general `loan:read` case contract. The latter audience inspects documents read-only and acquires no command or queue capability.
-
-```mermaid
-flowchart LR
-    Controller["StaffDocumentReadController"]
-    InPort["QueryStaffDocumentChecklistUseCase"]
-    Service["QueryStaffDocumentChecklistService"]
-    ChecklistRepo["DocumentChecklistRepository"]
-    DocumentRepo["DocumentRepository"]
-    LoanPort["LoanDocumentWorkflowPort"]
-    DocumentPersistence["Document persistence adapters"]
-    LoanAdapter["LoanDocumentWorkflowAdapter"]
-    LoanPersistence["Loan persistence"]
-
-    Controller --> InPort --> Service
-    Service --> ChecklistRepo --> DocumentPersistence
-    Service --> DocumentRepo --> DocumentPersistence
-    Service --> LoanPort --> LoanAdapter --> LoanPersistence
-```
-
-Document owns checklist, version, and review-history projection. It obtains only application existence and safe status through the purpose-limited Loan contract. Deterministic repository queries read the existing immutable version and review rows; no parallel history store is created. One batched `DocumentStaffActorDirectoryPort` lookup uses Identity's public Staff-summary contract. Exact review-version associations are validated before returning separately labeled reasons, Customer instructions, and authorized restricted Document notes. Checklist and signed-form metadata use read-only repeatable-read snapshots.
-
-### Correction and Signed-Form History Reads
-
-Loan owns the specialized correction history projection. `LoanCorrectionRepository` returns every request in creation-time/identifier order and tasks in sequence/identifier order. A purpose-limited `WorkflowActorDirectoryPort` resolves creator, completer, and exactly matched resubmitter associations in one batch. Loan validates Customer ownership and permitted self-service versus Staff-recorded semantics; it never returns Customer login identity.
-
-Resubmitter attribution requires a unique request timestamp and one same-application `RESUBMIT_CORRECTION` lifecycle transition at that exact timestamp, from `RETURNED_FOR_REVISION` to `SUBMITTED` or `UNDER_REVIEW`. Missing or ambiguous evidence yields an unavailable actor rather than inference. Stored task baseline links remain baselines because correction tasks do not retain an exact completion-proof version. The latest correction remains the action projection, and history does not change command locks, idempotency, maker-checker, audit, or transaction rules.
-
-Document's `ReadStaffAssistedActionEvidenceUseCase` provides permitted signed-form metadata and exact immutable content. The service reads its existing assisted-action document/version repository and validates application, evidence type, logical-document ownership, and version before opening `DocumentStoragePort`. Historical viewing does not call upload target authorization, because completed or superseded action targets must remain inspectable. Loan-owned action state continues to identify the consumed version through its existing public contracts. No new aggregate, file copy, history table, or generic evidence engine is introduced. Exact per-type read audiences and HTTP error/header contracts are defined in MER-API-001 Section 5.7.
-
 ### Submission Command
 
-`POST /api/v1/loan-applications/salary-advance` requires Bearer authentication and `loan:submit`. The application service derives the Customer from the authenticated actor and obtains Customer and Partner facts through their public contracts.
-
-```mermaid
-flowchart LR
-    Client["Authenticated Customer"]
-    Controller["SalaryAdvanceLoanApplicationController"]
-    InPort["StartSalaryAdvanceApplicationUseCase"]
-    Service["StartSalaryAdvanceApplicationService"]
-    ProductRepo["LoanProductRepository"]
-    CustomerPort["Customer readiness port"]
-    PartnerPort["Partner eligibility port"]
-    AccountRepo["LoanAccountRepository"]
-    LimitRepo["SalaryAdvanceLimitRepository"]
-    ApplicationRepo["LoanApplicationRepository"]
-    VerificationRepo["SalaryAdvanceVerificationRepository"]
-    Mapper["Loan mapper"]
-    DTO["SalaryAdvanceApplicationDto"]
-
-    Client --> Controller --> InPort --> Service
-    Service --> ProductRepo
-    Service --> CustomerPort
-    Service --> PartnerPort
-    Service --> AccountRepo
-    Service --> LimitRepo
-    Service --> ApplicationRepo
-    Service --> VerificationRepo
-    Service --> Mapper --> DTO --> Controller --> Client
-```
-
-The response contains the application identity, requested terms, product-verification outcome, and limit snapshots needed to explain the reservation. It must not expose Partner Employee salary, identity evidence, employee code, bank-account data, or raw matching evidence.
+The Salary Advance command derives the Customer from authentication and obtains Customer and Partner facts through their public contracts. It uses Loan repository ports for the product, blocking applications/accounts, limit, movements, and immutable verification snapshot. Document resolves the initial checklist and creates it inside the origination transaction. Ordinary responses remain purpose-limited and exclude Partner salary, identity evidence, employee code, bank-account data, and raw matching evidence. The order below protects the complete outcome.
 
 ### Submission Serialization and Database Guard
 
 The transaction follows this order:
 
-1. validate Customer readiness and product/amount/term policy before workflow locks;
+1. obtain locked Customer readiness and validate product/amount/term policy before Loan workflow locks;
 2. acquire the Customer-and-product advisory lock and perform the authoritative blocking-application check;
 3. resolve Partner-owned current-month eligibility and calculate the effective limit;
 4. acquire the Customer-and-employee-link advisory lock and repeat the blocking check;
@@ -549,54 +330,19 @@ For assisted evidence, the dedicated review capability first locks the Loan-owne
 
 A decision acquires the request-identity lock, checks replay, locks the assisted case when applicable, then locks Customer and exact Document evidence in that order. Customer reloads the attempt under its aggregate lock and rejects stale full-name or version context. VERIFY compares the transient presented Identity Reference against the Customer-owned fingerprint using constant-time equality. The response and audit contain no presented value. Terminal decisions, summary, and audit are atomic.
 
-Ordinary Customer and Staff profile maintenance locks Customer and applies the domain invariant before persistence or audit: a material full-name change while `VERIFIED` returns `409 VERIFIED_IDENTITY_CHANGE_NOT_ALLOWED`. An omitted saved full name retains the authoritative profile name. Rejection changes no profile, summary, readiness reference, or history and emits no verification-invalidated audit. Permitted contact and employment changes retain verification. The historical `CUSTOMER_IDENTITY_VERIFICATION_INVALIDATED` audit action remains compatible with stored history; ordinary profile maintenance does not emit it. Verified identity amendment is a separate deferred Staff workflow under MER-BIZ-001 Section 5.9.1.
+Ordinary Customer and Staff profile maintenance locks Customer and applies the domain invariant before persistence or audit: a material full-name change while `VERIFIED` fails before persistence. An omitted saved full name retains the authoritative profile name. Rejection changes no profile, summary, readiness reference, or history and emits no verification-invalidated audit. Permitted contact and employment changes retain verification. The historical `CUSTOMER_IDENTITY_VERIFICATION_INVALIDATED` audit action remains compatible with stored history; ordinary profile maintenance does not emit it. The permitted identity-amendment boundary belongs to MER-BIZ-001 Section 5.9.1.
 
 Controlled Identity Reference correction repairs a pre-verification mistake only. It uses the existing Customer self-service or Staff intake authority and locks the Customer aggregate before checking active/complete/non-verified state and protected duplicate ownership. The current profile change, `UNVERIFIED` summary, and safe audit are one transaction. It acquires no Partner or Loan persistence and does not change verification attempts or Document references. Correction therefore serializes with verification decisions and new origination through the same Customer row lock. A pending mismatch can be retried only against unchanged current evidence and full-name context. The command has no request UUID; clients clear sensitive input and reconcile unknown outcomes through a safe Customer read before another deliberate command.
 
 New Salary Advance, UCL, and Collateral origination paths obtain locked Customer readiness before the established Customer/product serialization and product-specific guards. The Customer row lock serializes submission against profile maintenance and verification decisions. Readiness requires both `VERIFIED` and the latest successful attempt matching the current full name; an unsupported legacy summary cannot satisfy it. Loan persists only the successful verification UUID. Salary Advance retains its additional Partner eligibility, limit locking, and exposure reservation rules. Downstream workflows do not acquire this origination guard. Historical null provenance is preserved.
 
-### UCL Manual Verification
-
-UCL verification start and completion acquire the LoanApplication workflow lock, the application row, and the authoritative latest UCL verification row. Completion rechecks Document processing readiness and atomically persists the verification result, LoanApplication transition, status history, PII-safe audit, and any structured `REQUIRES_MORE_INFORMATION` correction. `VERIFIED` opens Loan Officer review, `FAILED` ends the application as `VERIFICATION_FAILED`, and correctable evidence issues use `REQUIRES_MORE_INFORMATION` followed by a linked pending re-verification cycle after resubmission.
-
-### Staff Product-Verification and Review Read Flow
-
-The CP4 reads remain Loan-owned purpose-limited projections. They authorize an exact Staff `loan:review` capability in the web adapter and application service, then assemble only the evidence needed to verify a product or start/reconcile Loan Officer review.
-
-```mermaid
-flowchart LR
-    Client["Staff verification or review workspace"]
-    Controller["Staff Loan read controller"]
-    InPort["Purpose-limited Loan query port"]
-    Service["Repeatable-read Loan query service"]
-    ApplicationRepo["LoanApplication repository"]
-    ProductRepos["Loan-owned verification / Collateral repositories"]
-    ReviewRepo["Loan review-cycle repository"]
-    DocumentPort["LoanDocumentChecklistPort"]
-    DocumentService["DocumentChecklistService"]
-
-    Client --> Controller --> InPort --> Service
-    Service --> ApplicationRepo
-    Service --> ProductRepos
-    Service --> ReviewRepo
-    Service --> DocumentPort --> DocumentService
-```
-
-Loan does not read Document persistence or Customer persistence. Document resolves readiness and current immutable version targets behind `LoanDocumentChecklistPort`. The verification projection orders immutable product cycles by sequence and treats the latest as authoritative; Collateral additionally requires exactly one application-owned assessment snapshot. The review projection reads the latest Loan-owned review cycle and product result. Both reads are advisory presentation evidence: every mutation reacquires its established workflow/application locks and revalidates authoritative state.
-
-Because verification start/completion and review start have no client business UUID, Internal Web never automatically retries their POSTs. After a lost response it performs the corresponding purpose-limited GET and reports only what the refreshed durable state proves. Collateral completion carries the displayed `expectedVerificationId`; a stale conflict preserves the in-memory form, refreshes the latest cycle, and requires an explicit new confirmation.
-
-### Workflow Actor and Assisted Customer Action Reads
-
-Loan composes Staff application lifecycle actors under the existing repeatable-read `loan:read` query. Its workflow-actor output port calls Identity's batched public classification contract through an Identity adapter; Loan never reads Identity persistence. The query requires matching `user_type = CUSTOMER` and application Customer association before returning `CUSTOMER_SELF_SERVICE`, with no Customer login fields. Staff summaries remain purpose-limited, System requires no User record, and missing legacy Users produce `UNAVAILABLE`.
-
-Completed assisted offer-response and UCL cancellation reads compose existing Loan-owned action records, exact workflow transitions, Document-owned version metadata, and safe Staff recorder summaries. They validate subject/target, action/state, actor, time, operation correspondence, and consumed evidence version under the owning read transaction. Contradictions return `SYSTEM_STATE_CONFLICT`; the reads create no history, audit, or action records. Generic lifecycle history uses only validated high-level Customer decision/request wording. Detailed completed provenance stays in the offer-response and correction-case contracts. Accounting acknowledgment retains its existing contract-bound Customer/Staff distinction.
-
 ---
 
-## 8. Approval, Review, and Correction Coordination
+## 6. Product Verification, Review, Approval, and Correction
 
 Approval owns the immutable recommendation or decision record. Loan owns the active review cycle, correction workflow, and LoanApplication transition.
+
+Review start takes the workflow lock and application row lock, rechecks product evidence and Document readiness, and establishes the first assigned Loan Officer or preserves the proven prior-cycle assignment. A different officer or unresolved legacy assignment fails before a new cycle, transition, or audit is saved. Recommendation checks the assigned officer through Loan's narrow contract; Approver maker-checker remains a separate check. Intake, verification, document, and correction activity do not establish review stewardship.
 
 Approval exposes separate purpose-limited Staff projections for recommendation recovery, independent-decision recovery, and Approver discovery. The query service requires exact `approval:recommend` or `approval:decide` authority and composes Approval-owned immutable evidence with a narrow Loan-owned case boundary. Loan supplies application state, review-cycle, product-verification, Document readiness, correction options, and exact `APPROVAL_PENDING` queue membership without transferring ownership to Approval. Repeatable-read isolation keeps the composed evidence coherent.
 
@@ -604,7 +350,7 @@ The projections expose a current-actor maker-checker relation instead of interna
 
 Every recommendation command carries the review-cycle identifier shown to the Loan Officer. Every decision command carries the recommendation and review-cycle identifiers shown to the Approver. Approval compares these expected-state identifiers with the latest applicable Approval evidence and active Loan-owned cycle before it records, audits, or publishes an outcome. A mismatch returns `STALE_REVIEW_RECOMMENDATION` or `STALE_REVIEW_CYCLE` without an Approval or Loan side effect. These identifiers are concurrency guards; the commands still have no client business UUID.
 
-Revision-producing actions use synchronous transaction participation because a failure to apply the structured outcome must roll back the source Approval record and the resulting Loan, Document, Audit, and history changes.
+Recommendation and decision outcomes use synchronous transaction participation because a failure to apply the structured outcome must roll back the source Approval record and the resulting Loan, Document, Audit, and history changes.
 
 ```mermaid
 flowchart LR
@@ -631,7 +377,7 @@ For `CUSTOMER_DIGITAL`, Customer-sourced correction endpoints derive the exact C
 
 A Customer-via-Staff correction remains distinct from a Staff correction of Staff-controlled work. Task completion, upload authorization, and resubmission must preserve that distinction rather than treating every Staff-executed command as `REQUEST_STAFF_CORRECTION`. Staff queue, content-read, review, waiver, and resubmission endpoints retain their narrow permissions, and application services recheck task ownership and maker-checker constraints.
 
-The executable UCL/Collateral assisted path uses exact `loan:correction:staff` authority for purpose-specific Customer-task completion and Staff resubmission. Document authorizes replacement upload through the Loan-owned active-task boundary and exact `document:upload:assisted-correction`; the task baseline remains the concurrency proof. Loan records the authenticated Staff user as completion/audit actor and the application Customer as subject. Staff-task maker-checker remains unchanged but is not applied to a Customer-owned task merely because Staff records its Customer-provided proof. Customer-digital Customer tasks continue through the Customer-owned ports only. No generic Staff checklist-mutation port is introduced by this correction slice.
+The executable UCL/Collateral assisted path uses exact `loan:correction:staff` authority for purpose-specific Customer-task completion and Staff resubmission. Document authorizes replacement upload through the Loan-owned active-task boundary and exact `document:upload:assisted-correction`; the task baseline remains the concurrency proof. Loan records the authenticated Staff user as completion/audit actor and the application Customer as subject. Staff-task maker-checker remains unchanged but is not applied to a Customer-owned task merely because Staff records its Customer-provided proof. Customer-digital Customer tasks continue through the Customer-owned ports only. No generic Staff checklist-mutation port is introduced by these correction commands.
 
 Staff-assisted UCL cancellation is a separate evidenced terminal command. Document authorizes `CUSTOMER_CANCELLATION_REQUEST` upload or exact-baseline replacement only for the active correction of a `STAFF_ASSISTED` UCL in `RETURNED_FOR_REVISION`. Loan requires exact `loan:cancel:staff` authority and the Loan Officer role, revalidates the same correction and current evidence version under the cancellation lock order, and then uses the common Loan-owned cancellation execution path. The authenticated Staff user remains the actor, the application Customer remains the subject, and the stored cancellation row references the consumed Document version by ID without a cross-context foreign key. Customer-digital cancellation remains on the Customer-owned port; Collateral and Salary Advance remain unsupported by this Staff command.
 
@@ -657,6 +403,37 @@ flowchart LR
 
 The service computes current-actor maker-checker evidence without serializing actor IDs. It derives Staff task proof through `LoanDocumentChecklistPort` and assisted-cancellation evidence through the narrow assisted-action evidence port; Loan does not query Document tables or adapters. The read is advisory presentation evidence, while completion, resubmission, evidence upload, and cancellation commands revalidate locked state.
 
+### UCL Manual Verification
+
+UCL verification start and completion acquire the LoanApplication workflow lock, the application row, and the authoritative latest UCL verification row. Completion rechecks Document processing readiness and atomically persists the verification result, LoanApplication transition, status history, PII-safe audit, and any structured `REQUIRES_MORE_INFORMATION` correction. `VERIFIED` opens Loan Officer review, `FAILED` ends the application as `VERIFICATION_FAILED`, and correctable evidence issues use `REQUIRES_MORE_INFORMATION` followed by a linked pending re-verification cycle after resubmission.
+
+### Collateral Verification and Approval Coordination
+
+Collateral manual-verification start and completion use the existing LoanApplication workflow serialization. Each command acquires the workflow lock, locks the application, and locks the authoritative latest `collateral_loan_verifications` row before it persists verification, status-history, correction, or audit effects. Start is a normal `SUBMITTED -> VERIFICATION_PENDING` transition: one concurrent request succeeds and later requests fail rather than replaying a successful response.
+
+Completion carries `expectedVerificationId`. After locking the latest row, Loan rejects a mismatched identifier as stale before completing evidence. A successful command changes a pending cycle exactly once and atomically persists the terminal result, LoanApplication transition, history, audit, and any `REQUIRES_MORE_INFORMATION` correction. Document readiness is checked again inside the command. The database makes completed cycles immutable and reconciles each later cycle with the preceding completed cycle and its resubmitted source correction.
+
+The latest `VERIFIED` cycle opens Loan Officer review and recommendation and must remain authoritative when an Approver acts. Approval writes the immutable decision before Loan handles the synchronous outcome in the same transaction. Loan rechecks the latest Collateral verification under the workflow/application lock. Missing or non-verified evidence, invalid or missing pricing policy, an invalid term, or a later mandatory write failure rolls back the ApprovalDecision together with every Loan transition, review-cycle, correction, audit, and ApprovedOffer effect.
+
+`APPROVE` loads the active Collateral default policy and creates one exact-request immutable offer plus its reconciled provisional monthly items before reaching `CUSTOMER_ACCEPTANCE_PENDING`. The other three actions use the common reject, return, or document-only correction paths and create no offer. Competing decisions serialize to one authoritative outcome, and Collateral paths acquire no Salary Advance exposure locks or create Salary Advance movements. The channel-specific Customer-decision entry point then uses the common ApprovedOffer lock and terminal-action semantics; acceptance reaches `CONTRACT_PENDING` and opens the common operational-contract flow.
+
+### Correction Locking and Idempotency
+
+1. Document replacement locks the Loan workflow, then the checklist item and logical document. It appends a version only when the expected current-version identifier still matches.
+2. Manual review targets one immutable document version and rejects a stale review target.
+3. Ordinary Customer and Staff task completion locks the selected task, reads and validates its correction request, and locks the request's task set when required to reconcile readiness. It does not establish a correction-request row lock as a universal first lock. The assisted Customer-task command instead locks workflow/application, active correction request, then task. Each path preserves its actor, active-request, proof, and maker-checker checks. An identical completion is replay only after that path's guards; different content after completion is a conflict.
+4. Resubmission locks the Loan workflow and application first, then the active correction request and task rows. It validates Customer readiness and product policy, acquires Customer-and-product scope, checks blocking applications, and reads Document readiness. Salary Advance then locks its product exposure state; UCL and Collateral do not acquire Salary Advance limit or movement locks.
+5. Salary Advance resubmission rechecks Partner-owned current-month freshness; stale evidence rejects the operation before a new verification or workflow effect and preserves the existing reservation.
+6. One resubmission request is consumed exactly once.
+7. Collateral resubmission preserves the completed cycle and structured facts, returns the application to `SUBMITTED`, and creates one next pending cycle linked to the resubmitted correction. Concurrent resubmission permits one transition/cycle; a delayed completion carrying the prior cycle ID fails stale.
+8. Customer-requested cancellation is defined only for Salary Advance and UCL returned corrections. Customer-digital requests derive the Customer owner from authentication. For Staff-assisted UCL, authorized Staff may record the Customer's evidenced cancellation request after verifying the application's channel and subject. The command first serializes the request UUID, then locks the Loan workflow, application, and active correction request. Salary Advance additionally locks Customer-and-product scope, latest verification context, Customer-link scope, reservation movements, and the Salary Advance limit before recording its exact release. UCL proves that no Salary reservation or release evidence exists and records no exposure effect. Both products terminalize the correction and application and record history, audit, and immutable cancellation evidence.
+9. Cancellation intentionally does not recheck Partner freshness: Customer abandonment must remain possible after Partner evidence becomes stale. Resubmission and cancellation share the workflow/application/correction lock order, so a PostgreSQL race permits exactly one operation to win.
+10. Failure in synchronous Approval-to-Loan coordination or any cancellation evidence write rolls back the entire transaction.
+
+---
+
+## 7. Offer, Contract, Protected Reveal, and Disbursement
+
 ### Channel-Specific Customer Decisions
 
 After approval, Loan routes Customer-sourced actions by the persisted origination channel. `CUSTOMER_DIGITAL` uses Customer-owned input ports that derive the Customer from authentication. `STAFF_ASSISTED` uses purpose-specific Staff input ports that authenticate Staff, verify the selected application's Customer and channel, and record the evidenced Customer decision without impersonation.
@@ -680,32 +457,7 @@ flowchart LR
 
 Offer acceptance or decline remains the Customer's decision. A Staff-assisted command records that decision only when supported by the required branch evidence; it must not let Staff choose on the Customer's behalf. Contract acknowledgment follows the same actor-versus-subject rule. Customer-requested cancellation follows the rule for the exact active correction of a Staff-assisted UCL and consumes the current signed cancellation-request evidence before the terminal transition. Customer-digital and Staff-assisted entry points may share the same Loan-owned offer, contract, or cancellation transition logic after their channel-specific authorization and evidence checks.
 
-### Collateral Verification and Approval Coordination
-
-Collateral manual-verification start and completion use the existing LoanApplication workflow serialization. Each command acquires the workflow lock, locks the application, and locks the authoritative latest `collateral_loan_verifications` row before it persists verification, status-history, correction, or audit effects. Start is a normal `SUBMITTED -> VERIFICATION_PENDING` transition: one concurrent request succeeds and later requests fail rather than replaying a successful response.
-
-Completion carries `expectedVerificationId`. After locking the latest row, Loan rejects a mismatched identifier as stale before completing evidence. A successful command changes a pending cycle exactly once and atomically persists the terminal result, LoanApplication transition, history, audit, and any `REQUIRES_MORE_INFORMATION` correction. Document readiness is checked again inside the command. The database makes completed cycles immutable and reconciles each later cycle with the preceding completed cycle and its resubmitted source correction.
-
-The latest `VERIFIED` cycle opens Loan Officer review and recommendation and must remain authoritative when an Approver acts. Approval writes the immutable decision before Loan handles the synchronous outcome in the same transaction. Loan rechecks the latest Collateral verification under the workflow/application lock. Missing or non-verified evidence, invalid or missing pricing policy, an invalid term, or a later mandatory write failure rolls back the ApprovalDecision together with every Loan transition, review-cycle, correction, audit, and ApprovedOffer effect.
-
-`APPROVE` loads the active Collateral default policy and creates one exact-request immutable offer plus its reconciled provisional monthly items before reaching `CUSTOMER_ACCEPTANCE_PENDING`. The other three actions use the common reject, return, or document-only correction paths and create no offer. Competing decisions serialize to one authoritative outcome, and Collateral paths acquire no Salary Advance exposure locks or create Salary Advance movements. The channel-specific Customer-decision entry point then uses the common ApprovedOffer lock and terminal-action semantics; acceptance reaches `CONTRACT_PENDING` and opens the common operational-contract flow.
-
-### Correction Locking and Idempotency
-
-1. Document replacement locks the Loan workflow, then the checklist item and logical document. It appends a version only when the expected current-version identifier still matches.
-2. Manual review targets one immutable document version and rejects a stale review target.
-3. Task completion locks the task and correction request. An identical completion is replay; different content after completion is a conflict.
-4. Resubmission locks the Loan workflow first, followed by correction rows, Document readiness, and Customer-and-product scope. Salary Advance then locks its product exposure state; UCL and Collateral do not acquire Salary Advance limit or movement locks.
-5. Salary Advance resubmission rechecks Partner-owned current-month freshness; stale evidence rejects the operation before a new verification or workflow effect and preserves the existing reservation.
-6. One resubmission request is consumed exactly once.
-7. Collateral resubmission preserves the completed cycle and structured facts, returns the application to `SUBMITTED`, and creates one next pending cycle linked to the resubmitted correction. Concurrent resubmission permits one transition/cycle; a delayed completion carrying the prior cycle ID fails stale.
-8. Customer-requested cancellation is defined only for Salary Advance and UCL returned corrections. Customer-digital requests derive the Customer owner from authentication. For Staff-assisted UCL, authorized Staff may record the Customer's evidenced cancellation request after verifying the application's channel and subject. The command first serializes the request UUID, then locks the Loan workflow, application, and active correction request. Salary Advance additionally locks Customer-and-product scope, latest verification context, Customer-link scope, reservation movements, and the Salary Advance limit before recording its exact release. UCL proves that no Salary reservation or release evidence exists and records no exposure effect. Both products terminalize the correction and application and record history, audit, and immutable cancellation evidence.
-9. Cancellation intentionally does not recheck Partner freshness: Customer abandonment must remain possible after Partner evidence becomes stale. Resubmission and cancellation share the workflow/application/correction lock order, so a PostgreSQL race permits exactly one operation to win.
-10. Failure in synchronous Approval-to-Loan coordination or any cancellation evidence write rolls back the entire transaction.
-
----
-
-## 9. Contract Preparation and Readiness
+### Contract Preparation and Readiness
 
 ```mermaid
 sequenceDiagram
@@ -739,7 +491,7 @@ sequenceDiagram
 
 The advisory readiness query uses non-locking reads and does not persist a readiness Boolean. Confirmation acquires the workflow locks and recomputes every blocker before changing state.
 
-Contract acknowledgment remains a Customer-sourced action in both channels. Customer-digital acknowledgment derives the Customer from authentication. Staff-assisted acknowledgment verifies the application channel, the Customer subject, the exact current contract version, and the required evidence before recording the acknowledgment. Loan must preserve the Customer as the source of acknowledgment and the Staff user as the recording actor; it must not store Staff as though Staff were the acknowledging Customer.
+Acknowledgment verifies the exact current contract version and required channel-specific evidence. The channel boundary above preserves the Customer source and Staff recorder separately.
 
 Loan also owns the purpose-limited Staff contract-work projection. Its queue selects only `CONTRACT_PENDING` applications with server-side product filtering, paging, and deterministic ordering. Its case read admits only `CONTRACT_PENDING` and `DISBURSEMENT_PENDING`. Under one repeatable-read application transaction, the projection composes the application header, current Loan-owned contract, and the canonical readiness service result, then derives a work stage. Identity or lifecycle contradictions fail closed instead of being repaired in the controller or browser. The projection requires Staff `loan:contract:read` authority and Accounting Officer role; it does not transfer Customer acknowledgment ownership or expose the protected destination.
 
@@ -747,11 +499,7 @@ For Accounting contract and disbursement cases, Loan also composes a purpose-lim
 
 Loan stores a protected contract-bound destination snapshot. Normal contract responses expose only the masked destination. Full destination data is available only through the dedicated audited reveal flow.
 
-Salary Advance validates its exact unreleased reservation. UCL and Collateral Loan require the authoritative latest application-owned verification to be `VERIFIED`; contract preparation performs this product-evidence validation before reading or protecting bank-account data. Collateral contract versions copy the accepted offer's 1.5% monthly flat-rate terms and provisional items exactly. Destination refresh supersedes the prior version without repricing and requires a fresh Customer acknowledgment through the application's origination channel. UCL and Collateral paths do not acquire Salary Advance exposure locks or create Salary Advance movements.
-
----
-
-## 10. Protected Identity and Destination Reveal, and Manual Disbursement
+Salary Advance validates its exact unreleased reservation. UCL and Collateral Loan require the authoritative latest application-owned verification to be `VERIFIED`; contract preparation performs this product-evidence validation before reading or protecting bank-account data. Collateral contract versions copy the accepted offer's financial terms and provisional items exactly; pricing policy is defined in BIZ, not recomputed here. Destination refresh supersedes the prior version without repricing and requires a fresh Customer acknowledgment through the application's origination channel. UCL and Collateral paths do not acquire Salary Advance exposure locks or create Salary Advance movements.
 
 ### Application-Scoped Customer Identity Reference Reveal
 
@@ -817,20 +565,9 @@ The product activation policy revalidates the authoritative product evidence for
 
 ---
 
-## 11. LoanAccount Servicing Flows
+## 8. Servicing, Repayment, Settlement, and Closure
 
-| Request | Authorization | Runtime behavior |
-|---|---|---|
-| `GET /api/v1/staff/servicing-work` | Staff `loan:read` | Pages server-owned `ACTIVE` / `OVERDUE` LoanAccount work with optional product and serviceable-status filters. |
-| `GET /api/v1/staff/settlement-work` | Staff `loan:settlement:approve` plus Approver role | Pages server-owned `ACTIVE` / `OVERDUE` full-balance settlement candidates with positive authoritative outstanding. |
-| `GET /api/v1/staff/closure-work` | Staff `loan:account:close` plus Accounting Officer role | Pages fully reconciled `SETTLED` accounts with contractual-payoff or approved-settlement provenance. |
-| `GET /api/v1/loan-applications/{id}/loan-account` | `loan:read:own` or `loan:read` | Returns the activated account, masked contract destination, final schedule, and persisted servicing progress. |
-| `POST /api/v1/loan-applications/{id}/repayments` | `repayment:update` | Serializes request and payment-reference identity, locks authoritative aggregates, applies allocation and exposure effects, and records history and audit in one transaction. |
-| `GET /api/v1/loan-applications/{id}/repayments` | `loan:read:own` or `loan:read` | Reads immutable repayment and allocation evidence under a consistent read transaction. |
-| `GET /api/v1/staff/loan-applications/{id}/servicing-provenance` | Staff `loan:read` | Composes validated Loan-owned servicing evidence with safe Identity Staff actor summaries. |
-| `POST /api/v1/loan-applications/{id}/settlements` | `loan:settlement:approve` plus Approver role | Performs an Administrative Full-Balance Settlement through an exact full-outstanding payment, applies product-specific exposure semantics, and records immutable settlement, payment, history, and audit evidence. |
-| `GET /api/v1/loan-applications/{id}/settlements/approved` | `loan:settlement:approve` plus Approver role | Returns only immutable settlement amount, value date, approval time, and application/account identity for exact reload recovery. |
-| `POST /api/v1/loan-applications/{id}/loan-account/closure` | `loan:account:close` plus Accounting Officer role | Verifies settled financial provenance and changes only administrative account status, closure evidence, history, and audit. |
+LoanAccount is the authoritative servicing aggregate. Queries compose account/schedule/progress or immutable operation evidence; repayment, Administrative Full-Balance Settlement, and administrative closure remain separate commands. [MER-API-001](../api/MER-API-001-endpoints-and-postman-scenarios.md) owns endpoint audiences and fields; [MER-BIZ-001](../business/MER-BIZ-001-business-requirements-and-workflows.md) owns lifecycle policy.
 
 Customer ownership concealment belongs in the application service. A Customer receives the same not-found behavior for a missing, foreign-owned, or not-yet-activated account.
 
@@ -863,6 +600,8 @@ Read operations must not:
 - publish business evidence;
 - expose transfer references, full destinations, encryption envelopes, audit identifiers, employee evidence, or limit-movement internals.
 
+Repayment locks request identity, checks for conflicting reuse, acquires the application workflow lock, and repeats replay lookup before locking application, account, final schedule, and progress. The domain allocator applies payment in deterministic installment/component order against immutable obligations. Payment, allocations, progress, account roll-up, installment/account history when state changes, product release, durable operation outcome, and audit commit atomically. Overpayment is rejected before those writes. Replay validates the original operation and product-release evidence and returns the stored outcome even after later servicing changes; it does not recalculate the result from current balances.
+
 The repayment and Administrative Full-Balance Settlement controllers forward external payment references without canonicalizing them. The Loan application services own normalization, operation-specific idempotency, and duplicate-reference handling. The canonical external payment reference remains internal financial evidence and is excluded from ordinary responses, logs, audit payloads, and errors.
 
 Administrative Full-Balance Settlement is a Loan-owned payment operation even though its actor is an Approver. It starts from `ACTIVE` or `OVERDUE`, requires the caller's expected amount to equal locked total outstanding, applies the repayment allocator and servicing calculator, and commits `SETTLED` with immutable settlement, payment, outcome, history, and audit evidence. The selected repayment policy releases allocated principal exactly for Salary Advance and requires zero product-exposure release for UCL and Collateral Loan.
@@ -881,9 +620,7 @@ Existing application and account mutations use this global order:
 
 Activation, repayment, and Administrative Full-Balance Settlement must not acquire product-specific exposure locks before the LoanApplication workflow lock. Salary Advance Administrative Full-Balance Settlement follows request lock, workflow lock, application/account/schedule/progress row locks, payment validation, Customer-and-employee-link lock, then limit and movement locks. UCL and Collateral Loan use the same common financial locks but acquire no Salary Advance exposure lock or row. Canonical external payment-reference uniqueness is enforced by the payment insert and its database constraint; a conflict is resolved without exposing the reference. Administrative closure stops after workflow, application/account, and settlement-evidence verification because it does not mutate exposure. Submission and standalone limit refresh retain their Customer/product or Customer/employee-link to limit order and do not acquire an existing application workflow or account lock.
 
----
-
-## 12. Overdue Evaluation
+### Overdue Evaluation
 
 The overdue batch samples the injected clock once and derives one UTC business date. It selects stale `ACTIVE` or `OVERDUE` accounts with positive outstanding balances for the authoritative Salary Advance, UCL, and Collateral product allow-list, in deterministic evaluation-date and LoanAccount-ID order.
 
@@ -904,6 +641,132 @@ The direct evaluator validates the application is `DISBURSED` and then resolves 
 One overdue-evaluation operation identifier groups installment changes produced by the same evaluation. A real `ACTIVE` to `OVERDUE` or `OVERDUE` to `ACTIVE` account transition records account history and one `LOAN_ACCOUNT_STATUS_CHANGED` audit event. Date-only or installment-only advancement does not create a top-level account-status audit.
 
 The scheduler uses an explicit UTC zone, a positive batch size, and explicit operational enablement.
+
+---
+
+## 9. Partner Snapshot, Import, and Eligibility Coordination
+
+### Company Administration and Complete-Snapshot Import
+
+Partner Company create, update, and status commands require exact `partner:manage`. Partner serializes update and status mutations through a locked company read. Company code remains stable after creation, database uniqueness is the final create boundary, and a same-status request produces no duplicate save or audit effect.
+
+The effective-month import command uses this transaction order:
+
+1. acquire the operation-scoped advisory lock for `requestId`;
+2. return the stored outcome for an exact semantic fingerprint, or reject conflicting reuse;
+3. lock the Partner Company and verify that it exists without treating inactive or suspended status as an import prohibition;
+4. validate every row in the complete effective-month roster, including duplicate employee codes;
+5. if any row is invalid, persist a `FAILED` batch with validation counts and safe rejection summary, publish `PARTNER_EMPLOYEE_IMPORT_FAILED`, and commit without employee writes or reconciliation; otherwise persist one `COMPLETED` batch and the entire roster;
+6. if the new batch is the deterministic latest `COMPLETED` batch for that Partner Company and current UTC month, load the company's existing `VERIFIED` links in deterministic Customer/link order;
+7. lock and re-read each candidate link, continue only when it remains the Customer's `VERIFIED` relationship for that Partner Company, and skip it when the Customer and Partner Company have a pending eligibility review;
+8. compare the remaining link's stored verified identity reference and employee code with employees in the new batch through the normal Partner matching policy;
+9. refresh the same link to the new employee and source batch only for `MATCHED_ACTIVE`, leaving missing, ambiguous, inactive, or displaced matches unchanged and therefore stale or historical;
+10. publish one PII-safe business audit outcome before committing the complete import result.
+
+The Partner Company row remains the import reconciliation serialization boundary. The import path does not acquire the Customer-wide or Customer–Partner advisory lock after that row lock and does not mutate pending review rows; verification and review decisions acquire Customer-wide, then Customer–Partner, then company locks. A failure after a link refresh rolls back the batch, employees, link changes, rejection summary, and audit outcome in the same transaction.
+
+Request replay evidence stores the UUID and a SHA-256 semantic fingerprint rather than the raw command. Exact replay returns before reconciliation, so it does not advance link refresh timestamps or repeat audit effects. Multiple batches for the same company and month remain historical evidence. Each completed batch is a complete snapshot, and deterministic latest-completed selection replaces the previous snapshot without merging rows. A failed command cannot displace that authority. Valid/invalid counts describe validated rows; a failed batch contains no employee records. Exact replay also preserves a failed result; corrected input needs a new request ID. Only the deterministic latest completed current-month batch may refresh links. Partner mutates only the Partner-owned relationship. It does not create or change LoanApplications, Salary Advance limits, movements, or exposure. Loan readiness projects the current effective limit from Partner eligibility, and Loan persists its own limit refresh during submission when required.
+
+### Employee Verification
+
+The flow derives `customerId` from the authenticated Customer. The request supplies matching input such as `employeeCode`; it does not supply the trusted Customer identity. Partner obtains the required identity reference through a narrow Customer contract only for an active Customer with a complete profile and verified identity. An unverified or rejected identity returns `CUSTOMER_IDENTITY_VERIFICATION_REQUIRED` before employment matching. Manual review approval applies the same prerequisite. Current eligibility reads compare that identity with the link's preserved `verifiedIdentityRef`; mismatches return `NOT_VERIFIED` and cannot authorize Salary Advance.
+
+Runtime rules:
+
+1. Partner Company existence and active status are checked before import-batch lookup, employee matching, link creation, or manual-review routing. Partner derives the current effective month from the shared UTC `Clock` and selects the latest valid `COMPLETED` batch for that Partner Company and exact month, ordered deterministically by creation time and identifier.
+2. Verification acquires the Customer-wide Partner-employment advisory lock before the narrower Customer–Partner Company lock. One active match creates the first relationship, refreshes the same current relationship when its evidence matches, or disables the current relationship and creates a fresh link when the proven employer differs.
+3. Different same-employer evidence and missing or ambiguous current-month evidence follow the authorized manual-review policy. A genuinely unresolved current-month pending review makes the current eligibility contract return `NOT_VERIFIED`, even when an older current link remains persisted. Exact `MATCHED_ACTIVE` verification and successful manual approval supersede all remaining pending reviews for that Customer and month in the same transaction. The Customer-wide employment lock serializes these writes across Partner Companies; no additional company or advisory lock is acquired for competing review rows. Import reconciliation does not perform supersession. `MATCHED_INACTIVE` resolves only the selected company's pending attempt. Unresolved and rejected attempts leave alternative reviews pending. `SUPERSEDED` reviews are excluded from Customer discovery and pending eligibility checks. A reused verified link whose source batch or employee batch is not authoritative fails closed as stale for lending eligibility.
+4. An inactive Partner Company or Partner Employee is a hard stop. Re-verification may restore eligibility only by refreshing the link to matching active evidence in the authoritative batch.
+5. The response may expose identifiers, outcome, link status, and whether manual review is required. It must not expose raw identity evidence, employee code, salary, Salary Advance limit, or matching evidence.
+
+A review bound to a replaced source batch returns `SOURCE_BATCH_REPLACED` with unavailable decisions. Its source evidence remains unchanged. Fresh Customer verification uses the authoritative batch and either establishes current employment or supersedes the obsolete same-company pending review before creating the correct current review. Page refresh does not retarget historical reviews.
+
+### Eligibility Manual Review
+
+Customer verification and Back-Office decisions acquire the Customer-wide Partner-employment advisory lock before the Customer–Partner Company boundary. This order serializes automatic and reviewed switches across different Partner Companies. Missing or ambiguous evidence creates or reuses one Partner-owned `PENDING` review. A changed source batch supersedes the obsolete pending review when fresh Customer verification creates a replacement; a successful automatic match supersedes it without requiring a hidden mutation from a read request.
+
+Queue and detail reads require exact `partner:read`; the decision command requires exact `partner:manage`. The queue has no persisted assignment, claim, or reassignment state. Detail responses expose employee code and active employment facts needed for this restricted purpose, but exclude Customer identity references, salary, Salary Advance limit, and unrestricted notes.
+
+The decision transaction follows this order:
+
+1. locate the review, acquire the Customer-wide Partner-employment boundary followed by the Customer–Partner boundary, and lock the review row;
+2. return an exact persisted terminal replay or reject a different decision after resolution;
+3. lock and revalidate the Partner Company, effective UTC month, and authoritative latest `COMPLETED` import batch;
+4. for approval, obtain current usable Customer identity evidence and validate the selected active Partner Employee against the authoritative batch and identity;
+5. update the current same-employer link, or flush its transition to historical `DISABLED` before inserting a fresh different-employer `VERIFIED` link; rejection records `MANUAL_REVIEW_REJECTED` without a link mutation;
+6. persist the controlled reason, reviewer, decision time, selected employee/source evidence when approved, and PII-safe audit outcome in the same transaction.
+
+A prior-month review or a review bound to a replaced authoritative batch returns a stable stale-review conflict and requires fresh Customer verification. Import-time reconciliation never resolves or mutates a pending review. It keeps the Partner Company row as its first business lock, locks and re-reads each candidate link, and refreshes only a row that remains `VERIFIED` for that company. It does not acquire the Customer-wide advisory lock after the company lock, so an import cannot invert the verification lock order or restore a displaced historical relationship.
+
+---
+
+## 10. Identity Security Flows and Post-Commit Notification
+
+### Registration, Verification, and Password Recovery
+
+Identity separates transactional credential state from external delivery. Customer registration synchronously calls Customer through an output port and boundary adapter; Customer creation, Identity User/role association, and the digest-only verification token commit together. Only after the transactional service returns does the orchestrator call Notification. A registration or token-write failure therefore produces no email; a transport failure leaves the committed account and token available for the supported recovery flow.
+
+Email-verification resend and password-reset issuance lock the User, revoke an older unused token, and store a replacement digest in their own Identity transaction. Confirmation locks the exact digest-addressed token and User. Email confirmation returns successfully for a consumed token only when the User is already verified; otherwise it rejects revoked or expired authority before marking verified and consuming the token. Password reset instead requires an active, email-verified User and an unconsumed, unrevoked, unexpired token, then atomically replaces the password, consumes the token, clears login protection, and revokes refresh sessions. Raw secrets remain transient; neither database audit nor durable `event_publication` contains a token-bearing message.
+
+The four delivery purposes are Customer verification, password reset, Staff setup, and existing-Customer digital-access invitation. Identity-owned output ports call Notification's purpose-specific input contracts through infrastructure adapters. Notification renders a controlled template and invokes its email-sender port; SMTP remains an output adapter. It does not own token validity or credential outcomes. Delivery failure cannot roll back committed Identity/Customer state and does not imply a durable delivery/retry platform.
+
+### Internal User Administration and Staff Setup
+
+Protected Staff User and predefined-role discovery plus status and role-assignment commands use `/api/v1/admin/internal-users` and require exact `identity:user:manage`. Identity returns a purpose-limited Staff projection and excludes Customer Users and credential internals.
+
+Staff provisioning uses the same protected boundary. Identity validates an unused normalized email and predefined non-Customer roles, then persists a Staff User without a Customer association, its role assignments, a digest-only password-reset token, and actor-bound PII-safe creation and role-grant audit evidence in one transaction. The placeholder password is an unguessable hash. Administrative provisioning marks the Staff email verified in Identity; Customer email verification remains separate. After commit, Identity calls a purpose-limited Notification contract that sends the setup fragment link to Internal Web. An explicit Staff-only resend locks the User, replaces an older unused token, and sends after commit. Delivery failure does not reverse durable Identity state; the administrator can request another link. The existing password-reset confirmation consumes the token, replaces the password, and revokes refresh sessions.
+
+Every status and role command locks the target User before validating that it is internal Staff and before touching `role_assignments`. A same-target request returns the current projection without persistence, timestamp, version, session, or audit effects. A real change updates `users.updated_at` and increments `authorization_version` once. Role changes retain refresh sessions for an active User; a status change to `SUSPENDED` or `DISABLED` revokes all target-User refresh sessions in the same transaction. Reactivation increments the version but never restores a revoked token family. The audit entry records the authenticated actor, `IDENTITY_USER` target ID, controlled action, and status or role code without email or credential data.
+
+### Existing Customer Digital Access
+
+The protected Staff Customer-intake activation and status routes require exact `customer:intake:manage` and an authenticated Staff User without a Customer association. Identity owns the User link and credential state. Its consumer-owned Customer verification port calls a Customer public application contract; Customer locks the selected aggregate, requires `ACTIVE` and an identity-bearing profile, and matches the presented identity fingerprint without exposing stored raw evidence. An incomplete business profile does not block this identity proof. The submitted reference remains transient and never enters an audit or response.
+
+Identity creates one `CUSTOMER` User for the unchanged `customerId`, a `CUSTOMER` role assignment, an unguessable hashed placeholder secret, independent digest-only email-verification and password-setup tokens, and one actor-bound `IDENTITY_CUSTOMER_DIGITAL_ACCESS_ENABLED` audit outcome in one transaction. The Customer lock serializes competing activation attempts for that Customer, while unique normalized-email and Customer mapping constraints remain final database authorities. An insert conflict is classified without querying inside an aborted transaction. No Customer or Loan aggregate is written.
+
+After the creation transaction commits, Identity calls its Notification output port to deliver one purpose-specific Customer Web activation fragment link carrying both opaque secrets. Both tokens expire together under the email-verification lifetime; the setup token uses existing password-reset persistence. Delivery failure leaves the linked User and both tokens durable. Email confirmation precedes first-password setup through the existing password-reset confirmation, which requires verified email and owns password hashing, consumption, login-protection reset, and refresh-session revocation. No second credential mutation path or onboarding status is introduced; Staff never chooses or learns the Customer password. The Staff client reconciles an unknown command result with the protected digital-access read and does not automatically repeat the creation command. Customer-owned Loan reads use the original `customerId`; historical `STAFF_ASSISTED` applications retain their channel and have no manufactured digital action.
+
+---
+
+## 11. OCR Processing and Review
+
+Document creates an explicit job for an exact current intake version after Loan's open-case authorization. Queue processing is asynchronous; Staff review finalization is a separate Document transaction. Applying finalized suggestions populates Staff form inputs, and the existing Customer or Loan command remains the authoritative business mutation.
+
+[MER-ARCH-005](MER-ARCH-005-ocr-architecture.md) owns the queue lease/recovery model, case → document → result review lock order, current-version/expected-result guards, encrypted result/review handling, and manual fallback. [MER-DB-001](../database/MER-DB-001-data-model-and-erd.md#67-document) owns the logical job/result/review relationships. Worker disablement is a deployment choice and does not change these ownership or advisory boundaries.
+
+---
+
+## 12. Replay, Concurrency, and Failure Boundaries
+
+### Transaction and Event Participation
+
+Application services own transaction boundaries. Synchronous provider application calls participate in the coordinated outcome where partial persistence would be invalid. Approval publishes structured outcomes through plain synchronous `@EventListener` adapters into Loan input ports; this applies to recommendation and decision outcomes, including offer generation and correction continuation. These are not after-commit notifications. A required Loan, Document, history, or audit failure rolls back the source Approval record and every participating write.
+
+Business audit uses a synchronous listener and a recording service with mandatory transaction propagation. Required PII-safe audit entries and operation correlation commit with the originating transition. A failed audit write prevents success; audit is not the read projection or replacement source for workflow provenance. There is no independently committed audit success that can legitimize a rolled-back financial result.
+
+External file storage is not a database participant. Document stages uploads, validates replay under the operation's ownership and baseline locks, and promotes new content only after a clean mandatory malware scan. Unsafe content and scanner unavailability fail closed. Exact stored upload replay returns before promotion/scanning. Rollback cleanup removes newly promoted objects; staged content is discarded, and orphan checks protect references across Document's evidence families. Upload size/media/HTTP contracts belong in API-001.
+
+Durable asynchronous event publication and configured startup republication are infrastructure recovery mechanisms. They do not change the synchronous Approval/audit boundaries above or guarantee delivery/retry for secret-bearing Notification commands. Any decoupled consumer must define its own idempotency and recovery semantics.
+
+### Request Identity and Unknown Results
+
+Request UUIDs are operation-specific business identities, not a universal HTTP idempotency layer. Where a command defines replay, it validates the same actor, subject, evidence/baseline, and logical content according to that command before returning the stored outcome. Conflicting identity reuse fails without a second effect. Some commands revalidate current case/version or product evidence before replay; exact replay is not permission to bypass those guards.
+
+A lost response is an unknown result. Preserve the original request identity and logical content when exact replay is supported. An ordinary query can reconcile durable state but does not prove that a particular unresolved request succeeded. Commands without a business UUID, including verification/review starts and Approval actions, require a purpose-limited re-read and deliberate new confirmation rather than automatic command repetition. Idempotent field/target operations and non-UUID terminal replays retain their own documented semantics.
+
+### Concurrency and Financial Failure Boundaries
+
+Use the operation-specific lock sequences in the preceding sections. Existing-application financial commands acquire request serialization before workflow and aggregate locks; origination and standalone limit refresh have different Customer/product or Customer/link ordering. No generic lock template overrides those exceptions. Database uniqueness, immutable history, and deferred reconciliation are final integrity guards; commit-time failure must roll back the complete business outcome, including financial movements, history, and audit.
+
+Time-sensitive commands use the injected UTC clock. Where one operation needs a common instant/date, derive them from one sample; normalize immutable servicing timestamps consistently across relational and JSON evidence. Reads must not repair contradictory records or infer missing actors, financial evidence, or consumed versions.
+
+### Loan Product Administration
+
+Protected Loan Product administration is separate from the active Customer-safe catalogue and requires its dedicated administration authority.
+
+The administration query loads active and inactive products in deterministic product-code order without requiring an active pricing or checklist policy. The protected projection contains product identity and presentation facts plus activation and amount limits; it does not reuse the public policy assembly.
+
+An amount-limit or activation command opens one application transaction, locks the product row by stable product code, validates the target state, persists only the supported mutable facts, updates `updated_at`, and records the authenticated actor through the shared business-audit mechanism. A same-value target returns the locked current product without persistence, timestamp, or audit effects. Activation affects future catalogue discovery and submission only; historical lending evidence is not rewritten.
 
 ---
 
@@ -929,23 +792,3 @@ flowchart LR
 Flyway owns schema evolution. JPA repositories access the resulting tables and hydrate persistence entities. Persistence adapters translate those entities into domain models before application mapping.
 
 Released migrations are append-only. Runtime code must not depend on Hibernate schema generation as the database authority.
-
----
-
-## 14. Runtime Rules Summary
-
-- Security authenticates the request before the controller.
-- Controllers invoke input ports and translate HTTP concerns.
-- Application services resolve the authenticated actor, enforce ownership and business rules, and own transaction boundaries.
-- Application services call output ports, not adapter implementations.
-- Persistence adapters implement repository ports and map persistence entities to domain models.
-- Boundary adapters implement consumer-owned ports and call provider public contracts.
-- Mappers produce DTOs after the application result is complete.
-- Customer-owned identity comes from authentication, not from trusted request fields.
-- Staff-assisted commands authenticate Staff and carry the selected Customer separately as the business subject; they must not impersonate Customer self-service.
-- Origination-channel checks happen before shared Loan mutation logic, and Salary Advance has no Staff-assisted origination path.
-- Document owns paper intake evidence and authorizes it through a purpose-limited Loan intake boundary rather than correction-task proof.
-- Reads remain side-effect-free unless the endpoint explicitly defines a command.
-- Commands define lock order, idempotency, failure mapping, and audit behavior.
-- Flyway owns database schema changes.
-- Exact request and response contracts remain in `MER-API-001`; canonical error definitions remain in `MER-ARCH-004`.

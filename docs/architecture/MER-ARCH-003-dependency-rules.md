@@ -92,7 +92,7 @@ The following remain internal unless an owning architecture decision explicitly 
 
 Java `public` visibility alone does not make a type a cross-module contract. A published contract must be deliberate, stable, and placed in a package intended for collaboration.
 
-Spring Modulith named interfaces, package visibility, or ArchUnit rules may enforce module surfaces. Exact declarations remain in executable source rather than being duplicated here.
+Spring Modulith named interfaces, package visibility, or ArchUnit rules are possible enforcement mechanisms. Their presence must not be inferred from dependencies or Java visibility; Section 9 defines the executable coverage boundary.
 
 ---
 
@@ -149,7 +149,7 @@ Meridian uses one of two explicit reliability models:
 
 Business-critical coordination must not rely on fire-and-forget delivery.
 
-Audit and Notification consume published facts without becoming authorities over the workflow that produced them.
+Audit consumes published facts without becoming the authority over the workflow that produced them. Notification's supported security emails instead use purpose-specific public contracts after Identity commits. Secret-bearing delivery inputs must remain transient, outside durable event schemas. Runtime timing and rollback consequences belong in [MER-ARCH-006](MER-ARCH-006-api-request-flow-and-dependencies.md).
 
 ---
 
@@ -188,7 +188,7 @@ Product-specific lending code remains inside `loan`. Top-level feature modules f
 
 Document application code owns OCR job creation through Document ports and persistence adapters. The external Python worker keeps Google Document AI behind its provider-neutral `OcrProvider` boundary. Loan may consume Document's published readiness contract but must not import, call, or persist an OCR provider or OCR result directly.
 
-Audit and Notification consume published event schemas through their own inbound adapters. They must not import producer internals or command the workflow that produced an event.
+Audit consumes published event schemas through its inbound adapter. Notification accepts its supported security messages through public application contracts and keeps transport behind its own output port. Neither may import producer internals or command the originating workflow.
 
 `MER-ARCH-001` remains authoritative for the underlying business ownership.
 
@@ -235,16 +235,25 @@ Detailed HTTP disclosure, sensitive-value handling, and request-specific securit
 
 Mechanically checkable rules belong in `ArchitectureRulesTest` or focused architecture-test classes and run in the normal Maven verification lifecycle.
 
-The executable architecture-test baseline is narrower than the rule catalogue. `ArchitectureRulesTest` proves domain isolation from Spring, JPA, application and infrastructure; application isolation from infrastructure; domain and application isolation from concrete security/JWT implementation; and `shared` independence from feature modules. Repository dependencies on Spring Modulith do not by themselves enforce named interfaces, legal module dependencies, or cycle rules. Every other catalogue entry remains normative but relies on focused tests or code review until an executable rule proves it.
+The catalogue's intended enforcement column is a design requirement, not a coverage claim. `ArchitectureRulesTest` mechanically checks:
+
+- domain isolation from Spring, JPA, application, and infrastructure;
+- application isolation from infrastructure;
+- domain/application isolation from Spring Security, JWT libraries, and Identity security implementation;
+- `shared` independence from feature modules;
+- Identity domain/application isolation from Customer, Notification, and mail transport;
+- Notification application isolation from mail transport.
+
+Feature-module public surfaces, legal inter-feature imports, named interfaces, and module cycles are not fully mechanically enforced. Neither Spring Modulith dependencies nor the checks above prove those boundaries. Web/event adapter restrictions, foreign-persistence isolation, and product placement also require review beyond these checks. The durable law in Sections 1–8 still applies; focused workflow tests prove particular runtime outcomes, not universal module conformance. Source conformance and delivery status belong in the follow-up register.
 
 | Mechanism | Responsibility |
 |---|---|
 | Compiler and package visibility | Block accidental access to non-public types |
-| ArchUnit | Layer imports, shared independence, security isolation, web boundaries, product placement, and cycles |
-| Spring Modulith or equivalent rules | Module public surfaces and legal module dependencies |
-| Unit and integration tests | Transactions, event failure behavior, adapter translation, persistence isolation, and privacy |
-| Code review | Semantic ownership, purpose limitation, and rules that cannot be checked mechanically |
-| CI | Run architecture and verification tests on protected changes |
+| `ArchitectureRulesTest` / ArchUnit | The concrete import prohibitions listed above |
+| Spring Modulith metadata or dependencies | Do not establish public-surface, legal-dependency, or cycle proof without executable verification |
+| Focused unit and integration tests | Operation-specific transactions, event failure behavior, adapter translation, integrity, and privacy; coverage is limited to each tested assertion |
+| Code review | Published-contract intent, legal inter-feature access, cycles, adapter/persistence boundaries, product placement, semantic ownership, and purpose limitation beyond executable checks |
+| CI | Run the configured checks; passing CI does not prove untested catalogue entries |
 
 A rule must not be described as automatically enforced unless an executable test exists. Narrow negative rules are preferred over brittle framework allowlists or unreliable heuristics.
 

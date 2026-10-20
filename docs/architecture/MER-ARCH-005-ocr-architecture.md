@@ -19,6 +19,7 @@ Implementation status belongs in the project roadmap and follow-up register.
 - a provider-neutral Python service for model execution
 - OCR result and confidence persistence
 - authorized review of OCR-assisted results
+- explicit application of finalized reviewed suggestions to Staff form inputs before an owning Customer or Loan command
 - retry and worker-recovery behavior
 - trace correlation between Spring Boot and OCR workers
 
@@ -177,6 +178,8 @@ sequenceDiagram
 
 Upload does not create an OCR job. An authorized Staff user explicitly requests extraction for an already uploaded current immutable intake version. Repeating the request for the same version returns the same logical job and does not wait for OCR completion.
 
+Creation locks the open Loan-owned intake case through Document's boundary port, then the logical intake document. It verifies the exact current version before reusing or inserting the unique version-bound job and its PII-safe audit in one transaction. Worker result insertion and the job's `COMPLETED` transition are atomic. Completion or failure recording requires the same unexpired processing lease owner, so a displaced worker cannot overwrite the recovered job's outcome.
+
 ---
 
 ## 7. Result Ownership and Review
@@ -204,7 +207,11 @@ An authorized Staff reviewer receives only the allowlisted structured suggestion
 
 The browser contract does not disclose raw OCR text, normalized layout, ciphertext, storage keys, or provider response content. A historical result remains readable through its case/evidence/version relationship, but only the current version of an open assisted-intake case may receive a new review.
 
+Finalization locks the open intake case, logical document, and OCR result in that order, rechecks the current version and expected result identity, and validates the evidence-type field allowlist. The immutable encrypted review, result disposition, and PII-safe audit commit together; a downstream failure rolls them back. Replay is checked only after those current-case/version guards, so an identical field map does not bypass a closed intake or superseded version.
+
 Reviewed values remain advisory Document evidence. Staff Web may explicitly copy `reviewedFields` from a finalized review into route-local Customer, bank-account, UCL, or Collateral form inputs for the exact reviewed evidence version. Staff verifies and may edit those values before invoking the existing owning Customer or Loan command. Document and the OCR worker must not directly mutate Customer or Loan state, submit an owning command, or apply consent, verification, evidence decisions, readiness, recommendation, approval, or lending decisions.
+
+Staff Web offers application only in the open-intake workspace and tracks the source evidence version for copied values. When refreshed evidence or replacement reveals a changed version, it removes stale copied values that Staff has not edited. The owning command still validates its authoritative state; copying suggestions does not create a second business-mutation path or an OCR-owned application record. OCR review cannot establish a Customer offer response or contract acknowledgment. A disabled worker is a deployment configuration, not an absence of this architecture; manual intake remains available within the same ownership boundaries.
 
 ---
 
@@ -254,9 +261,9 @@ The OCR capability requires conceptual records for:
 ### OCR Review
 
 - result identifier
-- reviewer identity
-- reviewed or corrected values
-- controlled review outcome
+- authenticated Staff reviewer identity
+- encrypted allowlisted reviewed or corrected values
+- result disposition before finalization
 - review timestamp
 
 Exact tables, columns, constraints, and indexes belong in database design and migrations.
