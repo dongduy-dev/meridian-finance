@@ -2,17 +2,26 @@
 
 ## Meridian Lending Platform
 
-Meridian is a fictional engineering portfolio/demo of a multi-product lending platform built around a common lending lifecycle and product-specific policies. Salary Advance is the flagship workflow, with streamlined Unsecured Consumer Loan and Collateral Loan workflows built on the same lending core.
+Meridian is a multi-product lending platform built around a common lending lifecycle and product-specific policies. Salary Advance is the flagship workflow, with streamlined Unsecured Consumer Loan and Collateral Loan workflows built on the same lending core.
 
-Meridian helps lending teams manage the full journey from application through servicing and closure. Product workflows combine automated processing with controlled human review where business decisions or document verification require it. The platform is designed around practical financial software concerns such as auditability, security, data integrity, controlled state transitions, maker-checker controls, document traceability, and clear operational ownership.
-
-The complete Meridian platform combines a Java and Spring Boot modular monolith, backed by PostgreSQL, with React/Vite client applications and Python/FastAPI OCR processing. Meridian applies Domain-Driven Design and Practical Hexagonal Architecture within clearly defined bounded contexts. This approach enables rapid delivery within a cohesive platform while preserving clear boundaries and an evolutionary path toward selective distributed service extraction when justified by business requirements, scale, or operational ownership.
-
-The deployed portfolio serves [Customer Web](https://meridianfinance.dev) and [Internal Web](https://internal.meridianfinance.dev) through Cloudflare Pages, with the [API](https://api.meridianfinance.dev) routed through an authenticated Cloudflare Tunnel to the AWS backend runtime. Meridian is a fictional public portfolio/demo, not a real financial service. Public Customer registration and uploads are intentional; visitors must use fictional information, and submitted data is still handled as private. Staff operations require Meridian authentication and RBAC, with credentials shared privately only with trusted reviewers. OCR is a platform capability but is intentionally disabled in the deployed portfolio runtime. [MER-DEP-001](docs/deployment/MER-DEP-001-identity-bootstrap-and-demo-boundary.md), [MER-DEP-002](docs/deployment/MER-DEP-002-cloudflare-edge-and-aws-runtime.md), and [MER-DEP-003](docs/deployment/MER-DEP-003-portfolio-operations-and-recovery.md) own the detailed demo policy, edge/runtime contract, and operations/recovery procedures.
+Meridian covers the lending journey from origination through servicing and closure across Customer-digital and Staff-assisted channels. Product-specific rules remain inside a shared lending core, while document verification, controlled human review, maker-checker approval, and explicit operational ownership protect the workflow.
 
 ---
 
-## Key Features
+## Live Platform
+
+| Surface | Live address | Access                                                      |
+|---|---|-------------------------------------------------------------|
+| **Customer Web** | [meridianfinance.dev](https://meridianfinance.dev) | Customer self-service - Public registration                 |
+| **Internal Web** | [internal.meridianfinance.dev](https://internal.meridianfinance.dev) | Staff workspace - Available to trusted reviewers by request |
+| **API** | [api.meridianfinance.dev](https://api.meridianfinance.dev) | Backend API edge                                            |
+
+Customer Web and Internal Web are served through Cloudflare Pages, while API traffic is routed through an authenticated Cloudflare Tunnel to the AWS backend runtime. 
+Note: OCR is implemented as a platform capability but is intentionally disabled in the public portfolio runtime.
+
+---
+
+## Platform Overview
 
 ### Lending Products
 
@@ -22,6 +31,8 @@ The deployed portfolio serves [Customer Web](https://meridianfinance.dev) and [I
 
 All three products use Meridian's common application, approval, contract, activation, servicing, and closure lifecycle while retaining product-specific rules.
 
+### Lending Lifecycle and Capabilities
+
 ```text
 Customer-digital / Staff-assisted origination → evidence and verification
 → Loan Officer review and recommendation → independent Approver decision
@@ -29,18 +40,12 @@ Customer-digital / Staff-assisted origination → evidence and verification
 → manual disbursement and activation → servicing and repayment → settlement and closure
 ```
 
-### Platform Capabilities
-
-* **Common Lending Lifecycle**: A shared `LoanApplication` lifecycle coordinates submission, verification, review, approval, Customer response, contract readiness, disbursement, and `LoanAccount` activation.
 * **Digital and Staff-Assisted Origination**: Customer Web supports direct Customer origination for all three products. Staff Web supports paper-originated UCL and Collateral Loan through assisted Customer intake, paper evidence capture, Customer-sourced corrections, and evidenced Customer decisions. The authenticated Staff user remains the actor while the Customer remains the business subject, and a branch-originated application remains Staff-assisted rather than switching to Customer Web. Salary Advance origination remains Customer-digital only.
 * **Document and OCR-Assisted Processing**: Document owns document checklists, uploads, immutable versions, review, replacement, waiver, and processing readiness. OCR-assisted processing remains advisory, while authorized Document review remains authoritative.
 * **Review, Correction, and Approval**: Loan owns application review and correction workflows. Loan Officers record recommendations, while Approvers make independent decisions under maker-checker controls.
 * **Offers, Contracts, and Disbursement**: Loan preserves accepted lending terms through immutable offers, versioned contracts, Customer acknowledgment, readiness checks, and controlled disbursement activation.
 * **Loan Servicing**: Salary Advance, UCL, and Collateral Loan share repayment, overdue evaluation and cure, contractual payoff, payment-backed Administrative Full-Balance Settlement, and separate administrative closure.
 * **Identity and Access Control**: Identity manages Customer and internal-user authentication, session lifecycle, account recovery, roles, permissions, and access boundaries. A Staff-assisted Customer may exist without a Customer Web login; authorized Staff remain the authenticated actor while the Customer remains the business subject. Permission-based RBAC, Customer ownership checks, and purpose-limited contracts protect Customer and internal operations.
-* **Transactional Safety**: Critical financial commands use atomic state changes, operation-specific request identities, semantic replay validation, and concurrency controls.
-* **Immutable Audit Trail**: Ordered lifecycle history and append-only, PII-safe business audit evidence preserve traceability.
-* **Sensitive Data Protection**: AES-GCM protects selected Customer-sensitive values and immutable Loan disbursement bank-account snapshots at rest, while purpose-limited access and restricted or masked responses limit PII exposure.
 
 ### User Roles
 
@@ -51,6 +56,150 @@ Customer-digital / Staff-assisted origination → evidence and verification
 | **Approver** | Records the independent application decision, may return work for review or correction, and performs authorized Loan-owned Administrative Full-Balance Settlement. |
 | **Accounting Officer** | Prepares operational contracts, confirms readiness and external transfer evidence, records authorized repayments, and closes eligible settled LoanAccounts. |
 | **Back-Office Admin** | Administers products, Partner data and imports, internal users, and predefined role assignments. |
+
+---
+
+## Engineering Highlights
+
+* **Modular domain architecture**: Meridian uses a Spring Boot/Spring Modulith modular monolith with Domain-Driven Design and Practical Hexagonal Architecture. Cross-context collaboration uses narrow application contracts rather than shared persistence ownership.
+* **Transactional correctness and concurrency**: Critical financial commands use atomic state changes, operation-specific request identities, semantic replay validation, and concurrency controls.
+* **Evidence and auditability**: Document versions remain immutable, lifecycle history is ordered, and business audit evidence is append-only and PII-safe.
+* **Security and data protection**: Identity owns authentication and RBAC, while Customer ownership checks and purpose-limited contracts constrain access. AES-GCM protects selected Customer-sensitive values and immutable Loan disbursement bank-account snapshots at rest.
+* **Human-authoritative OCR**: The Python/FastAPI OCR subsystem produces advisory extracted results for Staff review. Reviewed values flow through the existing Customer and Loan commands instead of bypassing domain rules.
+* **Deployment and recovery discipline**: The deployed portfolio uses Cloudflare edge routing, a private AWS backend runtime, fail-closed ClamAV upload scanning, non-root containers, persistent encrypted storage, exact release identity, matched backups, and isolated restore verification.
+
+---
+
+## Architecture
+
+### Architecture Principles
+
+| Principle | Implementation |
+|---|---|
+| **Architecture Style** | Modular Monolith (Spring Modulith) |
+| **Internal Design** | Hexagonal Architecture (Ports & Adapters) |
+| **Domain Modeling** | Domain-Driven Design (Bounded Contexts) |
+| **Dependency Direction** | Inward-only — Infrastructure adapters → Application ports/services → Domain |
+| **Boundary Enforcement** | Architecture documents define the intended module law. ArchUnit tests enforce core layer, security, and shared-kernel rules. |
+| **Module Communication** | Narrow public application contracts support synchronous collaboration. Transaction-aware coordination preserves atomic outcomes, while durable asynchronous delivery requires explicit retry, recovery, and idempotency. |
+| **Selective Extraction** | Bounded contexts and published contracts preserve selective extraction options. A service is extracted only when stable boundaries, scale, or operational ownership justify it. |
+
+### Complete Platform Architecture
+
+```text
+┌──────────────────────────────────────────────────────────────────────────────┐
+│                                   CLIENTS                                    │
+│                   React/Vite Customer Web  ·  Internal Web                   │
+└──────────────────────────────────────┬───────────────────────────────────────┘
+                                       │ HTTPS
+                                       ▼
+┌──────────────────────────────────────────────────────────────────────────────┐
+│                         API EDGE / SECURITY LAYER                            │    
+│              Spring Security  ·  JWT (RS256)  ·  RBAC  ·  CORS               │
+└──────────────────────────────────────┬───────────────────────────────────────┘
+                                       │
+┌──────────────────────────────────────▼──────────────────────────────────────┐
+│                    MODULAR MONOLITH (Spring Boot + Spring Modulith)         │
+│                                                                             │
+│  ┌────────────────────┐ ┌────────────────────┐ ┌────────────────────────┐   │
+│  │ Identity & Access  │ │ Customer Management│ │ Partner Management     │   │
+│  └────────────────────┘ └────────────────────┘ └────────────────────────┘   │
+│                                                                             │
+│  ┌────────────────────┐ ┌────────────────────┐ ┌────────────────────────┐   │
+│  │ Loan Core /        │ │ Approval Workflow  │ │ Document Management    │   │
+│  │ Lending Lifecycle  │ │                    │ │ + OCR Boundary         │   │
+│  └────────────────────┘ └────────────────────┘ └────────────────────────┘   │
+│                                                                             │
+│  ┌─────────────────────────────────────────────────────────────────────┐    │
+│  │ Audit & Compliance Controls                                         │    │
+│  │ Append-only PII-safe audit evidence · Ordered lifecycle history     │    │
+│  └─────────────────────────────────────────────────────────────────────┘    │
+│                                                                             │
+│  ┌─────────────────────────────────────────────────────────────────────┐    │
+│  │ Notification · Controlled Identity security email over SMTP         │    │
+│  └─────────────────────────────────────────────────────────────────────┘    │
+│                                                                             │
+│       Public contracts · Transaction-aware coordination · Events            │
+│       Spring Modulith transactional event-publication persistence           │
+│       Logging foundation · Actuator observability · ArchUnit                │
+└──────────────────────────────────────┬──────────────────────────────────────┘
+                                       │
+                  ┌────────────────────┼────────────────────┐
+                  ▼                    ▼                    ▼
+      ┌──────────────────┐   ┌────────────────┐   ┌──────────────────────┐
+      │ PostgreSQL       │   │ File Storage   │   │ OCR Service          │
+      │ Module data      │   │ Document       │   │ Python + FastAPI     │
+      │ Event evidence   │   │ uploads and    │   │ Provider-neutral     │
+      │ Audit evidence   │   │ OCR inputs     │   │ Google Document AI   │
+      └──────────────────┘   └────────────────┘   └──────────────────────┘
+```
+
+### Bounded Contexts
+
+| Context | Responsibility |
+|---|---|
+| **Identity & Access** | Customer registration, existing-Customer digital access, User identity, credentials and email-verification state, JWT access, roles, permissions, and the complete platform's session lifecycle. |
+| **Customer Management** | Customer lifecycle, profile readiness, mutable source bank accounts, ownership controls, and protection of Customer data. |
+| **Partner Management** | Partner Companies, Partner Employees, monthly imports, employment matching, and reusable Salary Advance employment links. |
+| **Loan Core / Lending Lifecycle** | Product policies, LoanApplication state, product verification, review and correction cycles, offers, contracts, activation, LoanAccount servicing, contractual payoff, Administrative Full-Balance Settlement, and administrative closure. |
+| **Approval Workflow** | Immutable Loan Officer recommendations, independent Approver decisions, decision authority, and maker-checker evidence. |
+| **Document Management** | Checklists, uploads, immutable versions, manual document review, readiness, storage, and advisory OCR-assisted processing. |
+| **Audit & Compliance Controls** | Append-only, PII-safe evidence of important business actions and compliance-oriented history. |
+| **Notification** | Controlled rendering and post-commit SMTP delivery for Identity security email. Broader channels, preferences, durable delivery status, and retry management belong to future scope. |
+
+---
+
+## Technology Stack
+
+### Backend
+
+| Technology | Purpose |
+|---|---|
+| **Java 25** | Backend runtime |
+| **Spring Boot 4.1.0** | Application framework |
+| **Spring Modulith 2.1.0** | Module organization, observability support, and transactional event-publication persistence |
+| **Spring Security** | Authentication & authorization |
+| **Spring Mail** | Notification-owned SMTP delivery for controlled Identity security email |
+| **Spring Data JPA / Hibernate** | Data persistence |
+| **Flyway** | Versioned database migrations |
+| **ArchUnit** | Executable fitness functions for core layer, security, and shared-kernel rules |
+| **JWT (RS256)** | Access-token authentication with asymmetric signing |
+| **Springdoc OpenAPI** | Generated OpenAPI documentation and Swagger UI for the backend API |
+
+### Frontend
+
+| Technology | Purpose |
+|---|---|
+| **React** | Customer Web, plus Staff Web and Back-Office Administration within Internal Web |
+| **Vite** | Frontend build tooling |
+
+### OCR / Document Intelligence
+
+| Technology | Purpose |
+|---|---|
+| **Python + FastAPI** | Provider-neutral OCR service, operational health API, and PostgreSQL-backed worker |
+| **Google Document AI Enterprise Document OCR** | Selected advisory OCR provider adapter for controlled intake evidence |
+
+### Database
+
+| Technology | Purpose |
+|---|---|
+| **PostgreSQL** | Primary relational store for ACID transactions, concurrency control, durable event publication, and asynchronous job queues (SKIP LOCKED) |
+
+### Infrastructure
+
+| Technology | Purpose |
+|---|---|
+| **Docker Compose** | Local application, PostgreSQL, Mailpit SMTP capture, ClamAV, and opt-in OCR worker profile |
+| **GitHub Actions** | CI pipeline (build, test, architecture verification) |
+| **SLF4J + Logback** | Structured JSON logging |
+
+### Development Tools
+
+| Tool | Purpose |
+|---|---|
+| **Git / GitHub** | Version control |
+| **Postman** | API testing |
 
 ---
 
@@ -78,7 +227,8 @@ shared · identity · customer · partner · loan · approval · document · aud
 
 `shared` is a technical shared kernel, not a bounded context. [MER-ARCH-002](docs/architecture/MER-ARCH-002-project-structure.md) defines source and package structure; [MER-ARCH-003](docs/architecture/MER-ARCH-003-dependency-rules.md) defines legal dependencies and architecture enforcement.
 
-### Local Runtime Topology
+<details>
+<summary>Local runtime topology</summary>
 
 ```text
 Browser
@@ -103,6 +253,8 @@ Browser
 
 Compose does not start the frontend development servers. Both use `VITE_API_BASE_URL=http://localhost:8080/api/v1`, and the backend local CORS configuration allows the Customer Web and Internal Web origins.
 
+</details>
+
 ### Backend Environment
 
 Docker is the only runtime prerequisite for the backend Compose path. Compose builds Meridian with the Maven wrapper, starts PostgreSQL 16, Mailpit, and ClamAV, runs Flyway during normal Spring Boot startup, and persists PostgreSQL and Document filesystem data in named volumes. Meridian startup waits for healthy PostgreSQL and ClamAV.
@@ -121,8 +273,6 @@ Useful local endpoints:
 - Mailpit UI: `http://localhost:8025`
 
 Historical demo credentials are disabled by Flyway V73. Register Customer demo accounts through Customer Web and verify their email in Mailpit. Establish the first Back-Office Admin through the opt-in [Identity bootstrap procedure](docs/deployment/MER-DEP-001-identity-bootstrap-and-demo-boundary.md), then create Staff accounts through `/admin/users` and their emailed password-setup links. No shared Staff password is provided.
-
-The separate [Cloudflare edge and AWS runtime contract](docs/deployment/MER-DEP-002-cloudflare-edge-and-aws-runtime.md) defines deployed hostnames, Tunnel-only API access, private container storage/networking, and operator validation. These Compose instructions are for local development.
 
 The OCR worker is opt-in:
 
@@ -200,141 +350,6 @@ The local backend allows `http://localhost:5173` and `http://localhost:5174` by 
 Stop the backend environment with `docker compose down`. Named PostgreSQL and Document volumes are preserved. `docker compose down -v` removes them and should be used only for an intentionally disposable local environment.
 
 </details>
-
----
-
-## Architecture
-
-### Architecture Principles
-
-| Principle | Implementation                                                                                                                                                                                                           |
-|---|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| **Architecture Style** | Modular Monolith (Spring Modulith)                                                                                                                                                                                       |
-| **Internal Design** | Hexagonal Architecture (Ports & Adapters)                                                                                                                                                                                |
-| **Domain Modeling** | Domain-Driven Design (Bounded Contexts)                                                                                                                                                                                  |
-| **Dependency Direction** | Inward-only — Infrastructure adapters → Application ports/services → Domain                                                                                                                                              |
-| **Boundary Enforcement** | Architecture documents define the intended module law. ArchUnit tests enforce core layer, security, and shared-kernel rules.                                                                                             |
-| **Module Communication** | Narrow public application contracts support synchronous collaboration. Transaction-aware coordination preserves atomic outcomes, while durable asynchronous delivery requires explicit retry, recovery, and idempotency. |
-| **Selective Extraction** | Bounded contexts and published contracts preserve selective extraction options. A service is extracted only when stable boundaries, scale, or operational ownership justify it. |
-
-### Complete Platform Architecture
-
-```text
-┌──────────────────────────────────────────────────────────────────────────────┐
-│                                   CLIENTS                                    │
-│                   React/Vite Customer Web  ·  Internal Web                    │
-└──────────────────────────────────────┬───────────────────────────────────────┘
-                                       │ HTTPS
-                                       ▼
-┌──────────────────────────────────────────────────────────────────────────────┐
-│                         API EDGE / SECURITY LAYER                            │
-│              Spring Security  ·  JWT (RS256)  ·  RBAC  ·  CORS               │
-└──────────────────────────────────────┬───────────────────────────────────────┘
-                                       │
-┌──────────────────────────────────────▼──────────────────────────────────────┐
-│                    MODULAR MONOLITH (Spring Boot + Spring Modulith)         │
-│                                                                             │
-│  ┌────────────────────┐ ┌────────────────────┐ ┌────────────────────────┐   │
-│  │ Identity & Access  │ │ Customer Management│ │ Partner Management     │   │
-│  └────────────────────┘ └────────────────────┘ └────────────────────────┘   │
-│                                                                             │
-│  ┌────────────────────┐ ┌────────────────────┐ ┌────────────────────────┐   │
-│  │ Loan Core /        │ │ Approval Workflow  │ │ Document Management    │   │
-│  │ Lending Lifecycle  │ │                    │ │ + OCR Boundary         │   │
-│  └────────────────────┘ └────────────────────┘ └────────────────────────┘   │
-│                                                                             │
-│  ┌─────────────────────────────────────────────────────────────────────┐    │
-│  │ Audit & Compliance Controls                                         │    │
-│  │ Append-only PII-safe audit evidence · Ordered lifecycle history     │    │
-│  └─────────────────────────────────────────────────────────────────────┘    │
-│                                                                             │
-│  ┌─────────────────────────────────────────────────────────────────────┐    │
-│  │ Notification · Controlled Identity security email over SMTP        │    │
-│  └─────────────────────────────────────────────────────────────────────┘    │
-│                                                                             │
-│       Public contracts · Transaction-aware coordination · Events            │
-│       Spring Modulith transactional event-publication persistence           │
-│       Logging foundation · Actuator observability · ArchUnit                │
-└──────────────────────────────────────┬──────────────────────────────────────┘
-                                       │
-                  ┌────────────────────┼────────────────────┐
-                  ▼                    ▼                    ▼
-      ┌──────────────────┐   ┌────────────────┐   ┌──────────────────────┐
-      │ PostgreSQL       │   │ File Storage   │   │ OCR Service          │
-      │ Module data      │   │ Document       │   │ Python + FastAPI     │
-      │ Event evidence   │   │ uploads and    │   │ Provider-neutral     │
-      │ Audit evidence   │   │ OCR inputs     │   │ Google Document AI   │
-      └──────────────────┘   └────────────────┘   └──────────────────────┘
-```
-
-The diagram shows implemented platform components. The public portfolio runtime omits the OCR service; Mobile and broader Notification capabilities belong to the future roadmap.
-
-### Bounded Contexts
-
-| Context | Responsibility |
-|---|---|
-| **Identity & Access** | Customer registration, existing-Customer digital access, User identity, credentials and email-verification state, JWT access, roles, permissions, and the complete platform's session lifecycle. |
-| **Customer Management** | Customer lifecycle, profile readiness, mutable source bank accounts, ownership controls, and protection of Customer data. |
-| **Partner Management** | Partner Companies, Partner Employees, monthly imports, employment matching, and reusable Salary Advance employment links. |
-| **Loan Core / Lending Lifecycle** | Product policies, LoanApplication state, product verification, review and correction cycles, offers, contracts, activation, LoanAccount servicing, contractual payoff, Administrative Full-Balance Settlement, and administrative closure. |
-| **Approval Workflow** | Immutable Loan Officer recommendations, independent Approver decisions, decision authority, and maker-checker evidence. |
-| **Document Management** | Checklists, uploads, immutable versions, manual document review, readiness, storage, and advisory OCR-assisted processing. |
-| **Audit & Compliance Controls** | Append-only, PII-safe evidence of important business actions and compliance-oriented history. |
-| **Notification** | Controlled rendering and post-commit SMTP delivery for Identity security email. Broader channels, preferences, durable delivery status, and retry management belong to future scope. |
-
----
-
-## Technology Stack
-
-### Backend
-
-| Technology | Purpose                                                                                    |
-|---|--------------------------------------------------------------------------------------------|
-| **Java 25** | Backend runtime                                                                           |
-| **Spring Boot 4.1.0** | Application framework                                                                      |
-| **Spring Modulith 2.1.0** | Module organization, observability support, and transactional event-publication persistence |
-| **Spring Security** | Authentication & authorization                                                             |
-| **Spring Mail** | Notification-owned SMTP delivery for controlled Identity security email                  |
-| **Spring Data JPA / Hibernate** | Data persistence                                                                           |
-| **Flyway** | Versioned database migrations                                                              |
-| **ArchUnit** | Executable fitness functions for core layer, security, and shared-kernel rules             |
-| **JWT (RS256)** | Access-token authentication with asymmetric signing                                      |
-| **Springdoc OpenAPI** | Generated OpenAPI documentation and Swagger UI for the backend API                         |
-
-### Frontend
-
-| Technology | Purpose |
-|---|---|
-| **React** | Customer Web, plus Staff Web and Back-Office Administration within Internal Web |
-| **Vite** | Frontend build tooling |
-
-### OCR / Document Intelligence
-
-| Technology | Purpose                                                        |
-|---|----------------------------------------------------------------|
-| **Python + FastAPI** | Provider-neutral OCR service, operational health API, and PostgreSQL-backed worker |
-| **Google Document AI Enterprise Document OCR** | Selected advisory OCR provider adapter for controlled intake evidence |
-
-### Database
-
-| Technology | Purpose |
-|---|---|
-| **PostgreSQL** | Primary relational store for ACID transactions, concurrency control, durable event publication, and asynchronous job queues (SKIP LOCKED) |
-
-### Infrastructure
-
-| Technology | Purpose                                              |
-|---|------------------------------------------------------|
-| **Docker Compose** | Local application, PostgreSQL, Mailpit SMTP capture, ClamAV, and opt-in OCR worker profile |
-| **GitHub Actions** | CI pipeline (build, test, architecture verification) |
-| **SLF4J + Logback** | Structured JSON logging                              |
-
-### Development Tools
-
-| Tool | Purpose |
-|---|---|
-| **Git / GitHub** | Version control |
-| **Postman** | API testing |
 
 ---
 
