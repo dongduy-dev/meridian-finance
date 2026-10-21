@@ -10,13 +10,14 @@ Meridian covers the lending journey from origination through servicing and closu
 
 ## Live Platform
 
-| Surface | Live address | Access                                                      |
-|---|---|-------------------------------------------------------------|
-| **Customer Web** | [meridianfinance.dev](https://meridianfinance.dev) | Customer self-service - Public registration                 |
+| Surface | Live address | Access |
+|---|---|---|
+| **Customer Web** | [meridianfinance.dev](https://meridianfinance.dev) | Customer self-service - Public registration |
 | **Internal Web** | [internal.meridianfinance.dev](https://internal.meridianfinance.dev) | Staff workspace - Available to trusted reviewers by request |
-| **API** | [api.meridianfinance.dev](https://api.meridianfinance.dev) | Backend API edge                                            |
+| **API** | [api.meridianfinance.dev](https://api.meridianfinance.dev) | Backend API edge |
 
-Customer Web and Internal Web are served through Cloudflare Pages, while API traffic is routed through an authenticated Cloudflare Tunnel to the AWS backend runtime. 
+Customer Web and Internal Web are served through Cloudflare Pages, while API traffic is routed through an authenticated Cloudflare Tunnel to the AWS backend runtime.
+
 Note: OCR is implemented as a platform capability but is intentionally disabled in the public portfolio runtime.
 
 ---
@@ -61,12 +62,11 @@ Customer-digital / Staff-assisted origination → evidence and verification
 
 ## Engineering Highlights
 
-* **Modular domain architecture**: Meridian uses a Spring Boot/Spring Modulith modular monolith with Domain-Driven Design and Practical Hexagonal Architecture. Cross-context collaboration uses narrow application contracts rather than shared persistence ownership.
 * **Transactional correctness and concurrency**: Critical financial commands use atomic state changes, operation-specific request identities, semantic replay validation, and concurrency controls.
 * **Evidence and auditability**: Document versions remain immutable, lifecycle history is ordered, and business audit evidence is append-only and PII-safe.
 * **Security and data protection**: Identity owns authentication and RBAC, while Customer ownership checks and purpose-limited contracts constrain access. AES-GCM protects selected Customer-sensitive values and immutable Loan disbursement bank-account snapshots at rest.
 * **Human-authoritative OCR**: The Python/FastAPI OCR subsystem produces advisory extracted results for Staff review. Reviewed values flow through the existing Customer and Loan commands instead of bypassing domain rules.
-* **Deployment and recovery discipline**: The deployed portfolio uses Cloudflare edge routing, a private AWS backend runtime, fail-closed ClamAV upload scanning, non-root containers, persistent encrypted storage, exact release identity, matched backups, and isolated restore verification.
+* **Deployment and recovery discipline**: The deployed portfolio uses Cloudflare edge routing, a Tunnel-only AWS backend runtime, fail-closed ClamAV upload scanning, non-root containers, persistent encrypted storage, exact release identity, matched backups, and isolated restore verification.
 
 ---
 
@@ -94,7 +94,7 @@ Customer-digital / Staff-assisted origination → evidence and verification
                                        │ HTTPS
                                        ▼
 ┌──────────────────────────────────────────────────────────────────────────────┐
-│                         API EDGE / SECURITY LAYER                            │    
+│                         API EDGE / SECURITY LAYER                            │
 │              Spring Security  ·  JWT (RS256)  ·  RBAC  ·  CORS               │
 └──────────────────────────────────────┬───────────────────────────────────────┘
                                        │
