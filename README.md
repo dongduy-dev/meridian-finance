@@ -2,9 +2,9 @@
 
 ## Meridian Lending Platform
 
-Meridian is a multi-product lending platform built around a common lending lifecycle and product-specific policies. Salary Advance is the flagship workflow, with streamlined Unsecured Consumer Loan and Collateral Loan workflows built on the same lending core.
+Meridian is a multi-product lending platform built around a common lending lifecycle and product-specific policies. Salary Advance is the flagship workflow, with Unsecured Consumer Loan and Collateral Loan workflows built on the same lending core.
 
-Meridian covers the lending journey from origination through servicing and closure across Customer-digital and Staff-assisted channels. Product-specific rules remain inside a shared lending core, while document verification, controlled human review, maker-checker approval, and explicit operational ownership protect the workflow.
+Meridian covers the lending journey from origination through servicing and closure across Customer-digital and Staff-assisted channels. Product workflows combine automated processing with controlled human review. The platform is designed around practical financial software concerns such as auditability, security, data integrity, controlled state transitions, maker-checker separation, document traceability, and clear operational ownership.
 
 ---
 
@@ -207,86 +207,29 @@ Customer-digital / Staff-assisted origination → evidence and verification
 
 Meridian local development uses one backend environment and two browser applications. Docker Compose runs the Java backend together with PostgreSQL, Mailpit, and ClamAV; an opt-in `ocr` profile adds the Python OCR worker without making Google credentials a prerequisite for the default environment. Customer Web and Internal Web run separately with Vite and call the same backend API at `http://localhost:8080/api/v1`.
 
-### Repository Layout
+Meridian local development uses Docker Compose for the backend environment and separate Vite development servers for Customer Web and Internal Web.
 
-```text
-meridian-finance/
-├── meridian-platform/       # Java/Spring backend, Flyway migrations, and local Compose environment
-├── ocr-service/             # Python/FastAPI OCR worker and provider adapters
-├── customer-web/            # React/Vite Customer Web application
-├── internal-web/            # Shared React/Vite Internal Web application
-├── docs/                    # Business, architecture, API, database, frontend, and project documentation
-└── .github/workflows/       # Backend, frontend, and OCR CI workflows
-```
+**Requirements:** Docker, plus Node.js 22 and npm 10 or newer for the frontends.
 
-Backend modules under `com.meridian.platform` are:
+### Backend
 
-```text
-shared · identity · customer · partner · loan · approval · document · audit · notification
-```
-
-`shared` is a technical shared kernel, not a bounded context. [MER-ARCH-002](docs/architecture/MER-ARCH-002-project-structure.md) defines source and package structure; [MER-ARCH-003](docs/architecture/MER-ARCH-003-dependency-rules.md) defines legal dependencies and architecture enforcement.
-
-<details>
-<summary>Local runtime topology</summary>
-
-```text
-Browser
-  │
-  ├── Customer Web       http://localhost:5173
-  │        │
-  │        └──────────────┐
-  │                       │
-  └── Internal Web       http://localhost:5174
-           │              │
-           └──────────────┤
-                          ▼
-                 Meridian Platform
-                 http://localhost:8080
-                          │
-              ┌───────────┼────────────┬─────────────────┐
-              ▼           ▼            ▼                 ▼
-         PostgreSQL    Mailpit      ClamAV      OCR worker (opt-in)
-           :5432     SMTP :1025      :3310              :8090
-                      UI   :8025
-```
-
-Compose does not start the frontend development servers. Both use `VITE_API_BASE_URL=http://localhost:8080/api/v1`, and the backend local CORS configuration allows the Customer Web and Internal Web origins.
-
-</details>
-
-### Backend Environment
-
-Docker is the only runtime prerequisite for the backend Compose path. Compose builds Meridian with the Maven wrapper, starts PostgreSQL 16, Mailpit, and ClamAV, runs Flyway during normal Spring Boot startup, and persists PostgreSQL and Document filesystem data in named volumes. Meridian startup waits for healthy PostgreSQL and ClamAV.
+From `meridian-platform/`, copy `.env.example` to the ignored `.env`, fill the required local values, then start the backend environment:
 
 ```bash
 cd meridian-platform
-# Copy .env.example to .env and fill the required local secrets.
 docker compose up --build
 ```
 
+Compose starts Meridian with PostgreSQL 16, Mailpit, and ClamAV. Flyway runs during Spring Boot startup, and PostgreSQL and Document data persist in named Docker volumes.
+
 Useful local endpoints:
 
+- API: `http://localhost:8080/api/v1`
 - Backend health: `http://localhost:8080/api/v1/health`
-- OpenAPI: `http://localhost:8080/v3/api-docs`
 - Swagger UI: `http://localhost:8080/swagger-ui.html`
-- Mailpit UI: `http://localhost:8025`
-
-Historical demo credentials are disabled by Flyway V73. Register Customer demo accounts through Customer Web and verify their email in Mailpit. Establish the first Back-Office Admin through the opt-in [Identity bootstrap procedure](docs/deployment/MER-DEP-001-identity-bootstrap-and-demo-boundary.md), then create Staff accounts through `/admin/users` and their emailed password-setup links. No shared Staff password is provided.
-
-The OCR worker is opt-in:
-
-```bash
-docker compose --profile ocr up --build
-```
-
-The profile mounts the Document volume read-only and remains not-ready without the dedicated `MERIDIAN_OCR_RESULT_ENCRYPTION_KEY`, Google project/location/processor configuration, and Application Default Credentials. Local credentials are mounted through a developer-owned Compose override; credential files are never committed. Manual Staff intake remains available while the worker is absent or not ready.
+- Mailpit: `http://localhost:8025`
 
 ### Customer Web
-
-`customer-web/` contains Meridian's responsive Customer Web application. [MER-FE-001](docs/frontend/MER-FE-001-customer-web-blueprint.md) defines its frontend architecture, state ownership, visual language, and accessibility baseline.
-
-Both frontends require Node.js 22 and npm 10 or newer. Copy each package's `.env.example` to `.env` for the separate Vite servers below. Without `VITE_API_BASE_URL`, requests use relative `/api/v1` on the frontend origin.
 
 ```bash
 cd customer-web
@@ -295,13 +238,9 @@ npm ci
 npm run dev
 ```
 
-Customer Web uses `http://localhost:5173` by default and calls the local backend through `VITE_API_BASE_URL=http://localhost:8080/api/v1`.
+Customer Web runs at `http://localhost:5173`. See [`customer-web/README.md`](customer-web/README.md) for frontend configuration and verification commands.
 
 ### Internal Web
-
-`internal-web/` contains Meridian's shared Internal Web application. Staff Web handles Staff-assisted UCL and Collateral Loan intake and origination plus review, approval, correction, contract, disbursement, and repayment under `/staff/*`, while Back-Office Administration handles administrative capabilities under `/admin/*`. The two areas share authentication, session management, protected transport, responsive Internal Web chrome, and common UI foundations while keeping their feature routes, queries, commands, and authorization boundaries separate.
-
-[MER-FE-002](docs/frontend/MER-FE-002-staff-web-blueprint.md) defines Staff Web. [MER-FE-003](docs/frontend/MER-FE-003-back-office-administration-blueprint.md) defines Back-Office Administration.
 
 ```bash
 cd internal-web
@@ -310,30 +249,43 @@ npm ci
 npm run dev
 ```
 
-Internal Web uses `http://localhost:5174` and calls the same local backend through `VITE_API_BASE_URL=http://localhost:8080/api/v1`.
+Internal Web runs at `http://localhost:5174`. See [`internal-web/README.md`](internal-web/README.md) for Staff/Admin setup, frontend configuration, and verification commands.
 
-For either frontend, verification commands are `npm run lint`, `npm run typecheck`, `npm test`, and `npm run build`.
+### Local Accounts and Optional OCR
 
-Use separate browser profiles for simultaneous Customer and Internal sessions; the shared API refresh-cookie family can terminate the other portal's session ([MER-FU-049](docs/project/MER-TRACK-001-follow-up-register.md#mer-fu-049---isolate-customer-web-and-internal-web-browser-sessions)).
+Customers register through Customer Web and verify their email through Mailpit. To establish the first Back-Office Admin and provision Staff accounts, follow [MER-DEP-001](docs/deployment/MER-DEP-001-identity-bootstrap-and-demo-boundary.md).
+
+OCR is optional for local development:
+
+```bash
+cd meridian-platform
+docker compose --profile ocr up --build
+```
+
+The OCR profile requires its dedicated result-encryption key, Google Document AI configuration, and Application Default Credentials. Without the OCR profile, manual Staff intake remains available.
+
+Use separate browser profiles for simultaneous Customer and Internal sessions while [MER-FU-049](docs/project/MER-TRACK-001-follow-up-register.md#mer-fu-049---isolate-customer-web-and-internal-web-browser-sessions) remains deferred.
+
+Stop the backend environment with `docker compose down`. Named PostgreSQL and Document volumes are preserved; `docker compose down -v` removes them.
 
 <details>
-<summary>Local secret generation and runtime notes</summary>
+<summary>Generate required local secrets</summary>
 
-`meridian-platform/.env.example` is the local backend configuration inventory. At minimum, set `POSTGRES_PASSWORD`, the three required Base64-encoded symmetric key values, and a matching JWT private/public key pair before starting the default backend. Optional OCR processing and Staff review use a separate Base64-encoded 32-byte `MERIDIAN_OCR_RESULT_ENCRYPTION_KEY`; its absence keeps manual intake and backend startup available while OCR review fails closed.
+The default backend environment requires a database password, three separate symmetric values, and one matching RSA signing pair. Keep them only in the ignored `meridian-platform/.env`.
 
-Generate each local symmetric key with one of these commands and run the selected command three times for the default environment, or four times when configuring OCR:
+Generate a Base64-encoded 32-byte value and run the command three times for Customer encryption, Customer fingerprinting, and the Loan disbursement-snapshot key:
 
 ```bash
 openssl rand -base64 32
 ```
 
+Or in PowerShell:
+
 ```powershell
 [Convert]::ToBase64String([Security.Cryptography.RandomNumberGenerator]::GetBytes(32))
 ```
 
-`MERIDIAN_CUSTOMER_ENCRYPTION_KEY`, `MERIDIAN_LOAN_DISBURSEMENT_SNAPSHOT_KEYS_LOCAL`, and `MERIDIAN_OCR_RESULT_ENCRYPTION_KEY` must each decode to exactly 32 bytes. `MERIDIAN_CUSTOMER_FINGERPRINT_KEY` must decode to at least 32 bytes. The local disbursement-snapshot active key ID is `local`.
-
-Generate one matching RSA-2048 signing pair in PowerShell. The command emits the Base64-encoded PKCS#8 private key and X.509 SubjectPublicKeyInfo public key expected by Meridian:
+Generate the matching RSA-2048 JWT signing pair in PowerShell:
 
 ```powershell
 $rsa = [Security.Cryptography.RSA]::Create(2048)
@@ -341,13 +293,7 @@ $rsa = [Security.Cryptography.RSA]::Create(2048)
 "MERIDIAN_JWT_PUBLIC_KEY=$([Convert]::ToBase64String($rsa.ExportSubjectPublicKeyInfo()))"
 ```
 
-Keep both values from the same command run. Meridian rejects missing, malformed, mismatched, or weaker signing keys.
-
-The local backend allows `http://localhost:5173` and `http://localhost:5174` by default. Mailpit captures local verification and password-reset email without external SMTP credentials.
-
-`.env` contains local secrets and must not be committed.
-
-Stop the backend environment with `docker compose down`. Named PostgreSQL and Document volumes are preserved. `docker compose down -v` removes them and should be used only for an intentionally disposable local environment.
+When enabling OCR, generate one additional Base64-encoded 32-byte value for `MERIDIAN_OCR_RESULT_ENCRYPTION_KEY`.
 
 </details>
 
