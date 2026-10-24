@@ -205,8 +205,6 @@ Customer-digital / Staff-assisted origination → evidence and verification
 
 ## Run Meridian Locally
 
-Meridian local development uses one backend environment and two browser applications. Docker Compose runs the Java backend together with PostgreSQL, Mailpit, and ClamAV; an opt-in `ocr` profile adds the Python OCR worker without making Google credentials a prerequisite for the default environment. Customer Web and Internal Web run separately with Vite and call the same backend API at `http://localhost:8080/api/v1`.
-
 Meridian local development uses Docker Compose for the backend environment and separate Vite development servers for Customer Web and Internal Web.
 
 **Requirements:** Docker, plus Node.js 22 and npm 10 or newer for the frontends.
