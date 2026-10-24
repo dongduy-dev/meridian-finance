@@ -40,6 +40,7 @@ graph TB
     IAM -->|Authenticated actor and authorization facts| CUSTOMER
     IAM -->|Authenticated actor and authorization facts| PARTNER
     IAM -->|Authenticated actor and authorization facts| DOC
+    IAM -->|Purpose-limited security-email delivery| NOTIF
 
     CUSTOMER -->|Customer readiness and purpose-limited bank-account facts| LOAN
     CUSTOMER -->|Identity evidence for employment verification| PARTNER
@@ -48,9 +49,12 @@ graph TB
 
     LOAN -->|Application and active review-cycle context| APPROVAL
     APPROVAL -->|Recommendation and decision outcomes| LOAN
+
+    IAM -.->|PII-safe business audit events| AUDIT
+    CUSTOMER -.->|PII-safe business audit events| AUDIT
 ```
 
-Business contexts may publish PII-safe auditable facts to Audit & Compliance Controls.
+Arrows show context collaboration and fact/event flow, not Java dependency direction. Dotted arrows show representative PII-safe business audit event publication to Audit & Compliance Controls; Identity, Customer, Partner, Loan, Approval, and Document publish these events. Dotted styling does not imply asynchronous delivery.
 
 Identity invokes Notification through purpose-limited contracts after its security outcome commits. Secret-bearing messages remain transient rather than durable event payloads. Notification does not acquire workflow ownership.
 
