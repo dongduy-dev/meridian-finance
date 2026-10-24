@@ -42,60 +42,9 @@ To simplify access to short-term financing while improving operational efficienc
 
 ---
 
-## Technology Stack
+## Project Documentation
 
-### Backend
-
-* Java 21
-* Spring Boot
-* Spring Security
-* Spring Data JPA / Hibernate
-* JWT Authentication
-
-### Frontend
-
-* React
-* Vite
-* Bootstrap
-
-### Database
-
-* PostgreSQL
-
-### Development Tools
-
-* Git
-* GitHub
-* Postman
-* Docker *(Planned)*
-
----
-
-## Future Roadmap
-
-### OCR & AI Integration
-
-* OCR-assisted document extraction
-* Automated document validation
-* Intelligent data entry automation
-
-### Risk & Compliance
-
-* Risk assessment engine
-* Loan eligibility scoring
-* Fraud detection mechanisms
-
-### Analytics & Reporting
-
-* Executive dashboard
-* Loan portfolio analytics
-* Operational performance metrics
-
-### Platform Expansion
-
-* Mobile application support
-* Partner company integration
-* Multi-product lending ecosystem
+See the [project README](../../README.md) for the platform overview, technology stack, roadmap, and links to authoritative business and technical documentation.
 
 ---
 

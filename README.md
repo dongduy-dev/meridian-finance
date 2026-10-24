@@ -10,6 +10,8 @@ Meridian covers the lending journey from origination through servicing and closu
 
 ## Live Platform
 
+Meridian is a fictional portfolio/demo, not a real financial service. Visitors must use fictional information; submitted information is still handled as private. See [MER-DEP-001](docs/deployment/MER-DEP-001-identity-bootstrap-and-demo-boundary.md) for the detailed demo policy.
+
 | Surface | Live address | Access |
 |---|---|---|
 | **Customer Web** | [meridianfinance.dev](https://meridianfinance.dev) | Customer self-service - Public registration |
