@@ -1,6 +1,6 @@
 # Meridian Customer Web
 
-`customer-web/` is Meridian's independent React/Vite application for responsive Customer experiences. [MER-FE-001](../docs/frontend/MER-FE-001-customer-web-blueprint.md) defines its frontend architecture, state ownership, visual language, accessibility baseline, and delivery sequence. Backend contracts and business specifications remain authoritative for authentication and lending behavior.
+`customer-web/` is Meridian's independent React/Vite application for responsive Customer experiences. [MER-FE-001](../docs/frontend/MER-FE-001-customer-web-blueprint.md) defines its frontend architecture, state ownership, visual language, and accessibility baseline. Backend contracts and business specifications remain authoritative for authentication and lending behavior.
 
 ## Requirements
 
