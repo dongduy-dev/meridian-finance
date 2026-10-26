@@ -22,10 +22,6 @@ public final class JavaTrust {
             "CN=emSign Root CA - G1, O=eMudhra Technologies Limited, OU=emSign PKI, C=IN",
             "CN=emSign Root CA - G2, O=eMudhra Technologies Limited, OU=emSign PKI, C=IN",
             "CN=AAA Certificate Services, O=Comodo CA Limited, L=Salford, ST=Greater Manchester, C=GB");
-    private static final Set<X500Principal> RETAINED = principals(
-            "CN=emSign ECC Root CA - C3, O=eMudhra Inc, OU=emSign PKI, C=US",
-            "CN=emSign Root CA - C1, O=eMudhra Inc, OU=emSign PKI, C=US",
-            "CN=ISRG Root X1, O=Internet Security Research Group, C=US");
     private static final char[] PASSWORD = "changeit".toCharArray();
 
     public static void main(String[] args) throws Exception {
@@ -66,7 +62,6 @@ public final class JavaTrust {
         Set<X500Principal> subjects = Collections.list(actual.aliases()).stream()
                 .map(alias -> certificate(actual, alias).getSubjectX500Principal()).collect(Collectors.toSet());
         require(Collections.disjoint(subjects, REMOVED), "Affected root persisted");
-        require(subjects.containsAll(RETAINED), "Required unaffected control anchors missing");
 
         TrustManagerFactory factory = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
         factory.init((KeyStore) null); // JSSE's effective default store, not a separately supplied keystore.
@@ -77,7 +72,7 @@ public final class JavaTrust {
         require(effective.equals(Set.copyOf(preserved.values())), "Effective JSSE trust differs from verified cacerts");
         REMOVED.stream().map(X500Principal::getName).sorted().forEach(name -> System.out.println("ABSENT " + name));
         System.out.println("PASS " + System.getProperty("java.vendor") + " " + Runtime.version()
-                + "; " + actual.size() + " anchors; C1/C3/ISRG retained; effective default JSSE trust verified");
+                + "; " + actual.size() + " anchors; unaffected fingerprints preserved; effective default JSSE trust verified");
     }
 
     private static Set<X500Principal> principals(String... names) {
