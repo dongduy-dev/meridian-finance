@@ -1756,8 +1756,8 @@ class UnsecuredConsumerLoanManualVerificationPostgreSqlIntegrationTest {
         return new CompleteUnsecuredConsumerLoanVerificationRequest(
                 UnsecuredConsumerLoanManualVerificationOutcome.REQUIRES_MORE_INFORMATION,
                 assessmentNote,
-                CorrectionReasonCode.DOCUMENT_REPLACEMENT_REQUIRED,
-                replacementPlan(evidence)
+                com.meridian.platform.loan.domain.model.LoanCorrectionReasonCode.DOCUMENT_REPLACEMENT_REQUIRED,
+                com.meridian.platform.testsupport.CorrectionRequestFixtures.loanRequest(replacementPlan(evidence))
         );
     }
 
@@ -1765,7 +1765,7 @@ class UnsecuredConsumerLoanManualVerificationPostgreSqlIntegrationTest {
         return new CorrectionPlanRequest(List.of(new CorrectionTaskRequest(
                 CorrectionScope.DOCUMENT_REPLACEMENT,
                 CorrectionResponsibility.CUSTOMER,
-                evidence.documentType(),
+                com.meridian.platform.approval.application.dto.CorrectionDocumentType.valueOf(evidence.documentType().name()),
                 false,
                 evidence.checklistItemId(),
                 evidence.documentVersionId(),
@@ -1779,7 +1779,7 @@ class UnsecuredConsumerLoanManualVerificationPostgreSqlIntegrationTest {
                 new CorrectionTaskRequest(
                         CorrectionScope.DOCUMENT_REPLACEMENT,
                         CorrectionResponsibility.CUSTOMER,
-                        evidence.documentType(),
+                        com.meridian.platform.approval.application.dto.CorrectionDocumentType.valueOf(evidence.documentType().name()),
                         false,
                         evidence.checklistItemId(),
                         evidence.documentVersionId(),
@@ -1789,7 +1789,7 @@ class UnsecuredConsumerLoanManualVerificationPostgreSqlIntegrationTest {
                 new CorrectionTaskRequest(
                         CorrectionScope.DOCUMENT_REVIEW,
                         CorrectionResponsibility.STAFF,
-                        evidence.documentType(),
+                        com.meridian.platform.approval.application.dto.CorrectionDocumentType.valueOf(evidence.documentType().name()),
                         false,
                         evidence.checklistItemId(),
                         evidence.documentVersionId(),

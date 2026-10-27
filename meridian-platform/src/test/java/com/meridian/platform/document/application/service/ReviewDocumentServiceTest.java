@@ -1,6 +1,6 @@
 package com.meridian.platform.document.application.service;
 
-import com.meridian.platform.approval.domain.model.CorrectionReasonCode;
+import com.meridian.platform.document.application.dto.DocumentCorrectionReasonCode;
 import com.meridian.platform.document.application.dto.ReviewDocumentCommand;
 import com.meridian.platform.document.application.port.out.DocumentChecklistRepository;
 import com.meridian.platform.document.application.port.out.DocumentRepository;
@@ -14,7 +14,6 @@ import com.meridian.platform.document.domain.model.DocumentReviewDecision;
 import com.meridian.platform.document.domain.model.DocumentReviewOutcome;
 import com.meridian.platform.document.domain.model.DocumentType;
 import com.meridian.platform.document.domain.model.StoredDocument;
-import com.meridian.platform.loan.domain.model.LoanApplicationStatus;
 import com.meridian.platform.shared.application.audit.BusinessAuditPublisher;
 import com.meridian.platform.shared.application.security.AuthenticatedUser;
 import com.meridian.platform.shared.application.security.CurrentUserProvider;
@@ -74,7 +73,7 @@ class ReviewDocumentServiceTest {
         ));
         when(workflowPort.lock(APPLICATION_ID)).thenReturn(
                 new LoanDocumentWorkflowPort.LoanDocumentWorkflowSnapshot(
-                        APPLICATION_ID, CUSTOMER_ID, LoanApplicationStatus.UNDER_REVIEW
+                        APPLICATION_ID, CUSTOMER_ID, "UNDER_REVIEW"
                 )
         );
         when(checklistRepository.findByLoanApplicationIdAndStage(
@@ -195,7 +194,7 @@ class ReviewDocumentServiceTest {
             return new ReviewDocumentCommand(
                     APPLICATION_ID, ITEM_ID, VERSION_ID, requestId,
                     DocumentReviewOutcome.REQUEST_REPLACEMENT, null, "restricted",
-                    CorrectionReasonCode.DOCUMENT_REPLACEMENT_REQUIRED, "Replace the evidence.",
+                    DocumentCorrectionReasonCode.DOCUMENT_REPLACEMENT_REQUIRED, "Replace the evidence.",
                     REVIEWER_ID, false
             );
         }

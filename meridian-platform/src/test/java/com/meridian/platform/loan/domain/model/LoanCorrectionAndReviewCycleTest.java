@@ -98,7 +98,7 @@ class LoanCorrectionAndReviewCycleTest {
                 UUID.randomUUID(), UUID.randomUUID(), 1,
                 LoanCorrectionResponsibility.CUSTOMER,
                 LoanCorrectionScope.SUPPORTING_DOCUMENT_UPLOAD,
-                DocumentType.RECENT_PAYSLIP,
+                com.meridian.platform.loan.domain.model.LoanDocumentType.RECENT_PAYSLIP,
                 true, UUID.randomUUID(), null,
                 "Upload evidence.", null,
                 LoanCorrectionTaskStatus.OPEN,
@@ -110,7 +110,7 @@ class LoanCorrectionAndReviewCycleTest {
         return new LoanCorrectionRequest(
                 UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(),
                 "RETURN_TO_CUSTOMER_REVISION",
-                com.meridian.platform.approval.domain.model.CorrectionReasonCode.RECENT_PAYSLIP_REQUIRED,
+                com.meridian.platform.loan.domain.model.LoanCorrectionReasonCode.RECENT_PAYSLIP_REQUIRED,
                 UUID.randomUUID(), LoanCorrectionRequestStatus.OPEN,
                 null, STARTED_AT, null, null
         );

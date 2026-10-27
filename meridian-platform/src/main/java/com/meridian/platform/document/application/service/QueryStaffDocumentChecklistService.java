@@ -77,8 +77,8 @@ public class QueryStaffDocumentChecklistService implements QueryStaffDocumentChe
                 projections.stream().map(ItemProjection::state).toList());
         return new StaffDocumentChecklistDto(
                 loanApplicationId,
-                workflow.originationChannel().name(),
-                workflow.status().name(),
+                workflow.originationChannel(),
+                workflow.status(),
                 checklist.stage().name(),
                 readiness.uploadComplete(),
                 readiness.processingReady(),

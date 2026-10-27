@@ -16,7 +16,7 @@ import com.meridian.platform.approval.domain.model.ReviewRecommendationAction;
 import com.meridian.platform.shared.application.audit.BusinessAuditEvent;
 import com.meridian.platform.shared.application.audit.BusinessAuditPublisher;
 import com.meridian.platform.shared.application.security.AuthenticatedUser;
-import com.meridian.platform.document.domain.model.DocumentType;
+import com.meridian.platform.approval.application.dto.CorrectionDocumentType;
 import com.meridian.platform.shared.application.security.CurrentUserProvider;
 import com.meridian.platform.shared.domain.audit.BusinessAuditAction;
 import com.meridian.platform.shared.domain.exception.BusinessStateConflictException;
@@ -125,7 +125,7 @@ class SubmitReviewRecommendationServiceTest {
                 new CorrectionTaskRequest(
                         CorrectionScope.SUPPORTING_DOCUMENT_UPLOAD,
                         CorrectionResponsibility.STAFF,
-                        DocumentType.RECENT_PAYSLIP,
+                        CorrectionDocumentType.RECENT_PAYSLIP,
                         true,
                         null,
                         null,
@@ -148,7 +148,8 @@ class SubmitReviewRecommendationServiceTest {
 
         assertEquals("REQUEST_STAFF_CORRECTION", result.action());
         assertEquals(REVIEW_CYCLE_ID, result.reviewCycleId());
-        assertEquals(plan, eventPublisher.publishedEvent.correctionPlan());
+        assertEquals(tools.jackson.databind.json.JsonMapper.builder().build().valueToTree(plan),
+                tools.jackson.databind.json.JsonMapper.builder().build().valueToTree(eventPublisher.publishedEvent.correctionPlan()));
         assertNotNull(repository.savedRecommendation);
         assertNotNull(auditPublisher.publishedEvent);
     }

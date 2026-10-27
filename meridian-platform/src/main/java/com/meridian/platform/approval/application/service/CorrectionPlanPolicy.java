@@ -4,7 +4,7 @@ import com.meridian.platform.approval.application.dto.CorrectionPlanRequest;
 import com.meridian.platform.approval.application.dto.CorrectionTaskRequest;
 import com.meridian.platform.approval.domain.model.CorrectionResponsibility;
 import com.meridian.platform.approval.domain.model.CorrectionScope;
-import com.meridian.platform.document.domain.model.DocumentType;
+import com.meridian.platform.approval.application.dto.CorrectionDocumentType;
 import com.meridian.platform.shared.domain.exception.BusinessRuleViolationException;
 
 import java.util.HashSet;
@@ -45,7 +45,7 @@ public class CorrectionPlanPolicy {
         if (plan == null || plan.tasks() == null || plan.tasks().isEmpty() || plan.tasks().size() > 10) {
             throw invalid("A correction plan must contain between 1 and 10 tasks.");
         }
-        Set<DocumentType> createdDocumentTypes = new HashSet<>();
+        Set<CorrectionDocumentType> createdDocumentTypes = new HashSet<>();
         Set<TaskTuple> tuples = new HashSet<>();
         for (CorrectionTaskRequest task : plan.tasks()) {
             validateTask(task);
@@ -140,7 +140,7 @@ public class CorrectionPlanPolicy {
     private record TaskTuple(
             CorrectionResponsibility responsibility,
             CorrectionScope scope,
-            DocumentType documentType,
+            CorrectionDocumentType documentType,
             java.util.UUID checklistItemId,
             java.util.UUID baselineVersionId
     ) {

@@ -145,7 +145,7 @@ class AssistedActionEvidenceAuthorizationServiceTest {
     private LoanCorrectionRequest correction() {
         return new LoanCorrectionRequest(
                 correctionId, applicationId, null, "COMPLETE_PRODUCT_VERIFICATION",
-                com.meridian.platform.approval.domain.model.CorrectionReasonCode.DOCUMENT_REPLACEMENT_REQUIRED,
+                com.meridian.platform.loan.domain.model.LoanCorrectionReasonCode.DOCUMENT_REPLACEMENT_REQUIRED,
                 UUID.randomUUID(), LoanCorrectionRequestStatus.OPEN, null,
                 LocalDateTime.of(2026, 9, 21, 0, 0), null, null);
     }

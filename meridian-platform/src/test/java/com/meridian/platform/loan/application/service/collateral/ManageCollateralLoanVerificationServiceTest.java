@@ -3,12 +3,12 @@ package com.meridian.platform.loan.application.service.collateral;
 import com.meridian.platform.loan.application.service.CustomerCorrectionWorkflowService;
 import com.meridian.platform.loan.application.service.LoanApplicationStatusTransitionRecorder;
 
-import com.meridian.platform.approval.application.dto.CorrectionPlanRequest;
-import com.meridian.platform.approval.application.dto.CorrectionTaskRequest;
-import com.meridian.platform.approval.domain.model.CorrectionReasonCode;
-import com.meridian.platform.approval.domain.model.CorrectionResponsibility;
-import com.meridian.platform.approval.domain.model.CorrectionScope;
-import com.meridian.platform.document.domain.model.DocumentType;
+import com.meridian.platform.loan.application.dto.LoanCorrectionPlanRequest;
+import com.meridian.platform.loan.application.dto.LoanCorrectionTaskRequest;
+import com.meridian.platform.loan.domain.model.LoanCorrectionReasonCode;
+import com.meridian.platform.loan.application.dto.correction.CorrectionResponsibility;
+import com.meridian.platform.loan.application.dto.correction.CorrectionScope;
+import com.meridian.platform.loan.domain.model.LoanDocumentType;
 import com.meridian.platform.loan.application.dto.CollateralLoanVerificationDto;
 import com.meridian.platform.loan.application.dto.CollateralLoanVerificationStartDto;
 import com.meridian.platform.loan.application.dto.CompleteCollateralLoanVerificationRequest;
@@ -232,7 +232,7 @@ class ManageCollateralLoanVerificationServiceTest {
     void moreInformationCreatesDocumentOnlyCorrection() {
         when(applications.findByIdForUpdate(APPLICATION_ID))
                 .thenReturn(Optional.of(application(LoanApplicationStatus.VERIFICATION_PENDING)));
-        CorrectionPlanRequest plan = replacementPlan();
+        LoanCorrectionPlanRequest plan = replacementPlan();
 
         CollateralLoanVerificationDto result = service.completeManualVerification(
                 APPLICATION_ID,
@@ -240,7 +240,7 @@ class ManageCollateralLoanVerificationServiceTest {
                         VERIFICATION_ID,
                         CollateralLoanManualVerificationOutcome.REQUIRES_MORE_INFORMATION,
                         "Ownership evidence must be replaced.",
-                        CorrectionReasonCode.DOCUMENT_REPLACEMENT_REQUIRED,
+                        LoanCorrectionReasonCode.DOCUMENT_REPLACEMENT_REQUIRED,
                         plan
                 )
         );
@@ -248,8 +248,8 @@ class ManageCollateralLoanVerificationServiceTest {
         assertEquals("RETURNED_FOR_REVISION", result.status());
         verify(corrections).createFromProductVerification(
                 any(),
-                org.mockito.ArgumentMatchers.eq(CorrectionReasonCode.DOCUMENT_REPLACEMENT_REQUIRED),
-                org.mockito.ArgumentMatchers.same(plan),
+                org.mockito.ArgumentMatchers.eq(LoanCorrectionReasonCode.DOCUMENT_REPLACEMENT_REQUIRED),
+                org.mockito.ArgumentMatchers.eq(plan.toPlan()),
                 any()
         );
     }
@@ -282,7 +282,7 @@ class ManageCollateralLoanVerificationServiceTest {
                 VERIFICATION_ID,
                 CollateralLoanManualVerificationOutcome.VERIFIED,
                 "Evidence is sufficient.",
-                CorrectionReasonCode.DOCUMENT_REPLACEMENT_REQUIRED,
+                LoanCorrectionReasonCode.DOCUMENT_REPLACEMENT_REQUIRED,
                 replacementPlan()
         );
 
@@ -343,11 +343,11 @@ class ManageCollateralLoanVerificationServiceTest {
         );
     }
 
-    private CorrectionPlanRequest replacementPlan() {
-        return new CorrectionPlanRequest(List.of(new CorrectionTaskRequest(
+    private LoanCorrectionPlanRequest replacementPlan() {
+        return new LoanCorrectionPlanRequest(List.of(new LoanCorrectionTaskRequest(
                 CorrectionScope.DOCUMENT_REPLACEMENT,
                 CorrectionResponsibility.CUSTOMER,
-                DocumentType.COLLATERAL_OWNERSHIP_EVIDENCE,
+                LoanDocumentType.COLLATERAL_OWNERSHIP_EVIDENCE,
                 false,
                 UUID.randomUUID(),
                 UUID.randomUUID(),

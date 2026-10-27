@@ -1,12 +1,11 @@
 package com.meridian.platform.loan.application.service;
 
 import com.meridian.platform.loan.domain.model.LoanDocumentType;
-import com.meridian.platform.approval.application.dto.CorrectionPlanRequest;
-import com.meridian.platform.approval.application.dto.CorrectionTaskRequest;
-import com.meridian.platform.approval.domain.model.CorrectionReasonCode;
-import com.meridian.platform.approval.domain.model.CorrectionResponsibility;
-import com.meridian.platform.approval.domain.model.CorrectionScope;
-import com.meridian.platform.document.domain.model.DocumentType;
+import com.meridian.platform.loan.application.dto.correction.LoanCorrectionPlan;
+import com.meridian.platform.loan.application.dto.correction.LoanCorrectionPlan.Task;
+import com.meridian.platform.loan.domain.model.LoanCorrectionReasonCode;
+import com.meridian.platform.loan.application.dto.correction.CorrectionResponsibility;
+import com.meridian.platform.loan.application.dto.correction.CorrectionScope;
 import com.meridian.platform.loan.application.port.out.LoanCorrectionRepository;
 import com.meridian.platform.loan.application.port.out.LoanDocumentChecklistPort;
 import com.meridian.platform.loan.application.port.out.LoanReviewCycleRepository;
@@ -78,11 +77,21 @@ class CustomerCorrectionWorkflowServiceTest {
     }
 
     @Test
+    void missingReasonStillWinsBeforeMissingOrUnsupportedPlanValidation() {
+        BusinessRuleViolationException error = assertThrows(BusinessRuleViolationException.class,
+                () -> service.createFromProductVerification(application(ProductCode.COLLATERAL_LOAN),
+                        null, null, operation()));
+        assertEquals("INVALID_CORRECTION_PLAN", error.getErrorCode());
+        assertEquals("A controlled correction reason is required.", error.getMessage());
+        verify(corrections, never()).saveRequest(any());
+    }
+
+    @Test
     void verificationOriginatedUclReplacementUsesSharedCorrectionEvidence() {
         LoanCorrectionRequest result = service.createFromProductVerification(
                 application(ProductCode.UNSECURED_CONSUMER_LOAN),
-                CorrectionReasonCode.DOCUMENT_REPLACEMENT_REQUIRED,
-                replacementPlan(DocumentType.INCOME_PROOF),
+                LoanCorrectionReasonCode.DOCUMENT_REPLACEMENT_REQUIRED,
+                replacementPlan(LoanDocumentType.INCOME_PROOF),
                 operation()
         );
 
@@ -91,7 +100,7 @@ class CustomerCorrectionWorkflowServiceTest {
         assertNull(result.sourceReviewCycleId());
         ArgumentCaptor<LoanCorrectionTask> task = ArgumentCaptor.forClass(LoanCorrectionTask.class);
         verify(corrections).saveTask(task.capture());
-        assertEquals(DocumentType.INCOME_PROOF, task.getValue().documentType());
+        assertEquals(LoanDocumentType.INCOME_PROOF, task.getValue().documentType());
         assertEquals(ITEM_ID, task.getValue().checklistItemId());
         verify(reviewCycles, never()).save(any());
         verify(audits).publish(any());
@@ -101,14 +110,14 @@ class CustomerCorrectionWorkflowServiceTest {
     void uclRejectsRecentPayslipAndSalaryRejectsUclOnlyEvidence() {
         assertInvalid(() -> service.createFromProductVerification(
                 application(ProductCode.UNSECURED_CONSUMER_LOAN),
-                CorrectionReasonCode.DOCUMENT_REPLACEMENT_REQUIRED,
-                replacementPlan(DocumentType.RECENT_PAYSLIP),
+                LoanCorrectionReasonCode.DOCUMENT_REPLACEMENT_REQUIRED,
+                replacementPlan(LoanDocumentType.RECENT_PAYSLIP),
                 operation()
         ));
         assertInvalid(() -> service.createFromProductVerification(
                 application(ProductCode.SALARY_ADVANCE),
-                CorrectionReasonCode.DOCUMENT_REPLACEMENT_REQUIRED,
-                replacementPlan(DocumentType.INCOME_PROOF),
+                LoanCorrectionReasonCode.DOCUMENT_REPLACEMENT_REQUIRED,
+                replacementPlan(LoanDocumentType.INCOME_PROOF),
                 operation()
         ));
         verify(corrections, never()).saveRequest(any());
@@ -124,8 +133,8 @@ class CustomerCorrectionWorkflowServiceTest {
 
         assertInvalid(() -> service.createFromProductVerification(
                 application(ProductCode.UNSECURED_CONSUMER_LOAN),
-                CorrectionReasonCode.DOCUMENT_REPLACEMENT_REQUIRED,
-                replacementPlan(DocumentType.INCOME_PROOF),
+                LoanCorrectionReasonCode.DOCUMENT_REPLACEMENT_REQUIRED,
+                replacementPlan(LoanDocumentType.INCOME_PROOF),
                 operation()
         ));
         verify(corrections, never()).saveRequest(any());
@@ -147,8 +156,8 @@ class CustomerCorrectionWorkflowServiceTest {
                 BusinessStateConflictException.class,
                 () -> service.createFromProductVerification(
                         application(ProductCode.UNSECURED_CONSUMER_LOAN),
-                        CorrectionReasonCode.DOCUMENT_REPLACEMENT_REQUIRED,
-                        replacementPlan(DocumentType.INCOME_PROOF),
+                        LoanCorrectionReasonCode.DOCUMENT_REPLACEMENT_REQUIRED,
+                        replacementPlan(LoanDocumentType.INCOME_PROOF),
                         operation()
                 )
         );
@@ -158,8 +167,8 @@ class CustomerCorrectionWorkflowServiceTest {
                 BusinessStateConflictException.class,
                 () -> service.createFromProductVerification(
                         application(ProductCode.UNSECURED_CONSUMER_LOAN),
-                        CorrectionReasonCode.DOCUMENT_REPLACEMENT_REQUIRED,
-                        replacementPlan(DocumentType.INCOME_PROOF),
+                        LoanCorrectionReasonCode.DOCUMENT_REPLACEMENT_REQUIRED,
+                        replacementPlan(LoanDocumentType.INCOME_PROOF),
                         operation()
                 )
         );
@@ -169,11 +178,11 @@ class CustomerCorrectionWorkflowServiceTest {
 
     @Test
     void uclRejectsSupportingCreationAndApplicationTerms() {
-        CorrectionPlanRequest supportingCreation = new CorrectionPlanRequest(List.of(
-                new CorrectionTaskRequest(
+        LoanCorrectionPlan supportingCreation = new LoanCorrectionPlan(List.of(
+                new Task(
                         CorrectionScope.SUPPORTING_DOCUMENT_UPLOAD,
                         CorrectionResponsibility.CUSTOMER,
-                        DocumentType.BANK_STATEMENT,
+                        LoanDocumentType.BANK_STATEMENT,
                         true,
                         null,
                         null,
@@ -183,12 +192,12 @@ class CustomerCorrectionWorkflowServiceTest {
         ));
         assertInvalid(() -> service.createFromProductVerification(
                 application(ProductCode.UNSECURED_CONSUMER_LOAN),
-                CorrectionReasonCode.SUPPORTING_DOCUMENT_REQUIRED,
+                LoanCorrectionReasonCode.SUPPORTING_DOCUMENT_REQUIRED,
                 supportingCreation,
                 operation()
         ));
 
-        CorrectionPlanRequest terms = new CorrectionPlanRequest(List.of(new CorrectionTaskRequest(
+        LoanCorrectionPlan terms = new LoanCorrectionPlan(List.of(new Task(
                 CorrectionScope.APPLICATION_TERMS,
                 CorrectionResponsibility.CUSTOMER,
                 null,
@@ -202,7 +211,7 @@ class CustomerCorrectionWorkflowServiceTest {
                 BusinessRuleViolationException.class,
                 () -> service.createFromProductVerification(
                         application(ProductCode.UNSECURED_CONSUMER_LOAN),
-                        CorrectionReasonCode.DOCUMENT_REPLACEMENT_REQUIRED,
+                        LoanCorrectionReasonCode.DOCUMENT_REPLACEMENT_REQUIRED,
                         terms,
                         operation()
                 )
@@ -216,8 +225,8 @@ class CustomerCorrectionWorkflowServiceTest {
 
         LoanCorrectionRequest request = service.createFromProductVerification(
                 application(ProductCode.COLLATERAL_LOAN),
-                CorrectionReasonCode.DOCUMENT_REPLACEMENT_REQUIRED,
-                replacementPlan(DocumentType.COLLATERAL_OWNERSHIP_EVIDENCE),
+                LoanCorrectionReasonCode.DOCUMENT_REPLACEMENT_REQUIRED,
+                replacementPlan(LoanDocumentType.COLLATERAL_OWNERSHIP_EVIDENCE),
                 operation()
         );
 
@@ -231,12 +240,12 @@ class CustomerCorrectionWorkflowServiceTest {
     @Test
     void collateralSupportsStaffReviewAndMixedPlanForSameOwnershipItem() {
         stubCollateralDocument();
-        CorrectionPlanRequest mixed = new CorrectionPlanRequest(List.of(
-                replacementPlan(DocumentType.COLLATERAL_OWNERSHIP_EVIDENCE).tasks().getFirst(),
-                new CorrectionTaskRequest(
+        LoanCorrectionPlan mixed = new LoanCorrectionPlan(List.of(
+                replacementPlan(LoanDocumentType.COLLATERAL_OWNERSHIP_EVIDENCE).tasks().getFirst(),
+                new Task(
                         CorrectionScope.DOCUMENT_REVIEW,
                         CorrectionResponsibility.STAFF,
-                        DocumentType.COLLATERAL_OWNERSHIP_EVIDENCE,
+                        LoanDocumentType.COLLATERAL_OWNERSHIP_EVIDENCE,
                         false,
                         ITEM_ID,
                         VERSION_ID,
@@ -247,7 +256,7 @@ class CustomerCorrectionWorkflowServiceTest {
 
         service.createFromProductVerification(
                 application(ProductCode.COLLATERAL_LOAN),
-                CorrectionReasonCode.DOCUMENT_REVIEW_REQUIRED,
+                LoanCorrectionReasonCode.DOCUMENT_REVIEW_REQUIRED,
                 mixed,
                 operation()
         );
@@ -266,15 +275,15 @@ class CustomerCorrectionWorkflowServiceTest {
         stubCollateralDocument();
         assertInvalid(() -> service.createFromProductVerification(
                 application(ProductCode.COLLATERAL_LOAN),
-                CorrectionReasonCode.DOCUMENT_REPLACEMENT_REQUIRED,
-                replacementPlan(DocumentType.INCOME_PROOF),
+                LoanCorrectionReasonCode.DOCUMENT_REPLACEMENT_REQUIRED,
+                replacementPlan(LoanDocumentType.INCOME_PROOF),
                 operation()
         ));
 
-        CorrectionPlanRequest supporting = new CorrectionPlanRequest(List.of(new CorrectionTaskRequest(
+        LoanCorrectionPlan supporting = new LoanCorrectionPlan(List.of(new Task(
                 CorrectionScope.SUPPORTING_DOCUMENT_UPLOAD,
                 CorrectionResponsibility.CUSTOMER,
-                DocumentType.COLLATERAL_OWNERSHIP_EVIDENCE,
+                LoanDocumentType.COLLATERAL_OWNERSHIP_EVIDENCE,
                 true,
                 null,
                 null,
@@ -283,12 +292,12 @@ class CustomerCorrectionWorkflowServiceTest {
         )));
         assertInvalid(() -> service.createFromProductVerification(
                 application(ProductCode.COLLATERAL_LOAN),
-                CorrectionReasonCode.SUPPORTING_DOCUMENT_REQUIRED,
+                LoanCorrectionReasonCode.SUPPORTING_DOCUMENT_REQUIRED,
                 supporting,
                 operation()
         ));
 
-        CorrectionPlanRequest terms = new CorrectionPlanRequest(List.of(new CorrectionTaskRequest(
+        LoanCorrectionPlan terms = new LoanCorrectionPlan(List.of(new Task(
                 CorrectionScope.APPLICATION_TERMS,
                 CorrectionResponsibility.CUSTOMER,
                 null,
@@ -302,19 +311,19 @@ class CustomerCorrectionWorkflowServiceTest {
                 BusinessRuleViolationException.class,
                 () -> service.createFromProductVerification(
                         application(ProductCode.COLLATERAL_LOAN),
-                        CorrectionReasonCode.DOCUMENT_REPLACEMENT_REQUIRED,
+                        LoanCorrectionReasonCode.DOCUMENT_REPLACEMENT_REQUIRED,
                         terms,
                         operation()
                 )
         );
         assertEquals("CORRECTION_FIELD_NOT_ALLOWED", termsError.getErrorCode());
 
-        CorrectionPlanRequest twoItems = new CorrectionPlanRequest(List.of(
-                replacementPlan(DocumentType.COLLATERAL_OWNERSHIP_EVIDENCE).tasks().getFirst(),
-                new CorrectionTaskRequest(
+        LoanCorrectionPlan twoItems = new LoanCorrectionPlan(List.of(
+                replacementPlan(LoanDocumentType.COLLATERAL_OWNERSHIP_EVIDENCE).tasks().getFirst(),
+                new Task(
                         CorrectionScope.DOCUMENT_REVIEW,
                         CorrectionResponsibility.STAFF,
-                        DocumentType.COLLATERAL_OWNERSHIP_EVIDENCE,
+                        LoanDocumentType.COLLATERAL_OWNERSHIP_EVIDENCE,
                         false,
                         UUID.randomUUID(),
                         VERSION_ID,
@@ -324,7 +333,7 @@ class CustomerCorrectionWorkflowServiceTest {
         ));
         assertInvalid(() -> service.createFromProductVerification(
                 application(ProductCode.COLLATERAL_LOAN),
-                CorrectionReasonCode.DOCUMENT_REVIEW_REQUIRED,
+                LoanCorrectionReasonCode.DOCUMENT_REVIEW_REQUIRED,
                 twoItems,
                 operation()
         ));
@@ -347,8 +356,8 @@ class CustomerCorrectionWorkflowServiceTest {
                     BusinessStateConflictException.class,
                     () -> service.createFromProductVerification(
                             application(ProductCode.COLLATERAL_LOAN),
-                            CorrectionReasonCode.DOCUMENT_REPLACEMENT_REQUIRED,
-                            replacementPlan(DocumentType.COLLATERAL_OWNERSHIP_EVIDENCE),
+                            LoanCorrectionReasonCode.DOCUMENT_REPLACEMENT_REQUIRED,
+                            replacementPlan(LoanDocumentType.COLLATERAL_OWNERSHIP_EVIDENCE),
                             operation()
                     )
             );
@@ -365,8 +374,8 @@ class CustomerCorrectionWorkflowServiceTest {
         assertEquals("INVALID_CORRECTION_PLAN", error.getErrorCode());
     }
 
-    private CorrectionPlanRequest replacementPlan(DocumentType documentType) {
-        return new CorrectionPlanRequest(List.of(new CorrectionTaskRequest(
+    private LoanCorrectionPlan replacementPlan(LoanDocumentType documentType) {
+        return new LoanCorrectionPlan(List.of(new Task(
                 CorrectionScope.DOCUMENT_REPLACEMENT,
                 CorrectionResponsibility.CUSTOMER,
                 documentType,

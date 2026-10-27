@@ -1,7 +1,5 @@
 package com.meridian.platform.approval.application.event;
 
-import com.meridian.platform.approval.application.dto.CorrectionPlanRequest;
-import com.meridian.platform.approval.domain.model.CorrectionReasonCode;
 import com.meridian.platform.shared.application.operation.BusinessOperationContext;
 
 import java.time.LocalDateTime;
@@ -15,8 +13,8 @@ public record ApprovalDecisionRecordedEvent(
         UUID approverUserId,
         ApprovalDecisionEventAction action,
         String reason,
-        CorrectionReasonCode reasonCode,
-        CorrectionPlanRequest correctionPlan,
+        String reasonCode,
+        CorrectionPlanFacts correctionPlan,
         LocalDateTime decidedAt,
         BusinessOperationContext operationContext
 ) {

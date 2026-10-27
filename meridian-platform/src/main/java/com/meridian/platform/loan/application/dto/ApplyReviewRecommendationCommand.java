@@ -1,7 +1,7 @@
 package com.meridian.platform.loan.application.dto;
 
-import com.meridian.platform.approval.application.dto.CorrectionPlanRequest;
-import com.meridian.platform.approval.domain.model.CorrectionReasonCode;
+import com.meridian.platform.loan.application.dto.correction.LoanCorrectionPlan;
+import com.meridian.platform.loan.domain.model.LoanCorrectionReasonCode;
 import com.meridian.platform.loan.domain.model.LoanReviewRecommendationAction;
 import com.meridian.platform.shared.application.operation.BusinessOperationContext;
 
@@ -15,8 +15,8 @@ public record ApplyReviewRecommendationCommand(
         UUID loanOfficerUserId,
         LoanReviewRecommendationAction action,
         String reason,
-        CorrectionReasonCode reasonCode,
-        CorrectionPlanRequest correctionPlan,
+        LoanCorrectionReasonCode reasonCode,
+        LoanCorrectionPlan correctionPlan,
         LocalDateTime recommendedAt,
         BusinessOperationContext operationContext
 ) {

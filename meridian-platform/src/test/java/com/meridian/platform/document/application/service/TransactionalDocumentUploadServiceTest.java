@@ -18,8 +18,6 @@ import com.meridian.platform.document.domain.model.DocumentType;
 import com.meridian.platform.document.domain.model.DocumentUploaderActorType;
 import com.meridian.platform.document.domain.model.DocumentVersion;
 import com.meridian.platform.document.domain.model.StoredDocument;
-import com.meridian.platform.loan.domain.model.LoanApplicationStatus;
-import com.meridian.platform.loan.domain.model.OriginationChannel;
 import com.meridian.platform.shared.application.audit.BusinessAuditPublisher;
 import com.meridian.platform.shared.application.security.AuthenticatedUser;
 import com.meridian.platform.shared.application.security.CurrentUserProvider;
@@ -95,7 +93,7 @@ class TransactionalDocumentUploadServiceTest {
 
     @Test
     void rejectedScanCreatesNoVersionAndOuterUploadDiscardsStaging() {
-        prepareWorkflow(customer(), OriginationChannel.CUSTOMER_DIGITAL, LoanApplicationStatus.DOCUMENTS_PENDING);
+        prepareWorkflow(customer(), "CUSTOMER_DIGITAL", "DOCUMENTS_PENDING");
         when(checklists.findByLoanApplicationIdAndStage(APPLICATION_ID, DocumentChecklistStage.SUBMISSION))
                 .thenReturn(Optional.of(checklist()));
         when(checklists.findItemByIdForUpdate(ITEM_ID)).thenReturn(Optional.of(item()));
@@ -113,8 +111,8 @@ class TransactionalDocumentUploadServiceTest {
 
     @Test
     void customerDigitalInitialUploadRetainsExistingBehavior() {
-        prepareSuccessfulUpload(customer(), OriginationChannel.CUSTOMER_DIGITAL,
-                LoanApplicationStatus.DOCUMENTS_PENDING, false);
+        prepareSuccessfulUpload(customer(), "CUSTOMER_DIGITAL",
+                "DOCUMENTS_PENDING", false);
 
         service.store(command(DocumentUploaderActorType.CUSTOMER, null), STAGED);
 
@@ -124,8 +122,8 @@ class TransactionalDocumentUploadServiceTest {
 
     @Test
     void assistedInitialUploadWithNarrowPermissionDoesNotRequireCorrectionTask() {
-        prepareSuccessfulUpload(staff("document:upload:assisted"), OriginationChannel.STAFF_ASSISTED,
-                LoanApplicationStatus.DOCUMENTS_PENDING, false);
+        prepareSuccessfulUpload(staff("document:upload:assisted"), "STAFF_ASSISTED",
+                "DOCUMENTS_PENDING", false);
 
         service.store(command(DocumentUploaderActorType.STAFF, null), STAGED);
 
@@ -135,22 +133,22 @@ class TransactionalDocumentUploadServiceTest {
 
     @Test
     void correctionPermissionAloneCannotAuthorizeAssistedInitialUpload() {
-        assertDenied(staff("document:upload:staff"), OriginationChannel.STAFF_ASSISTED,
-                LoanApplicationStatus.DOCUMENTS_PENDING, DocumentUploaderActorType.STAFF);
+        assertDenied(staff("document:upload:staff"), "STAFF_ASSISTED",
+                "DOCUMENTS_PENDING", DocumentUploaderActorType.STAFF);
     }
 
     @Test
     void intakePermissionCannotAuthorizeApplicationChecklistUpload() {
-        assertDenied(staff("document:upload:intake"), OriginationChannel.STAFF_ASSISTED,
-                LoanApplicationStatus.DOCUMENTS_PENDING, DocumentUploaderActorType.STAFF);
+        assertDenied(staff("document:upload:intake"), "STAFF_ASSISTED",
+                "DOCUMENTS_PENDING", DocumentUploaderActorType.STAFF);
     }
 
     @Test
     void assistedPermissionCannotAuthorizeDigitalOrCorrectionUploads() {
-        assertDenied(staff("document:upload:assisted"), OriginationChannel.CUSTOMER_DIGITAL,
-                LoanApplicationStatus.DOCUMENTS_PENDING, DocumentUploaderActorType.STAFF);
-        assertDenied(staff("document:upload:assisted"), OriginationChannel.STAFF_ASSISTED,
-                LoanApplicationStatus.SUBMITTED, DocumentUploaderActorType.STAFF);
+        assertDenied(staff("document:upload:assisted"), "CUSTOMER_DIGITAL",
+                "DOCUMENTS_PENDING", DocumentUploaderActorType.STAFF);
+        assertDenied(staff("document:upload:assisted"), "STAFF_ASSISTED",
+                "SUBMITTED", DocumentUploaderActorType.STAFF);
     }
 
     @Test
@@ -197,20 +195,20 @@ class TransactionalDocumentUploadServiceTest {
 
     @Test
     void assistedCorrectionPermissionCannotAuthorizeInitialAssistedUpload() {
-        assertDenied(staff("document:upload:assisted-correction"), OriginationChannel.STAFF_ASSISTED,
-                LoanApplicationStatus.DOCUMENTS_PENDING, DocumentUploaderActorType.STAFF);
+        assertDenied(staff("document:upload:assisted-correction"), "STAFF_ASSISTED",
+                "DOCUMENTS_PENDING", DocumentUploaderActorType.STAFF);
     }
 
     @Test
     void customerCannotUploadToStaffAssistedApplication() {
-        assertDenied(customer(), OriginationChannel.STAFF_ASSISTED,
-                LoanApplicationStatus.DOCUMENTS_PENDING, DocumentUploaderActorType.CUSTOMER);
+        assertDenied(customer(), "STAFF_ASSISTED",
+                "DOCUMENTS_PENDING", DocumentUploaderActorType.CUSTOMER);
     }
 
     @Test
     void exactUploadRequestReplayIsIdempotent() {
         UUID requestId = UUID.randomUUID();
-        prepareWorkflow(customer(), OriginationChannel.CUSTOMER_DIGITAL, LoanApplicationStatus.DOCUMENTS_PENDING);
+        prepareWorkflow(customer(), "CUSTOMER_DIGITAL", "DOCUMENTS_PENDING");
         when(checklists.findByLoanApplicationIdAndStage(APPLICATION_ID, DocumentChecklistStage.SUBMISSION))
                 .thenReturn(Optional.of(checklist()));
         when(checklists.findItemByIdForUpdate(ITEM_ID)).thenReturn(Optional.of(item()));
@@ -228,7 +226,7 @@ class TransactionalDocumentUploadServiceTest {
     @Test
     void reusedUploadRequestForDifferentContentIsRejected() {
         UUID requestId = UUID.randomUUID();
-        prepareWorkflow(customer(), OriginationChannel.CUSTOMER_DIGITAL, LoanApplicationStatus.DOCUMENTS_PENDING);
+        prepareWorkflow(customer(), "CUSTOMER_DIGITAL", "DOCUMENTS_PENDING");
         when(checklists.findByLoanApplicationIdAndStage(APPLICATION_ID, DocumentChecklistStage.SUBMISSION))
                 .thenReturn(Optional.of(checklist()));
         when(checklists.findItemByIdForUpdate(ITEM_ID)).thenReturn(Optional.of(item()));
@@ -247,8 +245,8 @@ class TransactionalDocumentUploadServiceTest {
     @Test
     void staleExpectedVersionRemainsRejected() {
         UUID currentVersionId = UUID.randomUUID();
-        prepareWorkflow(staff("document:upload:assisted"), OriginationChannel.STAFF_ASSISTED,
-                LoanApplicationStatus.DOCUMENTS_PENDING);
+        prepareWorkflow(staff("document:upload:assisted"), "STAFF_ASSISTED",
+                "DOCUMENTS_PENDING");
         when(checklists.findByLoanApplicationIdAndStage(APPLICATION_ID, DocumentChecklistStage.SUBMISSION))
                 .thenReturn(Optional.of(checklist()));
         when(checklists.findItemByIdForUpdate(ITEM_ID)).thenReturn(Optional.of(item()));
@@ -264,8 +262,8 @@ class TransactionalDocumentUploadServiceTest {
 
     @Test
     void rollbackDeletesCommittedStorageObject() {
-        prepareSuccessfulUpload(staff("document:upload:assisted"), OriginationChannel.STAFF_ASSISTED,
-                LoanApplicationStatus.DOCUMENTS_PENDING, false);
+        prepareSuccessfulUpload(staff("document:upload:assisted"), "STAFF_ASSISTED",
+                "DOCUMENTS_PENDING", false);
 
         service.store(command(DocumentUploaderActorType.STAFF, null), STAGED);
         TransactionSynchronizationManager.getSynchronizations().forEach(
@@ -276,8 +274,8 @@ class TransactionalDocumentUploadServiceTest {
 
     @Test
     void finalRequiredUploadPublishesEstablishedCompletionEvent() {
-        prepareSuccessfulUpload(staff("document:upload:assisted"), OriginationChannel.STAFF_ASSISTED,
-                LoanApplicationStatus.DOCUMENTS_PENDING, true);
+        prepareSuccessfulUpload(staff("document:upload:assisted"), "STAFF_ASSISTED",
+                "DOCUMENTS_PENDING", true);
 
         service.store(command(DocumentUploaderActorType.STAFF, null), STAGED);
 
@@ -286,18 +284,18 @@ class TransactionalDocumentUploadServiceTest {
 
     private void assertDenied(
             AuthenticatedUser actor,
-            OriginationChannel channel,
-            LoanApplicationStatus status,
+            String channel,
+            String status,
             DocumentUploaderActorType actorType
     ) {
         prepareWorkflow(actor, channel, status);
         AuthorizationException error = assertThrows(AuthorizationException.class,
                 () -> service.store(command(actorType, null), STAGED));
-        assertEquals(channel == OriginationChannel.STAFF_ASSISTED && actorType == DocumentUploaderActorType.CUSTOMER
+        assertEquals(channel == "STAFF_ASSISTED" && actorType == DocumentUploaderActorType.CUSTOMER
                 ? "CUSTOMER_DIRECT_ACTION_NOT_ALLOWED" : "DOCUMENT_ACCESS_DENIED", error.getErrorCode());
     }
 
-    private void prepareWorkflow(AuthenticatedUser actor, OriginationChannel channel, LoanApplicationStatus status) {
+    private void prepareWorkflow(AuthenticatedUser actor, String channel, String status) {
         when(currentUsers.currentUser()).thenReturn(actor);
         when(workflows.lock(APPLICATION_ID)).thenReturn(
                 new LoanDocumentWorkflowPort.LoanDocumentWorkflowSnapshot(APPLICATION_ID, CUSTOMER_ID, channel, status));
@@ -305,8 +303,8 @@ class TransactionalDocumentUploadServiceTest {
 
     private void prepareSuccessfulUpload(
             AuthenticatedUser actor,
-            OriginationChannel channel,
-            LoanApplicationStatus status,
+            String channel,
+            String status,
             boolean uploadComplete
     ) {
         prepareWorkflow(actor, channel, status);
@@ -326,8 +324,8 @@ class TransactionalDocumentUploadServiceTest {
             AuthenticatedUser actor,
             LoanDocumentCorrectionPort.StaffUploadAuthority authority
     ) {
-        prepareWorkflow(actor, OriginationChannel.STAFF_ASSISTED,
-                LoanApplicationStatus.RETURNED_FOR_REVISION);
+        prepareWorkflow(actor, "STAFF_ASSISTED",
+                "RETURNED_FOR_REVISION");
         when(checklists.findByLoanApplicationIdAndStage(APPLICATION_ID, DocumentChecklistStage.SUBMISSION))
                 .thenReturn(Optional.of(checklist()));
         when(checklists.findItemByIdForUpdate(ITEM_ID)).thenReturn(Optional.of(item()));

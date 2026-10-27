@@ -13,7 +13,7 @@ import com.meridian.platform.approval.domain.model.CorrectionReasonCode;
 import com.meridian.platform.approval.domain.model.CorrectionResponsibility;
 import com.meridian.platform.approval.domain.model.CorrectionScope;
 import com.meridian.platform.approval.domain.model.ReviewRecommendationAction;
-import com.meridian.platform.document.domain.model.DocumentType;
+import com.meridian.platform.approval.application.dto.CorrectionDocumentType;
 import com.meridian.platform.shared.application.security.AuthenticatedUser;
 import com.meridian.platform.shared.domain.exception.BusinessStateConflictException;
 import com.meridian.platform.shared.domain.exception.EntityNotFoundException;
@@ -207,7 +207,7 @@ class ApprovalAuditHistoryRollbackIntegrationTest {
                                 new CorrectionPlanRequest(List.of(new CorrectionTaskRequest(
                                         CorrectionScope.SUPPORTING_DOCUMENT_UPLOAD,
                                         responsibility,
-                                        DocumentType.RECENT_PAYSLIP,
+                                        CorrectionDocumentType.RECENT_PAYSLIP,
                                         true,
                                         null,
                                         null,
@@ -254,7 +254,7 @@ class ApprovalAuditHistoryRollbackIntegrationTest {
                                         new CorrectionTaskRequest(
                                                 CorrectionScope.DOCUMENT_REPLACEMENT,
                                                 CorrectionResponsibility.CUSTOMER,
-                                                DocumentType.RECENT_PAYSLIP,
+                                                CorrectionDocumentType.RECENT_PAYSLIP,
                                                 false,
                                                 checklistItemId,
                                                 baselineVersionId,
@@ -264,7 +264,7 @@ class ApprovalAuditHistoryRollbackIntegrationTest {
                                         new CorrectionTaskRequest(
                                                 CorrectionScope.DOCUMENT_REVIEW,
                                                 CorrectionResponsibility.STAFF,
-                                                DocumentType.RECENT_PAYSLIP,
+                                                CorrectionDocumentType.RECENT_PAYSLIP,
                                                 false,
                                                 checklistItemId,
                                                 baselineVersionId,

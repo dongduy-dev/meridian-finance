@@ -2,7 +2,7 @@ package com.meridian.platform.loan.application.service;
 
 import com.meridian.platform.loan.application.service.salaryadvance.SalaryAdvanceReservationReleaseService;
 
-import com.meridian.platform.approval.domain.model.CorrectionReasonCode;
+import com.meridian.platform.loan.domain.model.LoanCorrectionReasonCode;
 import com.meridian.platform.loan.application.port.in.CancelLoanApplicationUseCase;
 import com.meridian.platform.loan.application.port.in.RecordAssistedUclCancellationUseCase;
 import com.meridian.platform.loan.application.port.out.LoanApplicationCancellationRepository;
@@ -669,7 +669,7 @@ class CancelLoanApplicationServiceTest {
                 APPLICATION_ID,
                 UUID.randomUUID(),
                 "RETURN_TO_CUSTOMER_REVISION",
-                CorrectionReasonCode.RECENT_PAYSLIP_REQUIRED,
+                LoanCorrectionReasonCode.RECENT_PAYSLIP_REQUIRED,
                 UUID.randomUUID(),
                 status,
                 null,
@@ -689,7 +689,7 @@ class CancelLoanApplicationServiceTest {
                 APPLICATION_ID,
                 null,
                 "COMPLETE_PRODUCT_VERIFICATION",
-                CorrectionReasonCode.DOCUMENT_REPLACEMENT_REQUIRED,
+                LoanCorrectionReasonCode.DOCUMENT_REPLACEMENT_REQUIRED,
                 UUID.randomUUID(),
                 status,
                 null,

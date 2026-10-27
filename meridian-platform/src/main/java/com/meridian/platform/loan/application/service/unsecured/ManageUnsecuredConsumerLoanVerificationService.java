@@ -127,7 +127,7 @@ public class ManageUnsecuredConsumerLoanVerificationService
             correctionWorkflowService.createFromProductVerification(
                     application,
                     request.reasonCode(),
-                    request.correctionPlan(),
+                    request.correctionPlan() == null ? null : request.correctionPlan().toPlan(),
                     operationContext
             );
         }

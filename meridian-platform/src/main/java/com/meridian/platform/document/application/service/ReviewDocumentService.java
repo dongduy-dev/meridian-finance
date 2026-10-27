@@ -165,7 +165,7 @@ public class ReviewDocumentService implements ReviewDocumentUseCase {
                     command.loanApplicationId(),
                     item.id(),
                     decision.documentVersionId(),
-                    command.correctionReasonCode(),
+                    command.correctionReasonCode().name(),
                     command.customerInstruction(),
                     operation
             );
@@ -223,7 +223,7 @@ public class ReviewDocumentService implements ReviewDocumentUseCase {
         }
         if (command.outcome() == DocumentReviewOutcome.REQUEST_REPLACEMENT) {
             if (command.correctionReasonCode()
-                    != com.meridian.platform.approval.domain.model.CorrectionReasonCode
+                    != com.meridian.platform.document.application.dto.DocumentCorrectionReasonCode
                     .DOCUMENT_REPLACEMENT_REQUIRED
                     || command.customerInstruction() == null
                     || command.customerInstruction().trim().isEmpty()

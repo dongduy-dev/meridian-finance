@@ -138,7 +138,7 @@ public class ManageCollateralLoanVerificationService
             correctionWorkflowService.createFromProductVerification(
                     application,
                     request.reasonCode(),
-                    request.correctionPlan(),
+                    request.correctionPlan() == null ? null : request.correctionPlan().toPlan(),
                     operationContext
             );
         }

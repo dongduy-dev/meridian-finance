@@ -3,12 +3,12 @@ package com.meridian.platform.loan.application.service.unsecured;
 import com.meridian.platform.loan.application.service.CustomerCorrectionWorkflowService;
 import com.meridian.platform.loan.application.service.LoanApplicationStatusTransitionRecorder;
 
-import com.meridian.platform.approval.application.dto.CorrectionPlanRequest;
-import com.meridian.platform.approval.application.dto.CorrectionTaskRequest;
-import com.meridian.platform.approval.domain.model.CorrectionReasonCode;
-import com.meridian.platform.approval.domain.model.CorrectionResponsibility;
-import com.meridian.platform.approval.domain.model.CorrectionScope;
-import com.meridian.platform.document.domain.model.DocumentType;
+import com.meridian.platform.loan.application.dto.LoanCorrectionPlanRequest;
+import com.meridian.platform.loan.application.dto.LoanCorrectionTaskRequest;
+import com.meridian.platform.loan.domain.model.LoanCorrectionReasonCode;
+import com.meridian.platform.loan.application.dto.correction.CorrectionResponsibility;
+import com.meridian.platform.loan.application.dto.correction.CorrectionScope;
+import com.meridian.platform.loan.domain.model.LoanDocumentType;
 import com.meridian.platform.loan.application.dto.CompleteUnsecuredConsumerLoanVerificationRequest;
 import com.meridian.platform.loan.application.dto.UnsecuredConsumerLoanVerificationDto;
 import com.meridian.platform.loan.application.port.out.LoanApplicationRepository;
@@ -215,14 +215,14 @@ class ManageUnsecuredConsumerLoanVerificationServiceTest {
     void moreInformationCreatesCorrectionAndReturnsApplicationForRevision() {
         when(applicationRepository.findByIdForUpdate(APPLICATION_ID))
                 .thenReturn(Optional.of(application(LoanApplicationStatus.VERIFICATION_PENDING)));
-        CorrectionPlanRequest plan = uclReplacementPlan();
+        LoanCorrectionPlanRequest plan = uclReplacementPlan();
 
         UnsecuredConsumerLoanVerificationDto result = service.completeManualVerification(
                 APPLICATION_ID,
                 new CompleteUnsecuredConsumerLoanVerificationRequest(
                         UnsecuredConsumerLoanManualVerificationOutcome.REQUIRES_MORE_INFORMATION,
                         "The income evidence must be replaced.",
-                        CorrectionReasonCode.DOCUMENT_REPLACEMENT_REQUIRED,
+                        LoanCorrectionReasonCode.DOCUMENT_REPLACEMENT_REQUIRED,
                         plan
                 )
         );
@@ -231,8 +231,8 @@ class ManageUnsecuredConsumerLoanVerificationServiceTest {
         assertEquals("REQUIRES_MORE_INFORMATION", result.productVerificationResult());
         verify(correctionWorkflowService).createFromProductVerification(
                 any(),
-                org.mockito.ArgumentMatchers.eq(CorrectionReasonCode.DOCUMENT_REPLACEMENT_REQUIRED),
-                org.mockito.ArgumentMatchers.same(plan),
+                org.mockito.ArgumentMatchers.eq(LoanCorrectionReasonCode.DOCUMENT_REPLACEMENT_REQUIRED),
+                org.mockito.ArgumentMatchers.eq(plan.toPlan()),
                 any()
         );
     }
@@ -269,7 +269,7 @@ class ManageUnsecuredConsumerLoanVerificationServiceTest {
                             new CompleteUnsecuredConsumerLoanVerificationRequest(
                                     outcome,
                                     "Terminal assessment.",
-                                    CorrectionReasonCode.DOCUMENT_REPLACEMENT_REQUIRED,
+                                    LoanCorrectionReasonCode.DOCUMENT_REPLACEMENT_REQUIRED,
                                     uclReplacementPlan()
                             )
                     )
@@ -390,11 +390,11 @@ class ManageUnsecuredConsumerLoanVerificationServiceTest {
         );
     }
 
-    private CorrectionPlanRequest uclReplacementPlan() {
-        return new CorrectionPlanRequest(List.of(new CorrectionTaskRequest(
+    private LoanCorrectionPlanRequest uclReplacementPlan() {
+        return new LoanCorrectionPlanRequest(List.of(new LoanCorrectionTaskRequest(
                 CorrectionScope.DOCUMENT_REPLACEMENT,
                 CorrectionResponsibility.CUSTOMER,
-                DocumentType.INCOME_PROOF,
+                LoanDocumentType.INCOME_PROOF,
                 false,
                 UUID.randomUUID(),
                 UUID.randomUUID(),
