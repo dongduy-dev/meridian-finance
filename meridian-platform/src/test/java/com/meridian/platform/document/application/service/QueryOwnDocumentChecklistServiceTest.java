@@ -2,7 +2,7 @@ package com.meridian.platform.document.application.service;
 
 import com.meridian.platform.document.application.port.out.DocumentChecklistRepository;
 import com.meridian.platform.document.application.port.out.DocumentRepository;
-import com.meridian.platform.document.application.port.out.LoanDocumentWorkflowPort;
+import com.meridian.platform.document.application.spi.loan.LoanDocumentWorkflowSpi;
 import com.meridian.platform.document.domain.model.DocumentChecklist;
 import com.meridian.platform.document.domain.model.DocumentChecklistItem;
 import com.meridian.platform.document.domain.model.DocumentChecklistStage;
@@ -40,7 +40,7 @@ class QueryOwnDocumentChecklistServiceTest {
     private static final UUID APPLICATION_ID = UUID.randomUUID();
     private static final LocalDateTime NOW = LocalDateTime.of(2026, 8, 30, 10, 0);
 
-    @Mock LoanDocumentWorkflowPort workflows;
+    @Mock LoanDocumentWorkflowSpi workflows;
     @Mock DocumentChecklistRepository checklists;
     @Mock DocumentRepository documents;
     @Mock CurrentUserProvider currentUserProvider;
@@ -53,7 +53,7 @@ class QueryOwnDocumentChecklistServiceTest {
                 workflows, checklists, documents, currentUserProvider
         );
         when(currentUserProvider.currentUser()).thenReturn(customer(CUSTOMER_ID));
-        when(workflows.find(APPLICATION_ID)).thenReturn(new LoanDocumentWorkflowPort
+        when(workflows.find(APPLICATION_ID)).thenReturn(new LoanDocumentWorkflowSpi
                 .LoanDocumentWorkflowSnapshot(
                         APPLICATION_ID, CUSTOMER_ID, "DOCUMENTS_PENDING"
                 ));
@@ -118,7 +118,7 @@ class QueryOwnDocumentChecklistServiceTest {
 
     @Test
     void foreignOwnershipAndMissingChecklistUseConcealedNotFound() {
-        when(workflows.find(APPLICATION_ID)).thenReturn(new LoanDocumentWorkflowPort
+        when(workflows.find(APPLICATION_ID)).thenReturn(new LoanDocumentWorkflowSpi
                 .LoanDocumentWorkflowSnapshot(
                         APPLICATION_ID, UUID.randomUUID(), "SUBMITTED"
                 ));

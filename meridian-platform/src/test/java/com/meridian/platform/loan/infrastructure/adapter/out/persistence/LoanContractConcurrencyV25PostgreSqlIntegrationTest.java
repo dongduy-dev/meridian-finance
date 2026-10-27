@@ -3,7 +3,7 @@ package com.meridian.platform.loan.infrastructure.adapter.out.persistence;
 import com.meridian.platform.MeridianPlatformApplication;
 import com.meridian.platform.customer.application.port.out.CustomerSensitiveValueProtector;
 import com.meridian.platform.customer.domain.model.ProtectedSensitiveValue;
-import com.meridian.platform.document.application.port.out.LoanDocumentWorkflowPort;
+import com.meridian.platform.document.application.spi.loan.LoanDocumentWorkflowSpi;
 import com.meridian.platform.loan.application.port.in.AcknowledgeLoanContractUseCase;
 import com.meridian.platform.loan.application.port.in.ConfirmContractReadinessUseCase;
 import com.meridian.platform.loan.application.port.in.PrepareLoanContractUseCase;
@@ -59,7 +59,7 @@ class LoanContractConcurrencyV25PostgreSqlIntegrationTest {
     @Autowired LoanContractRepository contractRepository;
     @Autowired ConfirmContractReadinessUseCase confirm;
     @Autowired CustomerSensitiveValueProtector customerProtector;
-    @Autowired LoanDocumentWorkflowPort documentWorkflow;
+    @Autowired LoanDocumentWorkflowSpi documentWorkflow;
     @Autowired PlatformTransactionManager transactionManager;
     @Autowired TestCurrentUserProvider currentUser;
 

@@ -5,8 +5,8 @@ import com.meridian.platform.document.application.port.out.DocumentChecklistRepo
 import com.meridian.platform.document.application.port.out.DocumentRepository;
 import com.meridian.platform.document.application.port.out.DocumentStoragePort;
 import com.meridian.platform.document.application.port.out.DocumentWorkflowEventPublisher;
-import com.meridian.platform.document.application.port.out.LoanDocumentCorrectionPort;
-import com.meridian.platform.document.application.port.out.LoanDocumentWorkflowPort;
+import com.meridian.platform.document.application.spi.loan.LoanDocumentCorrectionSpi;
+import com.meridian.platform.document.application.spi.loan.LoanDocumentWorkflowSpi;
 import com.meridian.platform.document.application.port.out.StagedDocument;
 import com.meridian.platform.document.application.port.out.StoredObject;
 import com.meridian.platform.document.domain.model.DocumentChecklist;
@@ -64,11 +64,11 @@ class TransactionalDocumentUploadServiceTest {
     private static final StagedDocument STAGED = new StagedDocument(
             UUID.randomUUID(), "evidence.pdf", "application/pdf", "application/pdf", 128, "a".repeat(64));
 
-    @Mock LoanDocumentWorkflowPort workflows;
+    @Mock LoanDocumentWorkflowSpi workflows;
     @Mock DocumentChecklistRepository checklists;
     @Mock DocumentRepository documents;
     @Mock DocumentStoragePort storage;
-    @Mock LoanDocumentCorrectionPort corrections;
+    @Mock LoanDocumentCorrectionSpi corrections;
     @Mock DocumentWorkflowEventPublisher events;
     @Mock BusinessAuditPublisher audits;
     @Mock CurrentUserProvider currentUsers;
@@ -155,7 +155,7 @@ class TransactionalDocumentUploadServiceTest {
     void assistedCorrectionPermissionUploadsOnlyWhenCustomerTaskAuthorizesExactBaseline() {
         prepareCorrectionUpload(
                 staff("document:upload:assisted-correction"),
-                LoanDocumentCorrectionPort.StaffUploadAuthority.ASSISTED_CUSTOMER_CORRECTION);
+                LoanDocumentCorrectionSpi.StaffUploadAuthority.ASSISTED_CUSTOMER_CORRECTION);
 
         service.store(command(DocumentUploaderActorType.STAFF, UUID.randomUUID(), BASELINE_ID), STAGED);
 
@@ -167,7 +167,7 @@ class TransactionalDocumentUploadServiceTest {
     void staffCorrectionPermissionCannotAuthorizeAssistedCustomerTaskUpload() {
         prepareCorrectionUpload(
                 staff("document:upload:staff"),
-                LoanDocumentCorrectionPort.StaffUploadAuthority.ASSISTED_CUSTOMER_CORRECTION);
+                LoanDocumentCorrectionSpi.StaffUploadAuthority.ASSISTED_CUSTOMER_CORRECTION);
 
         AuthorizationException error = assertThrows(AuthorizationException.class,
                 () -> service.store(
@@ -182,7 +182,7 @@ class TransactionalDocumentUploadServiceTest {
     void assistedCorrectionPermissionCannotAuthorizeStaffOwnedTaskUpload() {
         prepareCorrectionUpload(
                 staff("document:upload:assisted-correction"),
-                LoanDocumentCorrectionPort.StaffUploadAuthority.STAFF_CORRECTION);
+                LoanDocumentCorrectionSpi.StaffUploadAuthority.STAFF_CORRECTION);
 
         AuthorizationException error = assertThrows(AuthorizationException.class,
                 () -> service.store(
@@ -298,7 +298,7 @@ class TransactionalDocumentUploadServiceTest {
     private void prepareWorkflow(AuthenticatedUser actor, String channel, String status) {
         when(currentUsers.currentUser()).thenReturn(actor);
         when(workflows.lock(APPLICATION_ID)).thenReturn(
-                new LoanDocumentWorkflowPort.LoanDocumentWorkflowSnapshot(APPLICATION_ID, CUSTOMER_ID, channel, status));
+                new LoanDocumentWorkflowSpi.LoanDocumentWorkflowSnapshot(APPLICATION_ID, CUSTOMER_ID, channel, status));
     }
 
     private void prepareSuccessfulUpload(
@@ -322,7 +322,7 @@ class TransactionalDocumentUploadServiceTest {
 
     private void prepareCorrectionUpload(
             AuthenticatedUser actor,
-            LoanDocumentCorrectionPort.StaffUploadAuthority authority
+            LoanDocumentCorrectionSpi.StaffUploadAuthority authority
     ) {
         prepareWorkflow(actor, "STAFF_ASSISTED",
                 "RETURNED_FOR_REVISION");

@@ -123,6 +123,56 @@ class AssistedOriginationServiceTest {
         assertThrows(BusinessStateConflictException.class, () -> service.authorizeEvidenceMutation(caseId));
     }
 
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.EnumSource(AssistedOriginationCaseStatus.class)
+    void evidenceSpiPreservesHistoricalIdentityAndReadVersusMutationRules(AssistedOriginationCaseStatus status) {
+        when(users.currentUser()).thenReturn(actor("STAFF", null, Set.of("loan:originate:staff", "customer:identity:verify")));
+        for (ProductCode product : java.util.List.of(ProductCode.UNSECURED_CONSUMER_LOAN, ProductCode.COLLATERAL_LOAN)) {
+            UUID id = UUID.randomUUID(), customer = UUID.randomUUID();
+            var at = java.time.LocalDateTime.of(2026, 10, 27, 12, 0);
+            var value = new AssistedOriginationCase(id, product, customer, status, users.currentUser().userId(), at, at,
+                    status == AssistedOriginationCaseStatus.OPEN ? null : at,
+                    status == AssistedOriginationCaseStatus.COMPLETED ? UUID.randomUUID() : null);
+            when(cases.findById(id)).thenReturn(Optional.of(value));
+            when(cases.findByIdForUpdate(id)).thenReturn(Optional.of(value));
+            var spi = new com.meridian.platform.loan.infrastructure.adapter.in.document.AssistedOriginationEvidenceAuthorizationAdapter(service);
+            assertEquals(product.name(), spi.authorizeRead(id).productCode());
+            org.mockito.Mockito.verify(cases, org.mockito.Mockito.never()).findByIdForUpdate(id);
+            assertEquals(customer, spi.authorizeIdentityVerification(id, false));
+            if (status == AssistedOriginationCaseStatus.OPEN) {
+                assertEquals(id, spi.authorizeMutation(id).caseId());
+                assertEquals(customer, spi.authorizeIdentityVerification(id, true));
+            } else {
+                assertEquals("ASSISTED_ORIGINATION_CASE_NOT_OPEN", assertThrows(BusinessStateConflictException.class,
+                        () -> spi.authorizeMutation(id)).getErrorCode());
+                assertEquals("ASSISTED_ORIGINATION_CASE_NOT_OPEN", assertThrows(BusinessStateConflictException.class,
+                        () -> spi.authorizeIdentityVerification(id, true)).getErrorCode());
+            }
+        }
+    }
+
+    @Test
+    void identityEvidenceRequiresItsExistingActorShapeSelectedCustomerAndCase() {
+        UUID id = UUID.randomUUID();
+        var spi = new com.meridian.platform.loan.infrastructure.adapter.in.document.AssistedOriginationEvidenceAuthorizationAdapter(service);
+        for (var denied : java.util.List.of(actor("STAFF", null, Set.of()),
+                actor("CUSTOMER", UUID.randomUUID(), Set.of("customer:identity:verify")),
+                actor("STAFF", UUID.randomUUID(), Set.of("customer:identity:verify")))) {
+            when(users.currentUser()).thenReturn(denied);
+            assertEquals("IDENTITY_VERIFICATION_ACCESS_DENIED", assertThrows(AuthorizationException.class,
+                    () -> spi.authorizeIdentityVerification(id, false)).getErrorCode());
+        }
+        when(users.currentUser()).thenReturn(actor("STAFF", null, Set.of("customer:identity:verify")));
+        assertEquals("ASSISTED_ORIGINATION_CASE_NOT_FOUND", assertThrows(EntityNotFoundException.class,
+                () -> spi.authorizeIdentityVerification(id, false)).getErrorCode());
+        var at = java.time.LocalDateTime.of(2026, 10, 27, 12, 0);
+        UUID staffId = users.currentUser().userId();
+        when(cases.findByIdForUpdate(id)).thenReturn(Optional.of(new AssistedOriginationCase(id,
+                ProductCode.COLLATERAL_LOAN, null, AssistedOriginationCaseStatus.OPEN, staffId, at, at, null)));
+        assertEquals("ASSISTED_ORIGINATION_CUSTOMER_REQUIRED", assertThrows(BusinessStateConflictException.class,
+                () -> spi.authorizeIdentityVerification(id, false)).getErrorCode());
+    }
+
     private static AuthenticatedUser actor(String type, UUID customerId, Set<String> permissions) {
         return new AuthenticatedUser(UUID.randomUUID(), "actor@meridian.local", type, customerId, Set.of(), permissions);
     }

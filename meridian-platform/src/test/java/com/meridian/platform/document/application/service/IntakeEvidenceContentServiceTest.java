@@ -2,7 +2,7 @@ package com.meridian.platform.document.application.service;
 
 import com.meridian.platform.document.application.port.out.DocumentStoragePort;
 import com.meridian.platform.document.application.port.out.IntakeDocumentRepository;
-import com.meridian.platform.document.application.port.out.LoanAssistedOriginationPort;
+import com.meridian.platform.document.application.spi.loan.LoanAssistedOriginationSpi;
 import com.meridian.platform.document.domain.model.IntakeDocument;
 import com.meridian.platform.document.domain.model.IntakeDocumentVersion;
 import com.meridian.platform.document.domain.model.IntakeEvidenceType;
@@ -31,7 +31,7 @@ import static org.mockito.Mockito.*;
 class IntakeEvidenceContentServiceTest {
     private final IntakeDocumentRepository documents = mock(IntakeDocumentRepository.class);
     private final DocumentStoragePort storage = mock(DocumentStoragePort.class);
-    private final LoanAssistedOriginationPort cases = mock(LoanAssistedOriginationPort.class);
+    private final LoanAssistedOriginationSpi cases = mock(LoanAssistedOriginationSpi.class);
     private final CurrentUserProvider users = mock(CurrentUserProvider.class);
     private final BusinessAuditPublisher audits = mock(BusinessAuditPublisher.class);
     private final UUID caseId = UUID.randomUUID();
@@ -47,7 +47,7 @@ class IntakeEvidenceContentServiceTest {
     void setUp() {
         actor("STAFF", null, Set.of("document:upload:intake"));
         when(cases.authorizeRead(caseId)).thenReturn(
-                new LoanAssistedOriginationPort.AuthorizedIntake(caseId, "UNSECURED_CONSUMER_LOAN"));
+                new LoanAssistedOriginationSpi.AuthorizedIntake(caseId, "UNSECURED_CONSUMER_LOAN"));
         when(documents.findByCaseAndType(caseId, type)).thenReturn(Optional.of(
                 new IntakeDocument(documentId, caseId, type, currentId, now, now)));
     }

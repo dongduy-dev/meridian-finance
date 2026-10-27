@@ -1,5 +1,7 @@
 package com.meridian.platform.document.application.service;
 
+import com.meridian.platform.document.application.spi.loan.LoanDocumentWorkflowSpi;
+
 import com.meridian.platform.document.application.port.out.*;
 import com.meridian.platform.document.domain.model.*;
 import com.meridian.platform.shared.application.security.*;
@@ -16,7 +18,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 class ReadDocumentContentServiceTest {
-    final LoanDocumentWorkflowPort workflows = mock(LoanDocumentWorkflowPort.class);
+    final LoanDocumentWorkflowSpi workflows = mock(LoanDocumentWorkflowSpi.class);
     final DocumentChecklistRepository checklists = mock(DocumentChecklistRepository.class);
     final DocumentRepository documents = mock(DocumentRepository.class);
     final DocumentStoragePort storage = mock(DocumentStoragePort.class);
@@ -29,7 +31,7 @@ class ReadDocumentContentServiceTest {
         UUID documentId = UUID.randomUUID(), versionId = UUID.randomUUID();
         LocalDateTime now = LocalDateTime.of(2026, 10, 3, 9, 0);
         when(users.currentUser()).thenReturn(new AuthenticatedUser(UUID.randomUUID(), "staff@meridian.test", "STAFF", null, Set.of(), Set.of(permission)));
-        when(workflows.find(applicationId)).thenReturn(new LoanDocumentWorkflowPort.LoanDocumentWorkflowSnapshot(applicationId, UUID.randomUUID(), "SUBMITTED"));
+        when(workflows.find(applicationId)).thenReturn(new LoanDocumentWorkflowSpi.LoanDocumentWorkflowSnapshot(applicationId, UUID.randomUUID(), "SUBMITTED"));
         var item = new DocumentChecklistItem(itemId, checklistId, DocumentType.BANK_STATEMENT, DocumentRequirementStatus.REQUIRED, null, now, now);
         when(checklists.findByLoanApplicationIdAndStage(applicationId, DocumentChecklistStage.SUBMISSION))
                 .thenReturn(Optional.of(new DocumentChecklist(checklistId, applicationId, DocumentChecklistStage.SUBMISSION, List.of(item), now)));
@@ -59,7 +61,7 @@ class ReadDocumentContentServiceTest {
         UUID app = UUID.randomUUID();
         when(users.currentUser()).thenReturn(new AuthenticatedUser(UUID.randomUUID(), "staff@meridian.test", "STAFF", null,
                 Set.of(), Set.of("approval:decide", "document:read:own")));
-        when(workflows.find(app)).thenReturn(new LoanDocumentWorkflowPort.LoanDocumentWorkflowSnapshot(app, UUID.randomUUID(), "SUBMITTED"));
+        when(workflows.find(app)).thenReturn(new LoanDocumentWorkflowSpi.LoanDocumentWorkflowSnapshot(app, UUID.randomUUID(), "SUBMITTED"));
         assertThrows(AuthorizationException.class, () -> service.read(app, UUID.randomUUID(), UUID.randomUUID()));
         verifyNoInteractions(checklists, documents, storage);
     }
@@ -79,7 +81,7 @@ class ReadDocumentContentServiceTest {
         LocalDateTime now = LocalDateTime.of(2026, 10, 7, 10, 0);
         when(users.currentUser()).thenReturn(new AuthenticatedUser(UUID.randomUUID(), "customer@meridian.test", "CUSTOMER",
                 owner, Set.of(), Set.of("document:read:own")));
-        when(workflows.find(applicationId)).thenReturn(new LoanDocumentWorkflowPort.LoanDocumentWorkflowSnapshot(
+        when(workflows.find(applicationId)).thenReturn(new LoanDocumentWorkflowSpi.LoanDocumentWorkflowSnapshot(
                 applicationId, owner, "SUBMITTED"));
         var item = new DocumentChecklistItem(itemId, checklistId, DocumentType.BANK_STATEMENT,
                 DocumentRequirementStatus.REQUIRED, null, now, now);

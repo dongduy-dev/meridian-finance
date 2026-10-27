@@ -7,8 +7,8 @@ import com.meridian.platform.document.application.port.out.DocumentChecklistRepo
 import com.meridian.platform.document.application.port.out.DocumentRepository;
 import com.meridian.platform.document.application.port.out.DocumentStoragePort;
 import com.meridian.platform.document.application.port.out.DocumentWorkflowEventPublisher;
-import com.meridian.platform.document.application.port.out.LoanDocumentCorrectionPort;
-import com.meridian.platform.document.application.port.out.LoanDocumentWorkflowPort;
+import com.meridian.platform.document.application.spi.loan.LoanDocumentCorrectionSpi;
+import com.meridian.platform.document.application.spi.loan.LoanDocumentWorkflowSpi;
 import com.meridian.platform.document.application.port.out.StagedDocument;
 import com.meridian.platform.document.application.port.out.StoredObject;
 import com.meridian.platform.document.domain.model.DocumentChecklist;
@@ -44,24 +44,24 @@ import java.util.UUID;
 @Service
 public class TransactionalDocumentUploadService {
 
-    private final LoanDocumentWorkflowPort workflowPort;
+    private final LoanDocumentWorkflowSpi workflowPort;
     private final DocumentChecklistRepository checklistRepository;
     private final DocumentRepository documentRepository;
     private final DocumentStoragePort storagePort;
     private final DocumentPromotionService promotion;
-    private final LoanDocumentCorrectionPort correctionPort;
+    private final LoanDocumentCorrectionSpi correctionPort;
     private final DocumentWorkflowEventPublisher workflowEventPublisher;
     private final BusinessAuditPublisher auditPublisher;
     private final CurrentUserProvider currentUserProvider;
     private final Clock clock;
 
     public TransactionalDocumentUploadService(
-            LoanDocumentWorkflowPort workflowPort,
+            LoanDocumentWorkflowSpi workflowPort,
             DocumentChecklistRepository checklistRepository,
             DocumentRepository documentRepository,
             DocumentStoragePort storagePort,
             DocumentPromotionService promotion,
-            LoanDocumentCorrectionPort correctionPort,
+            LoanDocumentCorrectionSpi correctionPort,
             DocumentWorkflowEventPublisher workflowEventPublisher,
             BusinessAuditPublisher auditPublisher,
             CurrentUserProvider currentUserProvider,
@@ -91,7 +91,7 @@ public class TransactionalDocumentUploadService {
                 now
         );
 
-        LoanDocumentWorkflowPort.LoanDocumentWorkflowSnapshot workflow = workflowPort.lock(
+        LoanDocumentWorkflowSpi.LoanDocumentWorkflowSnapshot workflow = workflowPort.lock(
                 command.loanApplicationId()
         );
         validateOwnership(command, workflow);
@@ -153,10 +153,10 @@ public class TransactionalDocumentUploadService {
             correctionPort.authorizeCustomerUpload(
                     command.loanApplicationId(), item.id(), command.expectedCurrentVersionId());
         } else if (command.uploaderActorType() == DocumentUploaderActorType.STAFF && !assistedInitialUpload) {
-            LoanDocumentCorrectionPort.StaffUploadAuthority authority = correctionPort.authorizeStaffUpload(
+            LoanDocumentCorrectionSpi.StaffUploadAuthority authority = correctionPort.authorizeStaffUpload(
                     command.loanApplicationId(), item.id(), command.expectedCurrentVersionId());
             String requiredPermission = authority
-                    == LoanDocumentCorrectionPort.StaffUploadAuthority.ASSISTED_CUSTOMER_CORRECTION
+                    == LoanDocumentCorrectionSpi.StaffUploadAuthority.ASSISTED_CUSTOMER_CORRECTION
                     ? "document:upload:assisted-correction" : "document:upload:staff";
             if (!currentUser.hasPermission(requiredPermission)) {
                 throw new AuthorizationException(
@@ -259,7 +259,7 @@ public class TransactionalDocumentUploadService {
 
     private void validateOwnership(
             UploadDocumentCommand command,
-            LoanDocumentWorkflowPort.LoanDocumentWorkflowSnapshot workflow
+            LoanDocumentWorkflowSpi.LoanDocumentWorkflowSnapshot workflow
     ) {
         if (command.uploaderActorType() == DocumentUploaderActorType.CUSTOMER
                 && !workflow.customerId().equals(command.uploaderCustomerId())) {
@@ -273,7 +273,7 @@ public class TransactionalDocumentUploadService {
     private void validateChannel(
             UploadDocumentCommand command,
             AuthenticatedUser actor,
-            LoanDocumentWorkflowPort.LoanDocumentWorkflowSnapshot workflow
+            LoanDocumentWorkflowSpi.LoanDocumentWorkflowSnapshot workflow
     ) {
         if (command.uploaderActorType() == DocumentUploaderActorType.CUSTOMER
                 && !"CUSTOMER_DIGITAL".equals(workflow.originationChannel())) {

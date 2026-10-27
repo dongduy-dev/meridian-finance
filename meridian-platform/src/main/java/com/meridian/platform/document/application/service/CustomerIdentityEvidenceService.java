@@ -1,5 +1,7 @@
 package com.meridian.platform.document.application.service;
 
+import com.meridian.platform.document.application.spi.loan.LoanAssistedOriginationSpi;
+
 import com.meridian.platform.document.application.port.in.CustomerIdentityEvidenceUseCase;
 import com.meridian.platform.document.application.port.out.*;
 import com.meridian.platform.document.domain.model.*;
@@ -18,11 +20,11 @@ import java.util.UUID;
 public class CustomerIdentityEvidenceService implements CustomerIdentityEvidenceUseCase {
     private final CustomerIdentityDocumentRepository digital;
     private final IntakeDocumentRepository intake;
-    private final LoanAssistedOriginationPort cases;
+    private final LoanAssistedOriginationSpi cases;
     private final DocumentStoragePort storage;
     private final DocumentPromotionService promotion;
     public CustomerIdentityEvidenceService(CustomerIdentityDocumentRepository digital, IntakeDocumentRepository intake,
-            LoanAssistedOriginationPort cases, DocumentStoragePort storage, DocumentPromotionService promotion) {
+            LoanAssistedOriginationSpi cases, DocumentStoragePort storage, DocumentPromotionService promotion) {
         this.digital = digital; this.intake = intake; this.cases = cases; this.storage = storage; this.promotion = promotion;
     }
     @Transactional

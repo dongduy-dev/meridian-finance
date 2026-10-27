@@ -1,5 +1,7 @@
 package com.meridian.platform.document.application.service;
 
+import com.meridian.platform.document.application.spi.loan.LoanAssistedActionAuthorizationSpi;
+
 import com.meridian.platform.document.application.dto.UploadAssistedActionEvidenceCommand;
 import com.meridian.platform.document.application.port.out.*;
 import com.meridian.platform.document.domain.model.*;
@@ -33,7 +35,7 @@ class AssistedActionEvidenceServiceTest {
     private static final String HASH = "b".repeat(64);
     private final AssistedActionDocumentRepository documents = mock(AssistedActionDocumentRepository.class);
     private final DocumentStoragePort storage = mock(DocumentStoragePort.class);
-    private final LoanAssistedActionAuthorizationPort authorizations = mock(LoanAssistedActionAuthorizationPort.class);
+    private final LoanAssistedActionAuthorizationSpi authorizations = mock(LoanAssistedActionAuthorizationSpi.class);
     private final CurrentUserProvider users = mock(CurrentUserProvider.class);
     private final BusinessAuditPublisher audits = mock(BusinessAuditPublisher.class);
     private final UUID applicationId = UUID.randomUUID();

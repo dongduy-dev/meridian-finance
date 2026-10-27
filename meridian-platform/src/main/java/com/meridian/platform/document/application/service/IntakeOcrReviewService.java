@@ -5,7 +5,7 @@ import com.meridian.platform.document.application.dto.IntakeOcrFieldSuggestionDt
 import com.meridian.platform.document.application.dto.IntakeOcrReviewDto;
 import com.meridian.platform.document.application.port.in.ManageIntakeOcrReviewUseCase;
 import com.meridian.platform.document.application.port.out.IntakeDocumentRepository;
-import com.meridian.platform.document.application.port.out.LoanAssistedOriginationPort;
+import com.meridian.platform.document.application.spi.loan.LoanAssistedOriginationSpi;
 import com.meridian.platform.document.application.port.out.OcrJobRepository;
 import com.meridian.platform.document.application.port.out.OcrResultCipher;
 import com.meridian.platform.document.application.port.out.OcrResultRepository;
@@ -60,7 +60,7 @@ public class IntakeOcrReviewService implements ManageIntakeOcrReviewUseCase {
     private final OcrResultRepository results;
     private final OcrReviewRepository reviews;
     private final OcrResultCipher cipher;
-    private final LoanAssistedOriginationPort assistedOriginations;
+    private final LoanAssistedOriginationSpi assistedOriginations;
     private final CurrentUserProvider currentUsers;
     private final BusinessAuditPublisher auditPublisher;
     private final ObjectMapper objectMapper;
@@ -72,7 +72,7 @@ public class IntakeOcrReviewService implements ManageIntakeOcrReviewUseCase {
             OcrResultRepository results,
             OcrReviewRepository reviews,
             OcrResultCipher cipher,
-            LoanAssistedOriginationPort assistedOriginations,
+            LoanAssistedOriginationSpi assistedOriginations,
             CurrentUserProvider currentUsers,
             BusinessAuditPublisher auditPublisher,
             ObjectMapper objectMapper,

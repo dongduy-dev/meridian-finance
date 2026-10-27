@@ -5,7 +5,7 @@ import com.meridian.platform.document.application.port.in.ReadDocumentContentUse
 import com.meridian.platform.document.application.port.out.DocumentChecklistRepository;
 import com.meridian.platform.document.application.port.out.DocumentRepository;
 import com.meridian.platform.document.application.port.out.DocumentStoragePort;
-import com.meridian.platform.document.application.port.out.LoanDocumentWorkflowPort;
+import com.meridian.platform.document.application.spi.loan.LoanDocumentWorkflowSpi;
 import com.meridian.platform.document.domain.model.DocumentChecklist;
 import com.meridian.platform.document.domain.model.DocumentChecklistItem;
 import com.meridian.platform.document.domain.model.DocumentChecklistStage;
@@ -23,14 +23,14 @@ import java.util.UUID;
 @Service
 public class ReadDocumentContentService implements ReadDocumentContentUseCase {
 
-    private final LoanDocumentWorkflowPort workflowPort;
+    private final LoanDocumentWorkflowSpi workflowPort;
     private final DocumentChecklistRepository checklistRepository;
     private final DocumentRepository documentRepository;
     private final DocumentStoragePort storagePort;
     private final CurrentUserProvider currentUserProvider;
 
     public ReadDocumentContentService(
-            LoanDocumentWorkflowPort workflowPort,
+            LoanDocumentWorkflowSpi workflowPort,
             DocumentChecklistRepository checklistRepository,
             DocumentRepository documentRepository,
             DocumentStoragePort storagePort,

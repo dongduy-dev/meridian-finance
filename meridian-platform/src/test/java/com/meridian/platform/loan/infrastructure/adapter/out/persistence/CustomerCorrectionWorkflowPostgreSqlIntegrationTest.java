@@ -137,7 +137,7 @@ class CustomerCorrectionWorkflowPostgreSqlIntegrationTest {
     @Autowired private ThreadLocalCurrentUserProvider currentUserProvider;
     @Autowired private Clock clock;
     @MockitoSpyBean private BusinessAuditPublisher auditPublisher;
-    @Autowired private com.meridian.platform.document.application.port.out.LoanDocumentWorkflowPort documentWorkflow;
+    @Autowired private com.meridian.platform.document.application.spi.loan.LoanDocumentWorkflowSpi documentWorkflow;
     @Autowired private com.meridian.platform.loan.application.port.out.LoanCorrectionRepository corrections;
     @Autowired private org.springframework.transaction.PlatformTransactionManager transactionManager;
 
@@ -208,6 +208,15 @@ class CustomerCorrectionWorkflowPostgreSqlIntegrationTest {
 
     @Test
     void documentReplacementLateAuditFailureRollsBackReviewCorrectionHistoryAndAudit() {
+        assertDocumentReplacementRollback(BusinessAuditAction.DOCUMENT_REPLACEMENT_REQUESTED);
+    }
+
+    @Test
+    void documentReplacementLateLoanAuditFailureRollsBackReviewCorrectionHistoryAndAudit() {
+        assertDocumentReplacementRollback(BusinessAuditAction.CORRECTION_REQUEST_CREATED);
+    }
+
+    private void assertDocumentReplacementRollback(BusinessAuditAction failingAction) {
         UUID applicationId = submissionUseCase.startSalaryAdvanceApplication(
                 new SalaryAdvanceApplicationRequest(fixture.linkId(), money(3_000_000), 1)).loanApplicationId();
         useLoanOfficer();
@@ -230,7 +239,7 @@ class CustomerCorrectionWorkflowPostgreSqlIntegrationTest {
         int auditsBefore = count("SELECT count(*) FROM audit_events");
         useLoanOfficer();
         doThrow(new IllegalStateException("late replacement audit failure")).when(auditPublisher)
-                .publish(argThat(event -> event.entries().stream().anyMatch(entry -> entry.action() == BusinessAuditAction.DOCUMENT_REPLACEMENT_REQUESTED)));
+                .publish(argThat(event -> event.entries().stream().anyMatch(entry -> entry.action() == failingAction)));
         var failure = assertThrows(IllegalStateException.class, () -> documentReviewUseCase.review(new ReviewDocumentCommand(
                 applicationId, task.checklistItemId(), version.documentVersionId(), UUID.randomUUID(),
                 DocumentReviewOutcome.REQUEST_REPLACEMENT, null, "Restricted rollback note.",

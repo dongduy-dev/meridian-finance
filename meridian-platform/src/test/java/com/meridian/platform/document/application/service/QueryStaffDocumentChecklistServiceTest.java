@@ -2,7 +2,7 @@ package com.meridian.platform.document.application.service;
 
 import com.meridian.platform.document.application.port.out.DocumentChecklistRepository;
 import com.meridian.platform.document.application.port.out.DocumentRepository;
-import com.meridian.platform.document.application.port.out.LoanDocumentWorkflowPort;
+import com.meridian.platform.document.application.spi.loan.LoanDocumentWorkflowSpi;
 import com.meridian.platform.document.domain.model.DocumentChecklist;
 import com.meridian.platform.document.domain.model.DocumentChecklistItem;
 import com.meridian.platform.document.domain.model.DocumentChecklistStage;
@@ -47,11 +47,11 @@ class QueryStaffDocumentChecklistServiceTest {
     private static final UUID DECISION_ID = UUID.randomUUID();
     private static final LocalDateTime NOW = LocalDateTime.of(2026, 9, 2, 10, 0);
 
-    @Mock LoanDocumentWorkflowPort workflows;
+    @Mock LoanDocumentWorkflowSpi workflows;
     @Mock DocumentChecklistRepository checklists;
     @Mock DocumentRepository documents;
     @Mock CurrentUserProvider currentUserProvider;
-    @Mock com.meridian.platform.document.application.port.out.DocumentStaffActorDirectoryPort staffActors;
+    @Mock com.meridian.platform.document.application.spi.identity.DocumentStaffActorDirectorySpi staffActors;
     private QueryStaffDocumentChecklistService service;
 
     @BeforeEach
@@ -64,7 +64,7 @@ class QueryStaffDocumentChecklistServiceTest {
     @ValueSource(strings = {"document:review", "approval:decide"})
     void returnsSafeDeterministicVersionAndReviewHistory(String permission) {
         when(currentUserProvider.currentUser()).thenReturn(staff(permission));
-        when(workflows.find(APPLICATION_ID)).thenReturn(new LoanDocumentWorkflowPort
+        when(workflows.find(APPLICATION_ID)).thenReturn(new LoanDocumentWorkflowSpi
                 .LoanDocumentWorkflowSnapshot(APPLICATION_ID, UUID.randomUUID(),
                 "SUBMITTED"));
         DocumentChecklistItem item = new DocumentChecklistItem(
@@ -92,8 +92,8 @@ class QueryStaffDocumentChecklistServiceTest {
         when(documents.findReviewDecisionsByChecklistItemId(ITEM_ID))
                 .thenReturn(List.of(replacement, decision));
         when(staffActors.findByUserIds(Set.of(reviewerId, decision.reviewerUserId())))
-                .thenReturn(java.util.Map.of(reviewerId, new com.meridian.platform.document.application.port.out
-                        .DocumentStaffActorDirectoryPort.StaffActorSummary(reviewerId, "Deni Loan Officer", "deni@meridian.test")));
+                .thenReturn(java.util.Map.of(reviewerId, new com.meridian.platform.document.application.spi.identity
+                        .DocumentStaffActorDirectorySpi.StaffActorSummary(reviewerId, "Deni Loan Officer", "deni@meridian.test")));
 
         var result = service.query(APPLICATION_ID);
 
@@ -144,7 +144,7 @@ class QueryStaffDocumentChecklistServiceTest {
         assertEquals("DOCUMENT_ACCESS_DENIED", denied.getErrorCode());
 
         when(currentUserProvider.currentUser()).thenReturn(staff("document:review"));
-        when(workflows.find(APPLICATION_ID)).thenReturn(new LoanDocumentWorkflowPort
+        when(workflows.find(APPLICATION_ID)).thenReturn(new LoanDocumentWorkflowSpi
                 .LoanDocumentWorkflowSnapshot(APPLICATION_ID, UUID.randomUUID(),
                 "SUBMITTED"));
         DocumentChecklistItem item = new DocumentChecklistItem(

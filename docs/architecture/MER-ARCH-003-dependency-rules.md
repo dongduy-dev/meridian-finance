@@ -139,7 +139,7 @@ An SPI replaces its corresponding private output port. It must not extend or wra
 
 Publication requires an explicit purpose, consumer owner, designated provider implementer, operations, and approved support-type closure. SPI signatures and support types may use only JDK types, their explicitly published immutable facts, and approved shared technical contracts. Nested records, generic arguments, inheritance, and all transitive support types belong to that closure; foreign domain, internal application, persistence, web, and infrastructure types are forbidden. Java visibility, an `application.spi` package, or an `Spi` suffix grants no publication permission.
 
-The target catalogue authorizes exactly nine interfaces. Approval owns the first three under `approval.application.spi.loan`; Document owns five under `document.application.spi.loan` and one under `document.application.spi.identity`. Named support types below belong to their owning SPI surface; all other support types require an explicit publication decision.
+The catalogue authorizes exactly nine interfaces. Approval owns the first three under `approval.application.spi.loan`; Document owns five under `document.application.spi.loan` and one under `document.application.spi.identity`. Named support types below belong to their owning SPI surface; all other support types require an explicit publication decision.
 
 | Published SPI | Purpose / operations | Approved support types | Designated provider inbound adapter |
 |---|---|---|---|
@@ -277,23 +277,28 @@ The catalogue's intended enforcement column is a design requirement, not a cover
 - `shared` independence from feature modules;
 - Identity domain/application isolation from Customer, Notification, and mail transport;
 - Notification application isolation from mail transport;
-- inbound web-adapter and input-port isolation from output ports;
+- inbound web-adapter and input-port isolation from output ports, plus web/event-adapter isolation from repositories, persistence entities, domain services, and application service implementations;
 - foreign domain/internal application vocabulary isolation, retaining explicitly published Partner support facts and the clearable Customer bank-account carrier;
 - private Approval and Loan correction policies and the explicit immutable Approval event closure;
 - the three ordinary Loan/Document bindings, their published Document input closure, and absence of Document application dependencies on Loan output ports;
-- the three Approval SPI interfaces and exact support closure, designated Loan inbound implementers, thin adapter dependencies, Loan-owned query-input closure, absence of Loan domain/application SPI dependencies, retirement of the three private Approval ports, and absence of Approval-to-Loan Java dependencies.
+- all nine SPI interfaces and their exact support closure, designated provider inbound implementers, exactly one production implementation each, thin mapping/delegation dependencies, provider-owned input closure, provider domain/application isolation from foreign SPIs, retirement of the nine private ports, and absence of Approval-to-Loan Java dependencies;
+- an explicit type-level catalogue of ordinary published inputs, supporting records, events, and SPIs across all feature layers, including nested/generic signatures and transitive support dependencies;
+- foreign persistence/output-port isolation across all feature layers;
+- domain dependencies limited to JDK, own domain, and shared domain abstractions;
+- the approved top-level feature roots, rejecting additional product roots;
+- strict acyclicity calculated from production Java dependencies across all eight features, including published contracts, support types, events, signatures, generics, inheritance, and direct class references. `shared` is excluded from the feature graph and checked independently.
 
-Negative fixtures exercise wrong SPI implementers, provider application SPI dependencies, direct repository access, unpublished SPI types, and nested/generic internal-type leaks, alongside the earlier content, ordinary-adapter, and correction/event protections.
+Negative fixtures execute those same rules against a published-contract/event-only cycle, a foreign internal dependency in an otherwise acyclic graph, unpublished SPI types, wrong SPI implementers, provider application SPI dependencies, inbound SPI repository access, nested/generic internal-type leaks, shared-to-feature dependencies, foreign entities/repositories, and ordinary-adapter provider-internal access. Earlier content, ordinary-adapter, correction/event, and Approval SPI protections remain active.
 
-Complete public-contract and nine-SPI enforcement, including the six Document SPIs and the all-eight-feature cycle rule, belongs to the remaining S5 work tracked in [MER-FU-042](../project/MER-TRACK-001-follow-up-register.md#mer-fu-042---enforce-meridian-public-module-boundaries-in-source-and-architecture-tests). The checks above cover the three Approval SPIs; they do not prove that the full target catalogue is implemented. Feature-module public surfaces, legal inter-feature imports, named interfaces, and module cycles are not fully mechanically enforced. Neither Spring Modulith dependencies nor the checks above prove those boundaries. Web/event adapter restrictions, foreign-persistence isolation, and product placement also require review beyond these checks. The durable law in Sections 1–8 still applies; focused workflow tests prove particular runtime outcomes, not universal module conformance. Source conformance and delivery status belong in the follow-up register.
+These checks enforce Java dependencies and the exact publication catalogue. They do not establish SQL-level data ownership, business-policy ownership within an otherwise legal package, least disclosure, immutable collection behavior, lock order, rollback, or runtime reliability by themselves. Those constraints require focused tests and source review. The type-level catalogue does not depend on Spring Modulith named interfaces or tighter Java visibility. Source conformance, verification evidence, and delivery status belong in [MER-FU-042](../project/MER-TRACK-001-follow-up-register.md#mer-fu-042---enforce-meridian-public-module-boundaries-in-source-and-architecture-tests).
 
 | Mechanism | Responsibility |
 |---|---|
 | Compiler and package visibility | Block accidental access to non-public types |
-| `ArchitectureRulesTest` / ArchUnit | The concrete import prohibitions listed above |
+| `ArchitectureRulesTest` / ArchUnit | The concrete dependency, publication, SPI implementation, and feature-cycle restrictions listed above |
 | Spring Modulith metadata or dependencies | Do not establish public-surface, legal-dependency, or cycle proof without executable verification |
 | Focused unit and integration tests | Operation-specific transactions, event failure behavior, adapter translation, integrity, and privacy; coverage is limited to each tested assertion |
-| Code review | Published-contract intent, legal inter-feature access, cycles, adapter/persistence boundaries, product placement, semantic ownership, and purpose limitation beyond executable checks |
+| Code review | Publication intent, adapter orchestration, SQL access, product-policy placement, semantic ownership, and purpose limitation beyond executable dependency checks |
 | CI | Run the configured checks; passing CI does not prove untested catalogue entries |
 
 A rule must not be described as automatically enforced unless an executable test exists. Narrow negative rules are preferred over brittle framework allowlists or unreliable heuristics.

@@ -1,10 +1,10 @@
-package com.meridian.platform.document.application.port.out;
+package com.meridian.platform.document.application.spi.loan;
 
 import com.meridian.platform.shared.application.operation.BusinessOperationContext;
 
 import java.util.UUID;
 
-public interface LoanDocumentReviewCorrectionPort {
+public interface LoanDocumentReviewCorrectionSpi {
     void requestCustomerReplacement(
             UUID loanApplicationId,
             UUID checklistItemId,

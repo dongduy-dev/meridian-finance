@@ -1,4 +1,4 @@
-package com.meridian.platform.loan.infrastructure.adapter.out.document;
+package com.meridian.platform.loan.application.service;
 
 import com.meridian.platform.loan.application.port.out.LoanApplicationRepository;
 import com.meridian.platform.loan.domain.model.*;
@@ -15,7 +15,7 @@ import java.util.UUID;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
-class LoanDocumentWorkflowAdapterTest {
+class LoanDocumentWorkflowServiceTest {
     @ParameterizedTest
     @EnumSource(LoanApplicationStatus.class)
     void allStatusAndChannelCodesPreserveFindVersusLockBehavior(LoanApplicationStatus status) {
@@ -26,12 +26,12 @@ class LoanDocumentWorkflowAdapterTest {
                     new BigDecimal("5000000.00"), 6, LocalDateTime.of(2026, 10, 27, 12, 0));
             when(repository.findById(app.id())).thenReturn(Optional.of(app));
             when(repository.findByIdForUpdate(app.id())).thenReturn(Optional.of(app));
-            var adapter = new LoanDocumentWorkflowAdapter(repository);
+            var adapter = new LoanDocumentWorkflowService(repository);
             var found = adapter.find(app.id());
             assertEquals(app.id(), found.loanApplicationId());
             assertEquals(app.customerId(), found.customerId());
-            assertEquals(status.name(), found.status());
-            assertEquals(channel.name(), found.originationChannel());
+            assertEquals(status, found.status());
+            assertEquals(channel, found.originationChannel());
             verify(repository).findById(app.id());
             verify(repository, never()).acquireWorkflowLock(any());
             verify(repository, never()).findByIdForUpdate(any());
@@ -47,7 +47,7 @@ class LoanDocumentWorkflowAdapterTest {
     @Test
     void absentApplicationKeepsTheSameErrorAndLockOrder() {
         var repository = mock(LoanApplicationRepository.class);
-        var adapter = new LoanDocumentWorkflowAdapter(repository);
+        var adapter = new LoanDocumentWorkflowService(repository);
         UUID id = UUID.randomUUID();
         var missing = assertThrows(EntityNotFoundException.class, () -> adapter.find(id));
         assertEquals("LOAN_APPLICATION_NOT_FOUND", missing.getErrorCode());
@@ -57,5 +57,17 @@ class LoanDocumentWorkflowAdapterTest {
         var order = inOrder(repository);
         order.verify(repository).acquireWorkflowLock(id);
         order.verify(repository).findByIdForUpdate(id);
+    }
+    @Test
+    void repositoryFailuresRetainIdentityAndStopTheLockSequence() {
+        var repository = mock(LoanApplicationRepository.class);
+        var service = new LoanDocumentWorkflowService(repository);
+        UUID id = UUID.randomUUID();
+        var failure = new IllegalStateException("repository failure");
+        when(repository.findById(id)).thenThrow(failure);
+        assertSame(failure, assertThrows(IllegalStateException.class, () -> service.find(id)));
+        doThrow(failure).when(repository).acquireWorkflowLock(id);
+        assertSame(failure, assertThrows(IllegalStateException.class, () -> service.lock(id)));
+        verify(repository, never()).findByIdForUpdate(any());
     }
 }

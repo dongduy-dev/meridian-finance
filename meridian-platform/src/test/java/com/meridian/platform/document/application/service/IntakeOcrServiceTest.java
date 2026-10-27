@@ -1,7 +1,7 @@
 package com.meridian.platform.document.application.service;
 
 import com.meridian.platform.document.application.port.out.IntakeDocumentRepository;
-import com.meridian.platform.document.application.port.out.LoanAssistedOriginationPort;
+import com.meridian.platform.document.application.spi.loan.LoanAssistedOriginationSpi;
 import com.meridian.platform.document.application.port.out.OcrJobRepository;
 import com.meridian.platform.document.domain.model.IntakeDocument;
 import com.meridian.platform.document.domain.model.IntakeDocumentVersion;
@@ -42,7 +42,7 @@ class IntakeOcrServiceTest {
     private static final String HASH = "a".repeat(64);
     private final IntakeDocumentRepository documents = mock(IntakeDocumentRepository.class);
     private final OcrJobRepository jobs = mock(OcrJobRepository.class);
-    private final LoanAssistedOriginationPort cases = mock(LoanAssistedOriginationPort.class);
+    private final LoanAssistedOriginationSpi cases = mock(LoanAssistedOriginationSpi.class);
     private final CurrentUserProvider users = mock(CurrentUserProvider.class);
     private final BusinessAuditPublisher audits = mock(BusinessAuditPublisher.class);
     private final UUID caseId = UUID.randomUUID();
@@ -57,9 +57,9 @@ class IntakeOcrServiceTest {
                 actorId, "loan.officer@meridian.local", "STAFF", null,
                 Set.of(), Set.of("document:upload:intake")));
         when(cases.authorizeMutation(caseId)).thenReturn(
-                new LoanAssistedOriginationPort.AuthorizedIntake(caseId, "UNSECURED_CONSUMER_LOAN"));
+                new LoanAssistedOriginationSpi.AuthorizedIntake(caseId, "UNSECURED_CONSUMER_LOAN"));
         when(cases.authorizeRead(caseId)).thenReturn(
-                new LoanAssistedOriginationPort.AuthorizedIntake(caseId, "UNSECURED_CONSUMER_LOAN"));
+                new LoanAssistedOriginationSpi.AuthorizedIntake(caseId, "UNSECURED_CONSUMER_LOAN"));
         when(documents.findByCaseAndTypeForUpdate(caseId, IntakeEvidenceType.UCL_PAPER_APPLICATION))
                 .thenReturn(Optional.of(document(versionId)));
         when(documents.findByCaseAndType(caseId, IntakeEvidenceType.UCL_PAPER_APPLICATION))

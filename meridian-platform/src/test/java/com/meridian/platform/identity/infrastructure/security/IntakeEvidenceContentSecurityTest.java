@@ -2,7 +2,7 @@ package com.meridian.platform.identity.infrastructure.security;
 
 import com.meridian.platform.document.application.port.out.DocumentStoragePort;
 import com.meridian.platform.document.application.port.out.IntakeDocumentRepository;
-import com.meridian.platform.document.application.port.out.LoanAssistedOriginationPort;
+import com.meridian.platform.document.application.spi.loan.LoanAssistedOriginationSpi;
 import com.meridian.platform.document.application.service.IntakeEvidenceService;
 import com.meridian.platform.document.domain.model.IntakeDocument;
 import com.meridian.platform.document.domain.model.IntakeDocumentVersion;
@@ -47,7 +47,7 @@ class IntakeEvidenceContentSecurityTest {
     @MockitoBean IntakeDocumentRepository documents;
     @MockitoBean DocumentStoragePort storage;
     @MockitoBean com.meridian.platform.document.application.service.DocumentPromotionService promotion;
-    @MockitoBean LoanAssistedOriginationPort cases;
+    @MockitoBean LoanAssistedOriginationSpi cases;
     @MockitoBean CurrentUserProvider users;
     @MockitoBean BusinessAuditPublisher audits;
     @MockitoBean Clock clock;
@@ -62,7 +62,7 @@ class IntakeEvidenceContentSecurityTest {
         var now = LocalDateTime.of(2026, 10, 7, 10, 0);
         when(users.currentUser()).thenReturn(actor("STAFF", null));
         when(cases.authorizeRead(caseId)).thenReturn(
-                new LoanAssistedOriginationPort.AuthorizedIntake(caseId, "UNSECURED_CONSUMER_LOAN"));
+                new LoanAssistedOriginationSpi.AuthorizedIntake(caseId, "UNSECURED_CONSUMER_LOAN"));
         when(documents.findByCaseAndType(caseId, IntakeEvidenceType.UCL_PAPER_APPLICATION)).thenReturn(Optional.of(
                 new IntakeDocument(documentId, caseId, IntakeEvidenceType.UCL_PAPER_APPLICATION, versionId, now, now)));
         when(documents.findVersionById(versionId)).thenReturn(Optional.of(new IntakeDocumentVersion(

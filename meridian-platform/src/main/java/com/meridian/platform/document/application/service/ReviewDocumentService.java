@@ -5,8 +5,8 @@ import com.meridian.platform.document.application.dto.ReviewDocumentCommand;
 import com.meridian.platform.document.application.port.in.ReviewDocumentUseCase;
 import com.meridian.platform.document.application.port.out.DocumentChecklistRepository;
 import com.meridian.platform.document.application.port.out.DocumentRepository;
-import com.meridian.platform.document.application.port.out.LoanDocumentReviewCorrectionPort;
-import com.meridian.platform.document.application.port.out.LoanDocumentWorkflowPort;
+import com.meridian.platform.document.application.spi.loan.LoanDocumentReviewCorrectionSpi;
+import com.meridian.platform.document.application.spi.loan.LoanDocumentWorkflowSpi;
 import com.meridian.platform.document.domain.model.DocumentChecklist;
 import com.meridian.platform.document.domain.model.DocumentChecklistItem;
 import com.meridian.platform.document.domain.model.DocumentChecklistStage;
@@ -38,19 +38,19 @@ import java.util.UUID;
 @Service
 public class ReviewDocumentService implements ReviewDocumentUseCase {
 
-    private final LoanDocumentWorkflowPort workflowPort;
+    private final LoanDocumentWorkflowSpi workflowPort;
     private final DocumentChecklistRepository checklistRepository;
     private final DocumentRepository documentRepository;
-    private final LoanDocumentReviewCorrectionPort correctionPort;
+    private final LoanDocumentReviewCorrectionSpi correctionPort;
     private final BusinessAuditPublisher auditPublisher;
     private final CurrentUserProvider currentUserProvider;
     private final Clock clock;
 
     public ReviewDocumentService(
-            LoanDocumentWorkflowPort workflowPort,
+            LoanDocumentWorkflowSpi workflowPort,
             DocumentChecklistRepository checklistRepository,
             DocumentRepository documentRepository,
-            LoanDocumentReviewCorrectionPort correctionPort,
+            LoanDocumentReviewCorrectionSpi correctionPort,
             BusinessAuditPublisher auditPublisher,
             CurrentUserProvider currentUserProvider,
             Clock clock

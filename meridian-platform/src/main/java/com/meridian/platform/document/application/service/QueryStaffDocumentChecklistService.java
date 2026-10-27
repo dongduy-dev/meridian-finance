@@ -4,8 +4,8 @@ import com.meridian.platform.document.application.dto.StaffDocumentChecklistDto;
 import com.meridian.platform.document.application.port.in.QueryStaffDocumentChecklistUseCase;
 import com.meridian.platform.document.application.port.out.DocumentChecklistRepository;
 import com.meridian.platform.document.application.port.out.DocumentRepository;
-import com.meridian.platform.document.application.port.out.DocumentStaffActorDirectoryPort;
-import com.meridian.platform.document.application.port.out.LoanDocumentWorkflowPort;
+import com.meridian.platform.document.application.spi.identity.DocumentStaffActorDirectorySpi;
+import com.meridian.platform.document.application.spi.loan.LoanDocumentWorkflowSpi;
 import com.meridian.platform.document.domain.model.DocumentChecklist;
 import com.meridian.platform.document.domain.model.DocumentChecklistItem;
 import com.meridian.platform.document.domain.model.DocumentChecklistItemState;
@@ -32,18 +32,18 @@ import java.util.stream.Collectors;
 
 @Service
 public class QueryStaffDocumentChecklistService implements QueryStaffDocumentChecklistUseCase {
-    private final LoanDocumentWorkflowPort workflows;
+    private final LoanDocumentWorkflowSpi workflows;
     private final DocumentChecklistRepository checklists;
     private final DocumentRepository documents;
     private final CurrentUserProvider currentUserProvider;
-    private final DocumentStaffActorDirectoryPort staffActors;
+    private final DocumentStaffActorDirectorySpi staffActors;
 
     public QueryStaffDocumentChecklistService(
-            LoanDocumentWorkflowPort workflows,
+            LoanDocumentWorkflowSpi workflows,
             DocumentChecklistRepository checklists,
             DocumentRepository documents,
             CurrentUserProvider currentUserProvider,
-            DocumentStaffActorDirectoryPort staffActors
+            DocumentStaffActorDirectorySpi staffActors
     ) {
         this.workflows = workflows;
         this.checklists = checklists;
@@ -56,7 +56,7 @@ public class QueryStaffDocumentChecklistService implements QueryStaffDocumentChe
     @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
     public StaffDocumentChecklistDto query(UUID loanApplicationId) {
         requireAuthority(currentUserProvider.currentUser());
-        LoanDocumentWorkflowPort.LoanDocumentWorkflowSnapshot workflow;
+        LoanDocumentWorkflowSpi.LoanDocumentWorkflowSnapshot workflow;
         try {
             workflow = workflows.find(loanApplicationId);
         } catch (EntityNotFoundException exception) {
@@ -87,7 +87,7 @@ public class QueryStaffDocumentChecklistService implements QueryStaffDocumentChe
     }
 
     private ItemProjection toItem(DocumentChecklistItem item, List<DocumentReviewDecision> reviews,
-                                 Map<UUID, DocumentStaffActorDirectoryPort.StaffActorSummary> reviewers) {
+                                 Map<UUID, DocumentStaffActorDirectorySpi.StaffActorSummary> reviewers) {
         StoredDocument document = documents.findDocumentByChecklistItemId(item.id()).orElse(null);
         List<DocumentVersion> versions = document == null
                 ? List.of()
@@ -126,7 +126,7 @@ public class QueryStaffDocumentChecklistService implements QueryStaffDocumentChe
     }
 
     private static StaffDocumentChecklistDto.ReviewDto toReview(DocumentReviewDecision review,
-            Map<UUID, DocumentStaffActorDirectoryPort.StaffActorSummary> reviewers) {
+            Map<UUID, DocumentStaffActorDirectorySpi.StaffActorSummary> reviewers) {
         var actor = reviewers.get(review.reviewerUserId());
         var reviewer = actor == null || !review.reviewerUserId().equals(actor.userId())
                 || actor.displayName() == null || actor.displayName().isBlank()

@@ -82,6 +82,8 @@ Salary Advance, Unsecured Consumer Loan, and Collateral Loan remain product beha
 │   ├── port/
 │   │   ├── in/
 │   │   └── out/
+│   ├── spi/
+│   │   └── <designated-provider>/
 │   ├── service/
 │   ├── dto/
 │   └── mapper/
@@ -89,7 +91,8 @@ Salary Advance, Unsecured Consumer Loan, and Collateral Loan remain product beha
     ├── adapter/
     │   ├── in/
     │   │   ├── web/
-    │   │   └── event/
+    │   │   ├── event/
+    │   │   └── <consumer>/
     │   └── out/
     │       ├── persistence/
     │       ├── event/
@@ -191,7 +194,9 @@ Loan infrastructure may use boundary-specific adapter packages:
 loan/infrastructure/adapter/
 ├── in/
 │   ├── web/
-│   └── event/
+│   ├── event/
+│   ├── approval/
+│   └── document/
 └── out/
     ├── persistence/
     ├── event/
@@ -282,6 +287,15 @@ A boundary adapter may translate identifiers and immutable contract records. It 
 The finite Design S catalogue in [MER-ARCH-003](MER-ARCH-003-dependency-rules.md#published-consumer-spi-exception-design-s) permits a consumer-owned published SPI in place of its private output port. Its designated provider implementation belongs under `infrastructure.adapter.in.<consumer>` and calls a provider-owned application input port. Provider application and domain code remain independent of the foreign SPI.
 
 For example, Approval calls `approval.application.spi.loan.ApprovalLoanReviewCycleSpi`; Loan's `infrastructure.adapter.in.approval.ApprovalLoanReviewCycleAdapter` translates the result from `loan.application.port.in.QueryApprovalLoanReviewCycleUseCase`. Repository reads belong to the Loan application service. The runtime call supplies Loan-owned facts to Approval while the Java dependency points from Loan infrastructure to Approval's SPI.
+
+Document publishes its Loan collaborations under `document.application.spi.loan` and its Staff-directory contract under `document.application.spi.identity`. Their provider entry points and implementations follow the same placement:
+
+| Consumer publication | Provider-owned input | Provider inbound adapter |
+|---|---|---|
+| `document.application.spi.loan.LoanDocumentWorkflowSpi` | `loan.application.port.in.LoanDocumentWorkflowUseCase` | `loan.infrastructure.adapter.in.document.LoanDocumentWorkflowAdapter` |
+| `document.application.spi.identity.DocumentStaffActorDirectorySpi` | `identity.application.port.in.QueryStaffActorSummariesUseCase` | `identity.infrastructure.adapter.in.document.DocumentStaffActorDirectoryAdapter` |
+
+Loan's workflow reads, locking, and correction-upload decisions belong in Loan application services. Existing provider services implement their own inputs directly when they already own the operation. Inputs used only by the provider's own adapters remain internal application entry points; their package does not publish them to other features.
 
 These inbound adapters perform mapping and delegation only. They have no repository access or transaction boundary. The SPI replaces the private output port without a consumer forwarding adapter or a parallel binding.
 
