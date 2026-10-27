@@ -1,6 +1,6 @@
-package com.meridian.platform.loan.infrastructure.adapter.out.approval;
+package com.meridian.platform.loan.application.service;
 
-import com.meridian.platform.approval.application.port.out.ApprovalLoanCasePort;
+import com.meridian.platform.loan.application.port.in.QueryApprovalLoanCaseUseCase;
 import com.meridian.platform.loan.domain.model.LoanDocumentType;
 import com.meridian.platform.loan.application.port.out.CollateralLoanVerificationRepository;
 import com.meridian.platform.loan.application.port.out.LoanApplicationRepository;
@@ -14,15 +14,15 @@ import com.meridian.platform.loan.domain.model.LoanApplicationStatus;
 import com.meridian.platform.loan.domain.model.ProductCode;
 import com.meridian.platform.loan.domain.model.ProductVerificationResult;
 import com.meridian.platform.shared.domain.exception.BusinessStateConflictException;
-import org.springframework.stereotype.Component;
+import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
-@Component
-public class ApprovalLoanCaseAdapter implements ApprovalLoanCasePort {
+@Service
+public class QueryApprovalLoanCaseService implements QueryApprovalLoanCaseUseCase {
 
     private final LoanApplicationRepository applications;
     private final SalaryAdvanceVerificationRepository salaryAdvanceVerifications;
@@ -31,7 +31,7 @@ public class ApprovalLoanCaseAdapter implements ApprovalLoanCasePort {
     private final LoanReviewCycleRepository reviewCycles;
     private final LoanDocumentChecklistPort documents;
 
-    public ApprovalLoanCaseAdapter(
+    public QueryApprovalLoanCaseService(
             LoanApplicationRepository applications,
             SalaryAdvanceVerificationRepository salaryAdvanceVerifications,
             UnsecuredConsumerLoanVerificationRepository uclVerifications,
@@ -147,15 +147,15 @@ public class ApprovalLoanCaseAdapter implements ApprovalLoanCasePort {
     private ProductVerificationResult verificationResult(LoanApplication application) {
         return switch (application.productCode()) {
             case SALARY_ADVANCE -> salaryAdvanceVerifications.findByLoanApplicationId(application.id())
-                    .orElseThrow(ApprovalLoanCaseAdapter::systemConflict)
+                    .orElseThrow(QueryApprovalLoanCaseService::systemConflict)
                     .productVerificationResult();
             case UNSECURED_CONSUMER_LOAN -> uclVerifications
                     .findLatestByLoanApplicationId(application.id())
-                    .orElseThrow(ApprovalLoanCaseAdapter::systemConflict)
+                    .orElseThrow(QueryApprovalLoanCaseService::systemConflict)
                     .productVerificationResult();
             case COLLATERAL_LOAN -> collateralVerifications
                     .findLatestByLoanApplicationId(application.id())
-                    .orElseThrow(ApprovalLoanCaseAdapter::systemConflict)
+                    .orElseThrow(QueryApprovalLoanCaseService::systemConflict)
                     .productVerificationResult();
         };
     }

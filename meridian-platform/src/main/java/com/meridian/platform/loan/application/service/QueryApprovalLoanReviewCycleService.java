@@ -1,17 +1,17 @@
-package com.meridian.platform.loan.infrastructure.adapter.out.approval;
+package com.meridian.platform.loan.application.service;
 
-import com.meridian.platform.approval.application.port.out.ApprovalLoanReviewCyclePort;
+import com.meridian.platform.loan.application.port.in.QueryApprovalLoanReviewCycleUseCase;
 import com.meridian.platform.loan.application.port.out.LoanReviewCycleRepository;
-import org.springframework.stereotype.Component;
+import org.springframework.stereotype.Service;
 
 import java.util.Optional;
 import java.util.UUID;
 
-@Component
-public class ApprovalLoanReviewCycleAdapter implements ApprovalLoanReviewCyclePort {
+@Service
+public class QueryApprovalLoanReviewCycleService implements QueryApprovalLoanReviewCycleUseCase {
     private final LoanReviewCycleRepository reviewCycleRepository;
 
-    public ApprovalLoanReviewCycleAdapter(LoanReviewCycleRepository reviewCycleRepository) {
+    public QueryApprovalLoanReviewCycleService(LoanReviewCycleRepository reviewCycleRepository) {
         this.reviewCycleRepository = reviewCycleRepository;
     }
 

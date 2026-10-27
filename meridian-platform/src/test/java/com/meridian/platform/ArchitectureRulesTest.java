@@ -69,6 +69,138 @@ class ArchitectureRulesTest {
                 });
     }
 
+    private static final String ROOT = "com.meridian.platform.";
+    private static final java.util.Map<String, String> APPROVAL_SPI_BINDINGS = java.util.Map.of(
+            ROOT + "approval.application.spi.loan.ApprovalLoanCaseSpi",
+            ROOT + "loan.infrastructure.adapter.in.approval.ApprovalLoanCaseAdapter",
+            ROOT + "approval.application.spi.loan.ApprovalLoanReviewCycleSpi",
+            ROOT + "loan.infrastructure.adapter.in.approval.ApprovalLoanReviewCycleAdapter",
+            ROOT + "approval.application.spi.loan.ApprovalLoanReviewHistorySpi",
+            ROOT + "loan.infrastructure.adapter.in.approval.ApprovalLoanReviewHistoryAdapter");
+
+    private static final Set<String> APPROVAL_SPI_TYPES = Set.of(
+            ROOT + "approval.application.spi.loan.ApprovalLoanCaseSpi",
+            ROOT + "approval.application.spi.loan.ApprovalLoanCaseSpi$CaseSnapshot",
+            ROOT + "approval.application.spi.loan.ApprovalLoanCaseSpi$DocumentReadinessSnapshot",
+            ROOT + "approval.application.spi.loan.ApprovalLoanCaseSpi$ProductReadinessSnapshot",
+            ROOT + "approval.application.spi.loan.ApprovalLoanCaseSpi$ReviewCycleSnapshot",
+            ROOT + "approval.application.spi.loan.ApprovalLoanCaseSpi$CorrectionOptionSnapshot",
+            ROOT + "approval.application.spi.loan.ApprovalLoanCaseSpi$QueuePageSnapshot",
+            ROOT + "approval.application.spi.loan.ApprovalLoanCaseSpi$QueueItemSnapshot",
+            ROOT + "approval.application.spi.loan.ApprovalLoanReviewCycleSpi",
+            ROOT + "approval.application.spi.loan.ApprovalLoanReviewCycleSpi$ActiveReviewCycleSnapshot",
+            ROOT + "approval.application.spi.loan.ApprovalLoanReviewHistorySpi",
+            ROOT + "approval.application.spi.loan.ApprovalLoanReviewHistorySpi$HistorySnapshot");
+
+    private static final Set<String> LOAN_APPROVAL_INPUT_TYPES = APPROVAL_SPI_TYPES.stream()
+            .map(name -> name.replace("approval.application.spi.loan.ApprovalLoan", "loan.application.port.in.QueryApprovalLoan")
+                    .replace("Spi", "UseCase"))
+            .collect(java.util.stream.Collectors.toUnmodifiableSet());
+
+    private static ArchRule approvalSpiClosure(Set<String> published) {
+        return classes().that().resideInAPackage("..approval.application.spi.loan..")
+                .should(new ArchCondition<>("be explicitly published SPI interfaces and immutable support records") {
+                    @Override
+                    public void check(JavaClass type, ConditionEvents events) {
+                        if (!published.contains(type.getName())) {
+                            events.add(SimpleConditionEvent.violated(type, "Unpublished SPI type " + type.getName()));
+                        }
+                        if (!type.isInterface() && !type.isRecord()) {
+                            events.add(SimpleConditionEvent.violated(type, "SPI support must be a record: " + type.getName()));
+                        }
+                    }
+                }).andShould().onlyDependOnClassesThat(new DescribedPredicate<>("are in the exact SPI support closure") {
+                    @Override
+                    public boolean test(JavaClass type) {
+                        String name = baseTypeName(type);
+                        return name.startsWith("java.") || published.contains(name);
+                    }
+                });
+    }
+
+    private static final ArchRule APPROVAL_SPI_IMPLEMENTERS = classes()
+            .should(new ArchCondition<>("implement Approval SPIs only in designated Loan inbound adapters") {
+                @Override
+                public void check(JavaClass type, ConditionEvents events) {
+                    if (type.isInterface()) return;
+                    APPROVAL_SPI_BINDINGS.forEach((spi, adapter) -> {
+                        if (type.isAssignableTo(spi) && !type.getName().equals(adapter)) {
+                            events.add(SimpleConditionEvent.violated(type, type.getName() + " illegally implements " + spi));
+                        }
+                    });
+                }
+            });
+
+    private static final ArchRule LOAN_HAS_NO_APPLICATION_SPI_DEPENDENCY = noClasses()
+            .that().resideInAnyPackage("..loan.application..", "..loan.domain..")
+            .should().dependOnClassesThat().resideInAPackage("..approval.application.spi..")
+            .allowEmptyShould(true);
+
+    private static final ArchRule THIN_APPROVAL_SPI_ADAPTERS = classes()
+            .that(new DescribedPredicate<>("implement the three Approval SPIs") {
+                @Override
+                public boolean test(JavaClass type) {
+                    return !type.isInterface() && APPROVAL_SPI_BINDINGS.keySet().stream().anyMatch(type::isAssignableTo);
+                }
+            }).should().onlyDependOnClassesThat(new DescribedPredicate<>("are approved SPI facts, own query inputs, or component wiring") {
+                @Override
+                public boolean test(JavaClass type) {
+                    String name = baseTypeName(type);
+                    return name.startsWith("java.") || APPROVAL_SPI_TYPES.contains(name)
+                            || LOAN_APPROVAL_INPUT_TYPES.contains(name) || APPROVAL_SPI_BINDINGS.containsValue(name)
+                            || name.equals("org.springframework.stereotype.Component");
+                }
+            });
+
+    @Test
+    void approvalSpisHaveExplicitClosureAndDesignatedThinInboundImplementers() {
+        approvalSpiClosure(APPROVAL_SPI_TYPES).check(importedClasses);
+        APPROVAL_SPI_IMPLEMENTERS.check(importedClasses);
+        THIN_APPROVAL_SPI_ADAPTERS.check(importedClasses);
+        LOAN_HAS_NO_APPLICATION_SPI_DEPENDENCY.check(importedClasses);
+        classes().that(new DescribedPredicate<>("are Loan-owned Approval query inputs and results") {
+            @Override
+            public boolean test(JavaClass type) { return LOAN_APPROVAL_INPUT_TYPES.contains(type.getName()); }
+        }).should().onlyDependOnClassesThat(new DescribedPredicate<>("are JDK or the exact Loan input closure") {
+            @Override
+            public boolean test(JavaClass type) {
+                return baseTypeName(type).startsWith("java.") || LOAN_APPROVAL_INPUT_TYPES.contains(baseTypeName(type));
+            }
+        }).check(importedClasses);
+        noClasses().that().resideInAPackage("com.meridian.platform.approval..")
+                .should().dependOnClassesThat().resideInAPackage("com.meridian.platform.loan..")
+                .check(importedClasses);
+        for (String retired : Set.of("ApprovalLoanCasePort", "ApprovalLoanReviewCyclePort", "ApprovalLoanReviewHistoryPort")) {
+            assertTrue(importedClasses.stream().noneMatch(type -> type.getSimpleName().equals(retired)), retired);
+        }
+    }
+
+    @Test
+    void approvalSpiRulesRejectWrongImplementerApplicationDependencyAndRepositoryAccess() {
+        assertRuleRejects(APPROVAL_SPI_IMPLEMENTERS,
+                com.meridian.platform.testsupport.architecture.customer.infrastructure.WrongApprovalSpi.class,
+                "ApprovalLoanReviewCycleSpi");
+        assertRuleRejects(LOAN_HAS_NO_APPLICATION_SPI_DEPENDENCY,
+                com.meridian.platform.testsupport.architecture.loan.application.ForeignApprovalSpi.class,
+                "ApprovalLoanReviewCycleSpi");
+        assertRuleRejects(THIN_APPROVAL_SPI_ADAPTERS,
+                com.meridian.platform.testsupport.architecture.loan.infrastructure.adapter.in.approval.RepositoryLeak.class,
+                "LoanReviewCycleRepository");
+    }
+
+    @Test
+    void approvalSpiClosureRejectsNestedGenericInternalTypeLeaks() {
+        Class<?> fixture = com.meridian.platform.testsupport.architecture.approval.application.spi.loan.InternalTypeLeak.class;
+        var nested = fixture.getDeclaredClasses()[0];
+        var published = new java.util.HashSet<>(APPROVAL_SPI_TYPES);
+        published.add(fixture.getName());
+        published.add(nested.getName());
+        var result = approvalSpiClosure(published).evaluate(new ClassFileImporter().importClasses(fixture, nested));
+        assertTrue(result.hasViolation());
+        assertTrue(result.getFailureReport().toString().contains("LoanApplication"));
+        assertRuleRejects(approvalSpiClosure(APPROVAL_SPI_TYPES), fixture, "Unpublished SPI type");
+    }
+
     private static final Set<String> APPROVAL_EVENT_TYPES = Set.of(
             "com.meridian.platform.approval.application.event.ApprovalDecisionRecordedEvent",
             "com.meridian.platform.approval.application.event.ReviewRecommendationRecordedEvent",

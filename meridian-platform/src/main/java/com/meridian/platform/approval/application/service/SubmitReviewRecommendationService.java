@@ -4,7 +4,7 @@ import com.meridian.platform.approval.application.dto.ReviewRecommendationDto;
 import com.meridian.platform.approval.application.dto.ReviewRecommendationRequest;
 import com.meridian.platform.approval.application.mapper.ApprovalMapper;
 import com.meridian.platform.approval.application.port.in.SubmitReviewRecommendationUseCase;
-import com.meridian.platform.approval.application.port.out.ApprovalLoanReviewCyclePort;
+import com.meridian.platform.approval.application.spi.loan.ApprovalLoanReviewCycleSpi;
 import com.meridian.platform.approval.application.port.out.ReviewRecommendationEventPublisher;
 import com.meridian.platform.approval.application.port.out.ReviewRecommendationRepository;
 import com.meridian.platform.approval.domain.model.ReviewRecommendation;
@@ -33,7 +33,7 @@ import java.util.UUID;
 public class SubmitReviewRecommendationService implements SubmitReviewRecommendationUseCase {
 
     private final ReviewRecommendationRepository reviewRecommendationRepository;
-    private final ApprovalLoanReviewCyclePort loanReviewCyclePort;
+    private final ApprovalLoanReviewCycleSpi loanReviewCyclePort;
     private final ReviewRecommendationEventPublisher reviewRecommendationEventPublisher;
     private final CurrentUserProvider currentUserProvider;
     private final ApprovalMapper approvalMapper;
@@ -43,7 +43,7 @@ public class SubmitReviewRecommendationService implements SubmitReviewRecommenda
 
     public SubmitReviewRecommendationService(
             ReviewRecommendationRepository reviewRecommendationRepository,
-            ApprovalLoanReviewCyclePort loanReviewCyclePort,
+            ApprovalLoanReviewCycleSpi loanReviewCyclePort,
             ReviewRecommendationEventPublisher reviewRecommendationEventPublisher,
             CurrentUserProvider currentUserProvider,
             ApprovalMapper approvalMapper,
@@ -68,7 +68,7 @@ public class SubmitReviewRecommendationService implements SubmitReviewRecommenda
         Objects.requireNonNull(loanApplicationId, "loanApplicationId must not be null");
         Objects.requireNonNull(request, "request must not be null");
         Objects.requireNonNull(request.action(), "action must not be null");
-        ApprovalLoanReviewCyclePort.ActiveReviewCycleSnapshot reviewCycle =
+        ApprovalLoanReviewCycleSpi.ActiveReviewCycleSnapshot reviewCycle =
                 loanReviewCyclePort.findActiveReviewCycle(loanApplicationId)
                 .orElseThrow(() -> new BusinessStateConflictException(
                         "REVIEW_CYCLE_REQUIRED", "An active review cycle is required."));
@@ -122,7 +122,7 @@ public class SubmitReviewRecommendationService implements SubmitReviewRecommenda
     }
 
     private static void requireAssignedLoanOfficer(
-            ApprovalLoanReviewCyclePort.ActiveReviewCycleSnapshot reviewCycle,
+            ApprovalLoanReviewCycleSpi.ActiveReviewCycleSnapshot reviewCycle,
             UUID currentUserId
     ) {
         if (reviewCycle.assignedLoanOfficerUserId() == null) {

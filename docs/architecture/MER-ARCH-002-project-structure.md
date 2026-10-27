@@ -106,13 +106,15 @@ A module contains only the packages it uses.
 | `domain.model` | Aggregates, entities, value objects, enums, and state transitions |
 | `domain.service` | Pure business policies or calculations not owned by one aggregate |
 | `domain.event` | Context-owned domain event vocabulary |
-| `application.port.in` | Public command and query use-case contracts |
-| `application.port.out` | Persistence, publication, storage, provider, and cross-context dependency contracts |
+| `application.port.in` | Command and query use-case contracts; cross-module publication is explicit |
+| `application.port.out` | Private persistence, publication, storage, provider, and cross-context dependency contracts |
+| `application.spi.<provider>` | Explicitly published consumer-owned SPIs and approved support types from ARCH-003 |
 | `application.service` | Transactional use-case orchestration and policy selection |
 | `application.dto` | Application and API boundary shapes |
 | `application.mapper` | Domain-to-boundary mapping |
 | `infrastructure.adapter.in.web` | REST controllers and HTTP-specific concerns |
 | `infrastructure.adapter.in.event` | Event listeners entering through application contracts |
+| `infrastructure.adapter.in.<consumer>` | Designated implementations of published consumer SPIs, delegating to own input ports |
 | `infrastructure.adapter.out.persistence` | JPA/JDBC entities, repositories, adapters, and persistence mapping |
 | `infrastructure.adapter.out.<boundary>` | Event, storage, provider, or collaborating-context adapters |
 | `infrastructure.security` | Concrete Spring Security and JWT implementation owned by Identity |
@@ -253,7 +255,7 @@ Activation, repayment including contractual payoff, Administrative Full-Balance 
 
 ### 8.1 Synchronous Application Contracts
 
-The consuming module owns an output port that describes the facts or action it needs. A boundary adapter implements that port by calling the providing context's public application contract.
+The ordinary synchronous pattern uses a private output port owned by the consuming module to describe the facts or action it needs. A boundary adapter implements that port by calling the providing context's public application contract.
 
 ```text
 loan/
@@ -271,12 +273,19 @@ This pattern applies when:
 
 - Loan consumes Partner eligibility;
 - Loan consumes Document readiness;
-- Partner consumes Customer identity evidence;
-- Approval queries Loan-owned review-cycle facts.
+- Partner consumes Customer identity evidence.
 
 A boundary adapter may translate identifiers and immutable contract records. It must not expose another context's repositories, JPA entities, internal services, or aggregate object graphs.
 
-### 8.2 Published Events and Inbound Event Adapters
+### 8.2 Published Consumer SPIs
+
+The finite Design S catalogue in [MER-ARCH-003](MER-ARCH-003-dependency-rules.md#published-consumer-spi-exception-design-s) permits a consumer-owned published SPI in place of its private output port. Its designated provider implementation belongs under `infrastructure.adapter.in.<consumer>` and calls a provider-owned application input port. Provider application and domain code remain independent of the foreign SPI.
+
+For example, Approval calls `approval.application.spi.loan.ApprovalLoanReviewCycleSpi`; Loan's `infrastructure.adapter.in.approval.ApprovalLoanReviewCycleAdapter` translates the result from `loan.application.port.in.QueryApprovalLoanReviewCycleUseCase`. Repository reads belong to the Loan application service. The runtime call supplies Loan-owned facts to Approval while the Java dependency points from Loan infrastructure to Approval's SPI.
+
+These inbound adapters perform mapping and delegation only. They have no repository access or transaction boundary. The SPI replaces the private output port without a consumer forwarding adapter or a parallel binding.
+
+### 8.3 Published Events and Inbound Event Adapters
 
 A module that consumes a published business event handles it through `infrastructure.adapter.in.event` and enters its own application layer through an explicit contract.
 

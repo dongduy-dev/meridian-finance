@@ -3,7 +3,7 @@ package com.meridian.platform.approval.application.service;
 import com.meridian.platform.approval.application.port.out.ApprovalDecisionRepository;
 import com.meridian.platform.approval.application.port.out.ApprovalCustomerIdentityPort;
 import com.meridian.platform.approval.application.port.out.ApprovalCustomerIdentitySnapshot;
-import com.meridian.platform.approval.application.port.out.ApprovalLoanCasePort;
+import com.meridian.platform.approval.application.spi.loan.ApprovalLoanCaseSpi;
 import com.meridian.platform.approval.application.port.out.ReviewRecommendationRepository;
 import com.meridian.platform.approval.application.port.out.StaffActorDirectoryPort;
 import com.meridian.platform.approval.application.port.out.StaffActorSummary;
@@ -56,7 +56,7 @@ class QueryStaffApprovalWorkServiceTest {
 
     private static final UUID CUSTOMER_ID = UUID.randomUUID();
 
-    @Mock ApprovalLoanCasePort loanCases;
+    @Mock ApprovalLoanCaseSpi loanCases;
     @Mock ApprovalCustomerIdentityPort customers;
     @Mock ReviewRecommendationRepository recommendations;
     @Mock ApprovalDecisionRepository decisions;
@@ -232,13 +232,13 @@ class QueryStaffApprovalWorkServiceTest {
 
     @Test
     void queueMembershipAndPagingRemainLoanServerOwned() {
-        ApprovalLoanCasePort.QueueItemSnapshot item = new ApprovalLoanCasePort.QueueItemSnapshot(
+        ApprovalLoanCaseSpi.QueueItemSnapshot item = new ApprovalLoanCaseSpi.QueueItemSnapshot(
                 APPLICATION_ID, "UCL-1", "UNSECURED_CONSUMER_LOAN", "PERSONAL",
                 BigDecimal.TEN, 6, "APPROVAL_PENDING", NOW.minusHours(1)
         );
         when(currentUserProvider.currentUser()).thenReturn(staff(APPROVER_ID, Set.of("approval:decide")));
         when(loanCases.findDecisionQueue("UNSECURED_CONSUMER_LOAN", 1, 25)).thenReturn(
-                new ApprovalLoanCasePort.QueuePageSnapshot(1, 25, 26, 2, List.of(item))
+                new ApprovalLoanCaseSpi.QueuePageSnapshot(1, 25, 26, 2, List.of(item))
         );
         when(recommendations.findLatestByLoanApplicationId(APPLICATION_ID)).thenReturn(Optional.of(recommendation()));
         when(decisions.findByReviewRecommendationId(RECOMMENDATION_ID)).thenReturn(Optional.empty());
@@ -252,7 +252,7 @@ class QueryStaffApprovalWorkServiceTest {
 
     @Test
     void queueFailsClosedWhenApprovalEvidenceContradictsPendingMembership() {
-        ApprovalLoanCasePort.QueueItemSnapshot item = new ApprovalLoanCasePort.QueueItemSnapshot(
+        ApprovalLoanCaseSpi.QueueItemSnapshot item = new ApprovalLoanCaseSpi.QueueItemSnapshot(
                 APPLICATION_ID, "UCL-1", "UNSECURED_CONSUMER_LOAN", "PERSONAL",
                 BigDecimal.TEN, 6, "APPROVAL_PENDING", NOW.minusHours(1)
         );
@@ -262,7 +262,7 @@ class QueryStaffApprovalWorkServiceTest {
         );
         when(currentUserProvider.currentUser()).thenReturn(staff(APPROVER_ID, Set.of("approval:decide")));
         when(loanCases.findDecisionQueue(null, 0, 25)).thenReturn(
-                new ApprovalLoanCasePort.QueuePageSnapshot(0, 25, 1, 1, List.of(item))
+                new ApprovalLoanCaseSpi.QueuePageSnapshot(0, 25, 1, 1, List.of(item))
         );
         when(recommendations.findLatestByLoanApplicationId(APPLICATION_ID)).thenReturn(Optional.of(recommendation()));
         when(decisions.findByReviewRecommendationId(RECOMMENDATION_ID)).thenReturn(Optional.of(decision));
@@ -302,7 +302,7 @@ class QueryStaffApprovalWorkServiceTest {
     @Test
     void contradictoryLoanCaseLinkageFailsClosedBeforeCustomerLookup() {
         when(currentUserProvider.currentUser()).thenReturn(staff(APPROVER_ID, Set.of("approval:decide")));
-        var wrongCase = org.mockito.Mockito.mock(ApprovalLoanCasePort.CaseSnapshot.class);
+        var wrongCase = org.mockito.Mockito.mock(ApprovalLoanCaseSpi.CaseSnapshot.class);
         when(wrongCase.loanApplicationId()).thenReturn(UUID.randomUUID());
         when(loanCases.findCase(APPLICATION_ID)).thenReturn(Optional.of(wrongCase));
         assertThrows(BusinessStateConflictException.class, () -> service.queryDecisionCase(APPLICATION_ID));
@@ -343,20 +343,20 @@ class QueryStaffApprovalWorkServiceTest {
         assertEquals(Set.of("userId", "displayName", "email"), actorFields);
     }
 
-    private static ApprovalLoanCasePort.CaseSnapshot caseSnapshot(String status) {
+    private static ApprovalLoanCaseSpi.CaseSnapshot caseSnapshot(String status) {
         return caseSnapshot(status, "CUSTOMER_DIGITAL");
     }
 
-    private static ApprovalLoanCasePort.CaseSnapshot caseSnapshot(String status, String channel) {
-        return new ApprovalLoanCasePort.CaseSnapshot(
+    private static ApprovalLoanCaseSpi.CaseSnapshot caseSnapshot(String status, String channel) {
+        return new ApprovalLoanCaseSpi.CaseSnapshot(
                 APPLICATION_ID, CUSTOMER_ID, "UCL-1", "UNSECURED_CONSUMER_LOAN", "PERSONAL",
                 BigDecimal.TEN, 6, status, NOW.minusHours(2), channel,
-                new ApprovalLoanCasePort.DocumentReadinessSnapshot(true, true),
-                new ApprovalLoanCasePort.ProductReadinessSnapshot("VERIFIED", true),
-                new ApprovalLoanCasePort.ReviewCycleSnapshot(
+                new ApprovalLoanCaseSpi.DocumentReadinessSnapshot(true, true),
+                new ApprovalLoanCaseSpi.ProductReadinessSnapshot("VERIFIED", true),
+                new ApprovalLoanCaseSpi.ReviewCycleSnapshot(
                         CYCLE_ID, 1, OFFICER_ID, "ACTIVE", NOW.minusHours(1), null
                 ),
-                List.of(new ApprovalLoanCasePort.CorrectionOptionSnapshot(
+                List.of(new ApprovalLoanCaseSpi.CorrectionOptionSnapshot(
                         "INCOME_PROOF", UUID.randomUUID(), UUID.randomUUID(),
                         List.of("DOCUMENT_REPLACEMENT", "DOCUMENT_REVIEW")
                 ))

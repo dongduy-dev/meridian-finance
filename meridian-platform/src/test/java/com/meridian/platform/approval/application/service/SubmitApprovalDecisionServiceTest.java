@@ -251,6 +251,20 @@ class SubmitApprovalDecisionServiceTest {
         assertNull(eventPublisher.publishedEvent);
     }
 
+    @Test
+    void missingCycleKeepsEvidenceValidationAheadOfCorrectionAndMakerCheckerChecks() {
+        service = new SubmitApprovalDecisionService(reviewRecommendationRepository, approvalDecisionRepository,
+                ignored -> Optional.empty(), eventPublisher, new FixedCurrentUserProvider(LOAN_OFFICER_USER_ID),
+                new ApprovalMapper(), auditPublisher, CLOCK);
+        var failure = assertThrows(BusinessStateConflictException.class, () -> service.submitApprovalDecision(
+                LOAN_APPLICATION_ID, new ApprovalDecisionRequest(ApprovalDecisionAction.REQUEST_CUSTOMER_OR_STAFF_CORRECTION,
+                        null, null, RECOMMENDATION_ID, REVIEW_CYCLE_ID, null, null)));
+        assertEquals("REVIEW_CYCLE_REQUIRED", failure.getErrorCode());
+        assertNull(approvalDecisionRepository.savedDecision);
+        assertNull(auditPublisher.publishedEvent);
+        assertNull(eventPublisher.publishedEvent);
+    }
+
     private static ApprovalDecisionRequest request(
             ApprovalDecisionAction action,
             String reason,
@@ -271,8 +285,8 @@ class SubmitApprovalDecisionServiceTest {
         return new SubmitApprovalDecisionService(
                 reviewRecommendationRepository,
                 approvalDecisionRepository,
-                ignored -> Optional.of(new com.meridian.platform.approval.application.port.out
-                        .ApprovalLoanReviewCyclePort.ActiveReviewCycleSnapshot(
+                ignored -> Optional.of(new com.meridian.platform.approval.application.spi.loan
+                        .ApprovalLoanReviewCycleSpi.ActiveReviewCycleSnapshot(
                         REVIEW_CYCLE_ID, LOAN_OFFICER_USER_ID
                 )),
                 eventPublisher,

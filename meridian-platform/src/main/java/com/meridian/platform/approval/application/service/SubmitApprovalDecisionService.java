@@ -6,7 +6,7 @@ import com.meridian.platform.approval.application.mapper.ApprovalMapper;
 import com.meridian.platform.approval.application.port.in.SubmitApprovalDecisionUseCase;
 import com.meridian.platform.approval.application.port.out.ApprovalDecisionEventPublisher;
 import com.meridian.platform.approval.application.port.out.ApprovalDecisionRepository;
-import com.meridian.platform.approval.application.port.out.ApprovalLoanReviewCyclePort;
+import com.meridian.platform.approval.application.spi.loan.ApprovalLoanReviewCycleSpi;
 import com.meridian.platform.approval.application.port.out.ReviewRecommendationRepository;
 import com.meridian.platform.approval.domain.model.ApprovalDecision;
 import com.meridian.platform.approval.domain.model.ApprovalDecisionAction;
@@ -36,7 +36,7 @@ public class SubmitApprovalDecisionService implements SubmitApprovalDecisionUseC
 
     private final ReviewRecommendationRepository reviewRecommendationRepository;
     private final ApprovalDecisionRepository approvalDecisionRepository;
-    private final ApprovalLoanReviewCyclePort loanReviewCyclePort;
+    private final ApprovalLoanReviewCycleSpi loanReviewCyclePort;
     private final ApprovalDecisionEventPublisher approvalDecisionEventPublisher;
     private final CurrentUserProvider currentUserProvider;
     private final ApprovalMapper approvalMapper;
@@ -47,7 +47,7 @@ public class SubmitApprovalDecisionService implements SubmitApprovalDecisionUseC
     public SubmitApprovalDecisionService(
             ReviewRecommendationRepository reviewRecommendationRepository,
             ApprovalDecisionRepository approvalDecisionRepository,
-            ApprovalLoanReviewCyclePort loanReviewCyclePort,
+            ApprovalLoanReviewCycleSpi loanReviewCyclePort,
             ApprovalDecisionEventPublisher approvalDecisionEventPublisher,
             CurrentUserProvider currentUserProvider,
             ApprovalMapper approvalMapper,
