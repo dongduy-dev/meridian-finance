@@ -1,5 +1,6 @@
 package com.meridian.platform.loan.application.service;
 
+import com.meridian.platform.loan.domain.model.LoanDocumentType;
 import com.meridian.platform.approval.application.dto.CorrectionPlanRequest;
 import com.meridian.platform.approval.application.dto.CorrectionTaskRequest;
 import com.meridian.platform.approval.domain.model.CorrectionReasonCode;
@@ -65,7 +66,7 @@ class CustomerCorrectionWorkflowServiceTest {
         when(corrections.saveTask(any())).thenAnswer(invocation -> invocation.getArgument(0));
         when(documents.requireCurrentVersionSnapshot(APPLICATION_ID, ITEM_ID, VERSION_ID))
                 .thenReturn(new LoanDocumentChecklistPort.CurrentDocumentVersionSnapshot(
-                        DocumentType.INCOME_PROOF,
+                        LoanDocumentType.INCOME_PROOF,
                         VERSION_ID
                 ));
         service = new CustomerCorrectionWorkflowService(
@@ -117,7 +118,7 @@ class CustomerCorrectionWorkflowServiceTest {
     void uclRejectsMismatchedChecklistDocumentType() {
         when(documents.requireCurrentVersionSnapshot(APPLICATION_ID, ITEM_ID, VERSION_ID))
                 .thenReturn(new LoanDocumentChecklistPort.CurrentDocumentVersionSnapshot(
-                        DocumentType.BANK_STATEMENT,
+                        LoanDocumentType.BANK_STATEMENT,
                         VERSION_ID
                 ));
 
@@ -380,7 +381,7 @@ class CustomerCorrectionWorkflowServiceTest {
     private void stubCollateralDocument() {
         when(documents.requireCurrentVersionSnapshot(APPLICATION_ID, ITEM_ID, VERSION_ID))
                 .thenReturn(new LoanDocumentChecklistPort.CurrentDocumentVersionSnapshot(
-                        DocumentType.COLLATERAL_OWNERSHIP_EVIDENCE,
+                        LoanDocumentType.COLLATERAL_OWNERSHIP_EVIDENCE,
                         VERSION_ID
                 ));
     }

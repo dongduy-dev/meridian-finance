@@ -1,7 +1,6 @@
 package com.meridian.platform.loan.application.service.collateral;
 
-import com.meridian.platform.document.domain.model.DocumentRequirementStatus;
-import com.meridian.platform.document.domain.model.DocumentType;
+import com.meridian.platform.loan.domain.model.LoanDocumentType;
 import com.meridian.platform.loan.application.dto.AssistedOriginationCaseDto;
 import com.meridian.platform.loan.application.dto.CollateralDetailsRequest;
 import com.meridian.platform.loan.application.dto.CollateralLoanApplicationRequest;
@@ -172,8 +171,8 @@ class StartAssistedCollateralLoanServiceTest {
         when(checklists.createSubmissionChecklist(any(), eq(ProductCode.COLLATERAL_LOAN), any()))
                 .thenReturn(new LoanDocumentChecklistPort.SubmissionChecklistSnapshot(List.of(
                         new LoanDocumentChecklistPort.SubmissionChecklistItemSnapshot(
-                                UUID.randomUUID(), DocumentType.COLLATERAL_OWNERSHIP_EVIDENCE,
-                                DocumentRequirementStatus.REQUIRED))));
+                                UUID.randomUUID(), LoanDocumentType.COLLATERAL_OWNERSHIP_EVIDENCE,
+                                LoanDocumentChecklistPort.RequirementStatus.REQUIRED))));
         when(applications.nextApplicationNumberSequence()).thenReturn(9L);
         when(applications.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
         when(collaterals.save(any())).thenAnswer(invocation -> invocation.getArgument(0));

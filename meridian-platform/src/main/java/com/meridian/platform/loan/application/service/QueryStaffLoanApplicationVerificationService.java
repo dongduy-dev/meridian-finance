@@ -1,6 +1,6 @@
 package com.meridian.platform.loan.application.service;
 
-import com.meridian.platform.document.domain.model.DocumentType;
+import com.meridian.platform.loan.domain.model.LoanDocumentType;
 import com.meridian.platform.loan.application.dto.CollateralAssessmentSnapshotDto;
 import com.meridian.platform.loan.application.dto.StaffLoanApplicationVerificationDto;
 import com.meridian.platform.loan.application.port.in.QueryStaffLoanApplicationVerificationUseCase;
@@ -41,10 +41,10 @@ import java.util.stream.Collectors;
 public class QueryStaffLoanApplicationVerificationService
         implements QueryStaffLoanApplicationVerificationUseCase {
 
-    private static final Set<DocumentType> UCL_CORRECTION_TYPES = Set.of(
-            DocumentType.INCOME_PROOF,
-            DocumentType.BANK_STATEMENT,
-            DocumentType.EMPLOYMENT_PROOF
+    private static final Set<LoanDocumentType> UCL_CORRECTION_TYPES = Set.of(
+            LoanDocumentType.INCOME_PROOF,
+            LoanDocumentType.BANK_STATEMENT,
+            LoanDocumentType.EMPLOYMENT_PROOF
     );
 
     private final LoanApplicationRepository applications;
@@ -200,14 +200,14 @@ public class QueryStaffLoanApplicationVerificationService
                         )
                 ),
                 canReview ? correctionTargets(
-                        application.id(), Set.of(DocumentType.COLLATERAL_OWNERSHIP_EVIDENCE)
+                        application.id(), Set.of(LoanDocumentType.COLLATERAL_OWNERSHIP_EVIDENCE)
                 ) : List.of()
         );
     }
 
     private List<StaffLoanApplicationVerificationDto.CorrectionTargetDto> correctionTargets(
             UUID loanApplicationId,
-            Set<DocumentType> allowedTypes
+            Set<LoanDocumentType> allowedTypes
     ) {
         return documents.currentVersionTargets(loanApplicationId).stream()
                 .filter(target -> allowedTypes.contains(target.documentType()))

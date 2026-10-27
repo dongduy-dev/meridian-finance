@@ -84,7 +84,7 @@ public class PreReviewDocumentCorrectionService {
         LoanApplication application = applicationRepository.findByIdForUpdate(loanApplicationId)
                 .orElseThrow(() -> new EntityNotFoundException(
                         "LOAN_APPLICATION_NOT_FOUND", "Loan Application was not found."));
-        requireProductDocumentCompatibility(application.productCode(), document.documentType());
+        requireProductDocumentCompatibility(application.productCode(), DocumentType.valueOf(document.documentType().name()));
         var activeRequest = correctionRepository.findActiveRequestByApplicationIdForUpdate(loanApplicationId);
         if (activeRequest.isPresent()) {
             LoanCorrectionRequest request = activeRequest.get();
@@ -102,7 +102,7 @@ public class PreReviewDocumentCorrectionService {
             correctionRepository.saveTask(new LoanCorrectionTask(
                     UUID.randomUUID(), request.id(), correctionRepository.nextTaskSequence(request.id()),
                     LoanCorrectionResponsibility.CUSTOMER, LoanCorrectionScope.DOCUMENT_REPLACEMENT,
-                    document.documentType(), false, checklistItemId, baselineVersionId,
+                    DocumentType.valueOf(document.documentType().name()), false, checklistItemId, baselineVersionId,
                     instruction, null, LoanCorrectionTaskStatus.OPEN, null, null, null,
                     operation.occurredAt()
             ));
@@ -117,7 +117,7 @@ public class PreReviewDocumentCorrectionService {
         ));
         correctionRepository.saveTask(new LoanCorrectionTask(
                 UUID.randomUUID(), request.id(), 1, LoanCorrectionResponsibility.CUSTOMER,
-                LoanCorrectionScope.DOCUMENT_REPLACEMENT, document.documentType(),
+                LoanCorrectionScope.DOCUMENT_REPLACEMENT, DocumentType.valueOf(document.documentType().name()),
                 false, checklistItemId, baselineVersionId, instruction, null,
                 LoanCorrectionTaskStatus.OPEN, null, null, null, operation.occurredAt()
         ));

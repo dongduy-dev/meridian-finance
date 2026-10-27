@@ -1,7 +1,7 @@
 package com.meridian.platform.loan.infrastructure.adapter.out.approval;
 
 import com.meridian.platform.approval.application.port.out.ApprovalLoanCasePort;
-import com.meridian.platform.document.domain.model.DocumentType;
+import com.meridian.platform.loan.domain.model.LoanDocumentType;
 import com.meridian.platform.loan.application.port.out.CollateralLoanVerificationRepository;
 import com.meridian.platform.loan.application.port.out.LoanApplicationRepository;
 import com.meridian.platform.loan.application.port.out.LoanDocumentChecklistPort;
@@ -123,9 +123,9 @@ public class ApprovalLoanCaseAdapter implements ApprovalLoanCasePort {
                 )));
 
         if (application.productCode() == ProductCode.SALARY_ADVANCE
-                && currentTargets.stream().noneMatch(target -> target.documentType() == DocumentType.RECENT_PAYSLIP)) {
+                && currentTargets.stream().noneMatch(target -> target.documentType() == LoanDocumentType.RECENT_PAYSLIP)) {
             options.add(new CorrectionOptionSnapshot(
-                    DocumentType.RECENT_PAYSLIP.name(),
+                    LoanDocumentType.RECENT_PAYSLIP.name(),
                     null,
                     null,
                     List.of("SUPPORTING_DOCUMENT_UPLOAD")
@@ -134,13 +134,13 @@ public class ApprovalLoanCaseAdapter implements ApprovalLoanCasePort {
         return options;
     }
 
-    private boolean isProductCorrectionDocument(ProductCode productCode, DocumentType documentType) {
+    private boolean isProductCorrectionDocument(ProductCode productCode, LoanDocumentType documentType) {
         return switch (productCode) {
-            case SALARY_ADVANCE -> documentType == DocumentType.RECENT_PAYSLIP;
-            case UNSECURED_CONSUMER_LOAN -> documentType == DocumentType.INCOME_PROOF
-                    || documentType == DocumentType.BANK_STATEMENT
-                    || documentType == DocumentType.EMPLOYMENT_PROOF;
-            case COLLATERAL_LOAN -> documentType == DocumentType.COLLATERAL_OWNERSHIP_EVIDENCE;
+            case SALARY_ADVANCE -> documentType == LoanDocumentType.RECENT_PAYSLIP;
+            case UNSECURED_CONSUMER_LOAN -> documentType == LoanDocumentType.INCOME_PROOF
+                    || documentType == LoanDocumentType.BANK_STATEMENT
+                    || documentType == LoanDocumentType.EMPLOYMENT_PROOF;
+            case COLLATERAL_LOAN -> documentType == LoanDocumentType.COLLATERAL_OWNERSHIP_EVIDENCE;
         };
     }
 

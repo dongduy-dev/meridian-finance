@@ -3,7 +3,7 @@ package com.meridian.platform.document.application.service;
 import com.meridian.platform.document.domain.model.DocumentChecklistItem;
 import com.meridian.platform.document.domain.model.DocumentRequirementStatus;
 import com.meridian.platform.document.domain.model.DocumentType;
-import com.meridian.platform.loan.domain.model.ProductCode;
+import com.meridian.platform.document.application.port.in.DocumentChecklistUseCase.SubmissionProduct;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDateTime;
@@ -15,10 +15,10 @@ public class UnsecuredConsumerLoanDocumentChecklistResolver {
 
     public List<DocumentChecklistItem> resolve(
             UUID checklistId,
-            ProductCode productCode,
+            SubmissionProduct productCode,
             LocalDateTime createdAt
     ) {
-        if (productCode != ProductCode.UNSECURED_CONSUMER_LOAN) {
+        if (productCode != SubmissionProduct.UNSECURED_CONSUMER_LOAN) {
             throw new IllegalArgumentException("Unsupported document checklist product.");
         }
         return List.of(

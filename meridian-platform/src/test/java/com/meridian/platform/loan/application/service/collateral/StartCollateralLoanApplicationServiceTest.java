@@ -1,9 +1,8 @@
 package com.meridian.platform.loan.application.service.collateral;
 
+import com.meridian.platform.loan.domain.model.LoanDocumentType;
 import com.meridian.platform.loan.application.service.LoanApplicationStatusTransitionRecorder;
 
-import com.meridian.platform.document.domain.model.DocumentRequirementStatus;
-import com.meridian.platform.document.domain.model.DocumentType;
 import com.meridian.platform.loan.application.dto.CollateralDetailsRequest;
 import com.meridian.platform.loan.application.dto.CollateralLoanApplicationDto;
 import com.meridian.platform.loan.application.dto.CollateralLoanApplicationRequest;
@@ -264,8 +263,8 @@ class StartCollateralLoanApplicationServiceTest {
         return new LoanDocumentChecklistPort.SubmissionChecklistSnapshot(List.of(
                 new LoanDocumentChecklistPort.SubmissionChecklistItemSnapshot(
                         CHECKLIST_ITEM_ID,
-                        DocumentType.COLLATERAL_OWNERSHIP_EVIDENCE,
-                        DocumentRequirementStatus.REQUIRED
+                        LoanDocumentType.COLLATERAL_OWNERSHIP_EVIDENCE,
+                        LoanDocumentChecklistPort.RequirementStatus.REQUIRED
                 )
         ));
     }
