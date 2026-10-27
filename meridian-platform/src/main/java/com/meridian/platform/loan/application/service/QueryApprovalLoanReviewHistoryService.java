@@ -1,20 +1,20 @@
-package com.meridian.platform.loan.infrastructure.adapter.out.approval;
+package com.meridian.platform.loan.application.service;
 
-import com.meridian.platform.approval.application.port.out.ApprovalLoanCasePort.ReviewCycleSnapshot;
-import com.meridian.platform.approval.application.port.out.ApprovalLoanReviewHistoryPort;
+import com.meridian.platform.loan.application.port.in.QueryApprovalLoanCaseUseCase.ReviewCycleSnapshot;
+import com.meridian.platform.loan.application.port.in.QueryApprovalLoanReviewHistoryUseCase;
 import com.meridian.platform.loan.application.port.out.LoanApplicationRepository;
 import com.meridian.platform.loan.application.port.out.LoanReviewCycleRepository;
-import org.springframework.stereotype.Component;
+import org.springframework.stereotype.Service;
 
 import java.util.Optional;
 import java.util.UUID;
 
-@Component
-public class ApprovalLoanReviewHistoryAdapter implements ApprovalLoanReviewHistoryPort {
+@Service
+public class QueryApprovalLoanReviewHistoryService implements QueryApprovalLoanReviewHistoryUseCase {
     private final LoanApplicationRepository applications;
     private final LoanReviewCycleRepository cycles;
 
-    public ApprovalLoanReviewHistoryAdapter(LoanApplicationRepository applications, LoanReviewCycleRepository cycles) {
+    public QueryApprovalLoanReviewHistoryService(LoanApplicationRepository applications, LoanReviewCycleRepository cycles) {
         this.applications = applications;
         this.cycles = cycles;
     }

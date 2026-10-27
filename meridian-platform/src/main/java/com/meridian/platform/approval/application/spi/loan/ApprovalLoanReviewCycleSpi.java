@@ -1,9 +1,9 @@
-package com.meridian.platform.approval.application.port.out;
+package com.meridian.platform.approval.application.spi.loan;
 
 import java.util.Optional;
 import java.util.UUID;
 
-public interface ApprovalLoanReviewCyclePort {
+public interface ApprovalLoanReviewCycleSpi {
     Optional<ActiveReviewCycleSnapshot> findActiveReviewCycle(UUID loanApplicationId);
 
     record ActiveReviewCycleSnapshot(

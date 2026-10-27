@@ -1,6 +1,8 @@
 package com.meridian.platform.approval.application.service;
 
 import com.meridian.platform.approval.application.port.out.*;
+import com.meridian.platform.approval.application.spi.loan.ApprovalLoanCaseSpi;
+import com.meridian.platform.approval.application.spi.loan.ApprovalLoanReviewHistorySpi;
 import com.meridian.platform.approval.domain.model.*;
 import com.meridian.platform.shared.application.security.AuthenticatedUser;
 import com.meridian.platform.shared.application.security.CurrentUserProvider;
@@ -28,7 +30,7 @@ class QueryStaffReviewHistoryServiceTest {
     private static final UUID OFFICER = UUID.randomUUID();
     private static final UUID APPROVER = UUID.randomUUID();
     private static final LocalDateTime AT = LocalDateTime.of(2026, 10, 1, 9, 0);
-    @Mock ApprovalLoanReviewHistoryPort loanHistory;
+    @Mock ApprovalLoanReviewHistorySpi loanHistory;
     @Mock ReviewRecommendationRepository recommendations;
     @Mock ApprovalDecisionRepository decisions;
     @Mock StaffActorDirectoryPort actors;
@@ -156,11 +158,22 @@ class QueryStaffReviewHistoryServiceTest {
         assertThrows(BusinessStateConflictException.class, () -> service.query(APP));
     }
 
-    private void arrange(UUID actor, String permission, List<ApprovalLoanCasePort.ReviewCycleSnapshot> cycles,
+    @Test
+    void duplicateCycleIdentityOrNumberFailsBeforeJoiningRecommendationsOrActors() {
+        var first = cycle(1, OFFICER);
+        for (var duplicate : List.of(first, cycle(1, OFFICER))) {
+            arrange(OFFICER, "loan:review", List.of(first, duplicate), List.of(), List.of());
+            var failure = assertThrows(BusinessStateConflictException.class, () -> service.query(APP));
+            assertEquals("SYSTEM_STATE_CONFLICT", failure.getErrorCode());
+            verifyNoInteractions(recommendations, decisions, actors);
+        }
+    }
+
+    private void arrange(UUID actor, String permission, List<ApprovalLoanCaseSpi.ReviewCycleSnapshot> cycles,
                          List<ReviewRecommendation> recs, List<ApprovalDecision> decs) {
         when(currentUser.currentUser()).thenReturn(staff(actor, permission));
         when(loanHistory.findHistory(APP)).thenReturn(Optional.of(
-                new ApprovalLoanReviewHistoryPort.HistorySnapshot(APP, "UCL-HISTORY", "RETURNED_TO_REVIEW", cycles)));
+                new ApprovalLoanReviewHistorySpi.HistorySnapshot(APP, "UCL-HISTORY", "RETURNED_TO_REVIEW", cycles)));
         lenient().when(recommendations.findByLoanApplicationIdOrderBySubmittedAtAsc(APP)).thenReturn(recs);
         lenient().when(decisions.findByLoanApplicationIdOrderByDecidedAtDesc(APP)).thenReturn(decs);
         lenient().when(actors.findByUserIds(anySet())).thenReturn(Map.of());
@@ -170,8 +183,8 @@ class QueryStaffReviewHistoryServiceTest {
         return new AuthenticatedUser(id, "staff@meridian.test", "STAFF", null, Set.of(), Set.of(permission));
     }
 
-    private static ApprovalLoanCasePort.ReviewCycleSnapshot cycle(int number, UUID assigned) {
-        return new ApprovalLoanCasePort.ReviewCycleSnapshot(UUID.randomUUID(), number, assigned,
+    private static ApprovalLoanCaseSpi.ReviewCycleSnapshot cycle(int number, UUID assigned) {
+        return new ApprovalLoanCaseSpi.ReviewCycleSnapshot(UUID.randomUUID(), number, assigned,
                 number == 3 ? "ACTIVE" : "SUPERSEDED", AT, number == 3 ? null : AT.plusHours(1));
     }
 

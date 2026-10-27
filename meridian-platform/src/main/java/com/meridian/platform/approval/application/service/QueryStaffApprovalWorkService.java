@@ -6,7 +6,7 @@ import com.meridian.platform.approval.application.dto.StaffRecommendationCaseDto
 import com.meridian.platform.approval.application.port.in.QueryStaffApprovalWorkUseCase;
 import com.meridian.platform.approval.application.port.out.ApprovalDecisionRepository;
 import com.meridian.platform.approval.application.port.out.ApprovalCustomerIdentityPort;
-import com.meridian.platform.approval.application.port.out.ApprovalLoanCasePort;
+import com.meridian.platform.approval.application.spi.loan.ApprovalLoanCaseSpi;
 import com.meridian.platform.approval.application.port.out.ReviewRecommendationRepository;
 import com.meridian.platform.approval.application.port.out.StaffActorDirectoryPort;
 import com.meridian.platform.approval.application.port.out.StaffActorSummary;
@@ -34,7 +34,7 @@ public class QueryStaffApprovalWorkService implements QueryStaffApprovalWorkUseC
 
     public static final int MAX_PAGE_SIZE = 100;
 
-    private final ApprovalLoanCasePort loanCases;
+    private final ApprovalLoanCaseSpi loanCases;
     private final ApprovalCustomerIdentityPort customers;
     private final ReviewRecommendationRepository recommendations;
     private final ApprovalDecisionRepository decisions;
@@ -42,7 +42,7 @@ public class QueryStaffApprovalWorkService implements QueryStaffApprovalWorkUseC
     private final CurrentUserProvider currentUserProvider;
 
     public QueryStaffApprovalWorkService(
-            ApprovalLoanCasePort loanCases,
+            ApprovalLoanCaseSpi loanCases,
             ApprovalCustomerIdentityPort customers,
             ReviewRecommendationRepository recommendations,
             ApprovalDecisionRepository decisions,
@@ -63,7 +63,7 @@ public class QueryStaffApprovalWorkService implements QueryStaffApprovalWorkUseC
         Objects.requireNonNull(loanApplicationId, "loanApplicationId must not be null");
         AuthenticatedUser actor = currentUserProvider.currentUser();
         requireAuthority(actor, "approval:recommend");
-        ApprovalLoanCasePort.CaseSnapshot loanCase = requireCase(loanApplicationId);
+        ApprovalLoanCaseSpi.CaseSnapshot loanCase = requireCase(loanApplicationId);
         ReviewRecommendation recommendation = loanCase.currentReviewCycle() == null ? null
                 : recommendations.findByReviewCycleId(loanCase.currentReviewCycle().reviewCycleId()).orElse(null);
         Map<UUID, StaffActorSummary> actorSummaries = staffActors.findByUserIds(actorIds(loanCase, recommendation));
@@ -87,7 +87,7 @@ public class QueryStaffApprovalWorkService implements QueryStaffApprovalWorkUseC
         Objects.requireNonNull(loanApplicationId, "loanApplicationId must not be null");
         AuthenticatedUser actor = currentUserProvider.currentUser();
         requireAuthority(actor, "approval:decide");
-        ApprovalLoanCasePort.CaseSnapshot loanCase = requireCase(loanApplicationId);
+        ApprovalLoanCaseSpi.CaseSnapshot loanCase = requireCase(loanApplicationId);
         ReviewRecommendation recommendation = recommendations.findLatestByLoanApplicationId(loanApplicationId)
                 .orElse(null);
         List<ApprovalDecision> history = decisions
@@ -137,7 +137,7 @@ public class QueryStaffApprovalWorkService implements QueryStaffApprovalWorkUseC
         requireAuthority(actor, "approval:decide");
         requireValidPage(page, size);
         String normalizedProduct = normalizeProduct(productCode);
-        ApprovalLoanCasePort.QueuePageSnapshot selected = loanCases
+        ApprovalLoanCaseSpi.QueuePageSnapshot selected = loanCases
                 .findDecisionQueue(normalizedProduct, page, size);
         List<StaffApprovalQueuePageDto.ItemDto> items = selected.items().stream()
                 .map(item -> queueItem(item, actor))
@@ -148,7 +148,7 @@ public class QueryStaffApprovalWorkService implements QueryStaffApprovalWorkUseC
     }
 
     private StaffApprovalQueuePageDto.ItemDto queueItem(
-            ApprovalLoanCasePort.QueueItemSnapshot item,
+            ApprovalLoanCaseSpi.QueueItemSnapshot item,
             AuthenticatedUser actor
     ) {
         ReviewRecommendation recommendation = recommendations
@@ -166,17 +166,17 @@ public class QueryStaffApprovalWorkService implements QueryStaffApprovalWorkUseC
         );
     }
 
-    private ApprovalLoanCasePort.CaseSnapshot requireCase(UUID loanApplicationId) {
+    private ApprovalLoanCaseSpi.CaseSnapshot requireCase(UUID loanApplicationId) {
         return loanCases.findCase(loanApplicationId).orElseThrow(() -> new EntityNotFoundException(
                 "LOAN_APPLICATION_NOT_FOUND", "Loan Application was not found."
         ));
     }
 
     private static StaffRecommendationCaseDto.EvidenceDto evidence(
-            ApprovalLoanCasePort.CaseSnapshot loanCase,
+            ApprovalLoanCaseSpi.CaseSnapshot loanCase,
             Map<UUID, StaffActorSummary> actorSummaries
     ) {
-        ApprovalLoanCasePort.ReviewCycleSnapshot cycle = loanCase.currentReviewCycle();
+        ApprovalLoanCaseSpi.ReviewCycleSnapshot cycle = loanCase.currentReviewCycle();
         return new StaffRecommendationCaseDto.EvidenceDto(
                 loanCase.documentReadiness().uploadComplete(),
                 loanCase.documentReadiness().processingReady(),
@@ -213,7 +213,7 @@ public class QueryStaffApprovalWorkService implements QueryStaffApprovalWorkUseC
     }
 
     private static Set<UUID> actorIds(
-            ApprovalLoanCasePort.CaseSnapshot loanCase,
+            ApprovalLoanCaseSpi.CaseSnapshot loanCase,
             ReviewRecommendation recommendation
     ) {
         Set<UUID> actorIds = new LinkedHashSet<>();
@@ -234,7 +234,7 @@ public class QueryStaffApprovalWorkService implements QueryStaffApprovalWorkUseC
     }
 
     private static List<StaffRecommendationCaseDto.CorrectionOptionDto> correctionOptions(
-            ApprovalLoanCasePort.CaseSnapshot loanCase
+            ApprovalLoanCaseSpi.CaseSnapshot loanCase
     ) {
         return loanCase.correctionOptions().stream().map(option ->
                 new StaffRecommendationCaseDto.CorrectionOptionDto(
@@ -260,7 +260,7 @@ public class QueryStaffApprovalWorkService implements QueryStaffApprovalWorkUseC
         };
     }
 
-    private static boolean activeCycle(ApprovalLoanCasePort.CaseSnapshot loanCase) {
+    private static boolean activeCycle(ApprovalLoanCaseSpi.CaseSnapshot loanCase) {
         return loanCase.currentReviewCycle() != null
                 && "ACTIVE".equals(loanCase.currentReviewCycle().status());
     }
@@ -271,7 +271,7 @@ public class QueryStaffApprovalWorkService implements QueryStaffApprovalWorkUseC
     }
 
     private static void validatePendingDecisionEvidence(
-            ApprovalLoanCasePort.CaseSnapshot loanCase,
+            ApprovalLoanCaseSpi.CaseSnapshot loanCase,
             ReviewRecommendation recommendation,
             ApprovalDecision latestDecision
     ) {

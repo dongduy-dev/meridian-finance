@@ -1,4 +1,4 @@
-package com.meridian.platform.approval.application.port.out;
+package com.meridian.platform.loan.application.port.in;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -6,7 +6,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
-public interface ApprovalLoanCasePort {
+public interface QueryApprovalLoanCaseUseCase {
 
     Optional<CaseSnapshot> findCase(UUID loanApplicationId);
 

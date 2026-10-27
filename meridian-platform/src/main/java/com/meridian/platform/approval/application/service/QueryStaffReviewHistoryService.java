@@ -4,8 +4,8 @@ import com.meridian.platform.approval.application.dto.StaffRecommendationCaseDto
 import com.meridian.platform.approval.application.dto.StaffReviewHistoryDto;
 import com.meridian.platform.approval.application.port.in.QueryStaffReviewHistoryUseCase;
 import com.meridian.platform.approval.application.port.out.ApprovalDecisionRepository;
-import com.meridian.platform.approval.application.port.out.ApprovalLoanCasePort;
-import com.meridian.platform.approval.application.port.out.ApprovalLoanReviewHistoryPort;
+import com.meridian.platform.approval.application.spi.loan.ApprovalLoanCaseSpi;
+import com.meridian.platform.approval.application.spi.loan.ApprovalLoanReviewHistorySpi;
 import com.meridian.platform.approval.application.port.out.ReviewRecommendationRepository;
 import com.meridian.platform.approval.application.port.out.StaffActorDirectoryPort;
 import com.meridian.platform.approval.application.port.out.StaffActorSummary;
@@ -33,13 +33,13 @@ import java.util.UUID;
 
 @Service
 public class QueryStaffReviewHistoryService implements QueryStaffReviewHistoryUseCase {
-    private final ApprovalLoanReviewHistoryPort loanHistory;
+    private final ApprovalLoanReviewHistorySpi loanHistory;
     private final ReviewRecommendationRepository recommendations;
     private final ApprovalDecisionRepository decisions;
     private final StaffActorDirectoryPort staffActors;
     private final CurrentUserProvider currentUserProvider;
 
-    public QueryStaffReviewHistoryService(ApprovalLoanReviewHistoryPort loanHistory,
+    public QueryStaffReviewHistoryService(ApprovalLoanReviewHistorySpi loanHistory,
                                          ReviewRecommendationRepository recommendations,
                                          ApprovalDecisionRepository decisions,
                                          StaffActorDirectoryPort staffActors, CurrentUserProvider currentUserProvider) {
@@ -64,8 +64,8 @@ public class QueryStaffReviewHistoryService implements QueryStaffReviewHistoryUs
                 "LOAN_APPLICATION_NOT_FOUND", "Loan Application was not found."));
         if (!loanApplicationId.equals(history.loanApplicationId())) throw conflict();
         var cycles = history.cycles().stream()
-                .sorted(Comparator.comparingInt(ApprovalLoanCasePort.ReviewCycleSnapshot::cycleNumber)).toList();
-        Map<UUID, ApprovalLoanCasePort.ReviewCycleSnapshot> cycleById = new LinkedHashMap<>();
+                .sorted(Comparator.comparingInt(ApprovalLoanCaseSpi.ReviewCycleSnapshot::cycleNumber)).toList();
+        Map<UUID, ApprovalLoanCaseSpi.ReviewCycleSnapshot> cycleById = new LinkedHashMap<>();
         Set<Integer> numbers = new HashSet<>();
         Set<UUID> actorIds = new LinkedHashSet<>();
         for (var cycle : cycles) {

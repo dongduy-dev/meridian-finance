@@ -21,9 +21,23 @@ import com.meridian.platform.loan.infrastructure.adapter.out.document.LoanDocume
 import com.meridian.platform.loan.infrastructure.adapter.out.document.LoanIntakeEvidenceAdapter;
 import com.meridian.platform.loan.infrastructure.adapter.out.document.LoanAssistedActionEvidenceAdapter;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
+import com.meridian.platform.approval.application.spi.loan.ApprovalLoanCaseSpi;
+import com.meridian.platform.loan.application.port.in.QueryApprovalLoanCaseUseCase;
+import com.meridian.platform.loan.application.service.QueryApprovalLoanCaseService;
+import com.meridian.platform.loan.infrastructure.adapter.in.approval.ApprovalLoanCaseAdapter;
+import com.meridian.platform.approval.application.spi.loan.ApprovalLoanReviewCycleSpi;
+import com.meridian.platform.loan.application.port.in.QueryApprovalLoanReviewCycleUseCase;
+import com.meridian.platform.loan.application.service.QueryApprovalLoanReviewCycleService;
+import com.meridian.platform.loan.infrastructure.adapter.in.approval.ApprovalLoanReviewCycleAdapter;
+import com.meridian.platform.approval.application.spi.loan.ApprovalLoanReviewHistorySpi;
+import com.meridian.platform.loan.application.port.in.QueryApprovalLoanReviewHistoryUseCase;
+import com.meridian.platform.loan.application.service.QueryApprovalLoanReviewHistoryService;
+import com.meridian.platform.loan.infrastructure.adapter.in.approval.ApprovalLoanReviewHistoryAdapter;
 
 import java.util.UUID;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 @SpringBootTest(properties = "meridian.loan.offer-expiry.enabled=false")
 class MeridianPlatformApplicationTests {
@@ -51,6 +65,22 @@ class MeridianPlatformApplicationTests {
         assertSingleBinding(DocumentChecklistUseCase.class, DocumentChecklistService.class);
         assertSingleBinding(LoanIntakeEvidenceUseCase.class, LoanIntakeEvidenceService.class);
         assertSingleBinding(AssistedActionEvidenceUseCase.class, AssistedActionEvidenceService.class);
+    }
+
+    @Test
+    void approvalSpisAndLoanQueriesHaveExactlyOneProductionBindingAndNoRetiredPorts() {
+        assertSingleBinding(ApprovalLoanCaseSpi.class, ApprovalLoanCaseAdapter.class);
+        assertSingleBinding(QueryApprovalLoanCaseUseCase.class, QueryApprovalLoanCaseService.class);
+        assertThrows(ClassNotFoundException.class, () -> Class.forName(
+                "com.meridian.platform.approval.application.port.out.ApprovalLoanCasePort"));
+        assertSingleBinding(ApprovalLoanReviewCycleSpi.class, ApprovalLoanReviewCycleAdapter.class);
+        assertSingleBinding(QueryApprovalLoanReviewCycleUseCase.class, QueryApprovalLoanReviewCycleService.class);
+        assertThrows(ClassNotFoundException.class, () -> Class.forName(
+                "com.meridian.platform.approval.application.port.out.ApprovalLoanReviewCyclePort"));
+        assertSingleBinding(ApprovalLoanReviewHistorySpi.class, ApprovalLoanReviewHistoryAdapter.class);
+        assertSingleBinding(QueryApprovalLoanReviewHistoryUseCase.class, QueryApprovalLoanReviewHistoryService.class);
+        assertThrows(ClassNotFoundException.class, () -> Class.forName(
+                "com.meridian.platform.approval.application.port.out.ApprovalLoanReviewHistoryPort"));
     }
 
     private void assertSingleBinding(Class<?> contract, Class<?> implementation) {

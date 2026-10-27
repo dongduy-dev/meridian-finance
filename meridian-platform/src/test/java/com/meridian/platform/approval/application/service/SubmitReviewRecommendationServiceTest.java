@@ -59,8 +59,8 @@ class SubmitReviewRecommendationServiceTest {
         auditPublisher = new FakeBusinessAuditPublisher();
         service = new SubmitReviewRecommendationService(
                 repository,
-                ignored -> Optional.of(new com.meridian.platform.approval.application.port.out
-                        .ApprovalLoanReviewCyclePort.ActiveReviewCycleSnapshot(
+                ignored -> Optional.of(new com.meridian.platform.approval.application.spi.loan
+                        .ApprovalLoanReviewCycleSpi.ActiveReviewCycleSnapshot(
                         REVIEW_CYCLE_ID, LOAN_OFFICER_USER_ID
                 )),
                 eventPublisher,
@@ -209,8 +209,8 @@ class SubmitReviewRecommendationServiceTest {
         UUID assignedOfficer = UUID.fromString("00000000-0000-4000-8000-000000000399");
         service = new SubmitReviewRecommendationService(
                 repository,
-                ignored -> Optional.of(new com.meridian.platform.approval.application.port.out
-                        .ApprovalLoanReviewCyclePort.ActiveReviewCycleSnapshot(
+                ignored -> Optional.of(new com.meridian.platform.approval.application.spi.loan
+                        .ApprovalLoanReviewCycleSpi.ActiveReviewCycleSnapshot(
                         REVIEW_CYCLE_ID, assignedOfficer
                 )),
                 eventPublisher,
@@ -236,6 +236,39 @@ class SubmitReviewRecommendationServiceTest {
         );
 
         assertEquals("LOAN_REVIEW_ASSIGNED_TO_ANOTHER_OFFICER", exception.getErrorCode());
+        assertNull(repository.savedRecommendation);
+        assertNull(auditPublisher.publishedEvent);
+        assertNull(eventPublisher.publishedEvent);
+    }
+
+    @Test
+    void missingCyclePrecedesCorrectionValidationAndProducesNoEffects() {
+        service = new SubmitReviewRecommendationService(repository, ignored -> Optional.empty(), eventPublisher,
+                new FixedCurrentUserProvider(), new ApprovalMapper(), auditPublisher, CLOCK);
+        var failure = assertThrows(BusinessStateConflictException.class, () -> service.submitReviewRecommendation(
+                LOAN_APPLICATION_ID, new ReviewRecommendationRequest(ReviewRecommendationAction.RETURN_TO_CUSTOMER_REVISION,
+                        null, null, REVIEW_CYCLE_ID, null, null)));
+        assertEquals("REVIEW_CYCLE_REQUIRED", failure.getErrorCode());
+        assertNull(repository.savedRecommendation);
+        assertNull(auditPublisher.publishedEvent);
+        assertNull(eventPublisher.publishedEvent);
+    }
+
+    @Test
+    void legacyMissingAssignmentFailsClosedAfterCorrectionIntentValidation() {
+        service = new SubmitReviewRecommendationService(repository, ignored -> Optional.of(
+                new com.meridian.platform.approval.application.spi.loan.ApprovalLoanReviewCycleSpi.ActiveReviewCycleSnapshot(
+                        REVIEW_CYCLE_ID, null)), eventPublisher,
+                new FixedCurrentUserProvider(), new ApprovalMapper(), auditPublisher, CLOCK);
+        var assignment = assertThrows(BusinessStateConflictException.class, () -> service.submitReviewRecommendation(
+                LOAN_APPLICATION_ID, new ReviewRecommendationRequest(ReviewRecommendationAction.RECOMMEND_APPROVAL,
+                        null, null, REVIEW_CYCLE_ID, null, null)));
+        assertEquals("SYSTEM_STATE_CONFLICT", assignment.getErrorCode());
+        var correction = assertThrows(com.meridian.platform.shared.domain.exception.BusinessRuleViolationException.class,
+                () -> service.submitReviewRecommendation(LOAN_APPLICATION_ID,
+                        new ReviewRecommendationRequest(ReviewRecommendationAction.RETURN_TO_CUSTOMER_REVISION,
+                                null, null, REVIEW_CYCLE_ID, null, null)));
+        assertEquals("INVALID_CORRECTION_PLAN", correction.getErrorCode());
         assertNull(repository.savedRecommendation);
         assertNull(auditPublisher.publishedEvent);
         assertNull(eventPublisher.publishedEvent);
