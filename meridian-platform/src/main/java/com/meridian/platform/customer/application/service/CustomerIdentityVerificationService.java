@@ -125,15 +125,17 @@ public class CustomerIdentityVerificationService implements CustomerIdentityVeri
         return dto(completed, saved, true);
     }
     @Transactional(readOnly = true)
-    public CustomerIdentityEvidencePort.Content readOwn(UUID id) {
+    public CustomerIdentityContent readOwn(UUID id) {
         var actor = own("customer:identity:read:own"); var v = find(id);
         if (!actor.requireCustomerId().equals(v.customerId())) throw missing();
-        return evidence.read(v.customerId(), v.caseId(), v.documentVersionId());
+        var content = evidence.read(v.customerId(), v.caseId(), v.documentVersionId());
+        return new CustomerIdentityContent(content.filename(), content.mimeType(), content.byteSize(), content.content());
     }
     @Transactional(readOnly = true)
-    public CustomerIdentityEvidencePort.Content readStaff(UUID id) {
+    public CustomerIdentityContent readStaff(UUID id) {
         staff(); var v = find(id);
-        return evidence.read(v.customerId(), v.caseId(), v.documentVersionId());
+        var content = evidence.read(v.customerId(), v.caseId(), v.documentVersionId());
+        return new CustomerIdentityContent(content.filename(), content.mimeType(), content.byteSize(), content.content());
     }
     private CustomerIdentityVerificationDto dto(CustomerIdentityVerification v, Customer c, boolean detail) {
         return new CustomerIdentityVerificationDto(v.id(), v.sequence(), c.customerNumber(), v.identityFullName(),

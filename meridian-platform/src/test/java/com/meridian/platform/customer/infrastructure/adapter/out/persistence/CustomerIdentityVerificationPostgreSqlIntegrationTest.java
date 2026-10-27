@@ -263,15 +263,24 @@ class CustomerIdentityVerificationPostgreSqlIntegrationTest {
         assertEquals(1, jdbc.queryForObject("select count(*) from customer_identity_verifications where customer_id = ? and status = 'VERIFIED'", Integer.class, customerId));
     }
     @Test void ownConcealmentAndGenericStaffPermissionsFailClosedBeforeContent() throws Exception {
-        var v = upload(); customer(); try (var stream = service.readOwn(v.verificationId()).content()) { assertTrue(stream.readAllBytes().length > 0); }
+        var v = upload(); customer();
+        var ownContent = service.readOwn(v.verificationId());
+        assertEquals("identity.pdf", ownContent.filename()); assertEquals("application/pdf", ownContent.mimeType());
+        byte[] expected = pdf("identity evidence").readAllBytes();
+        assertEquals(expected.length, ownContent.byteSize());
+        try (var stream = ownContent.content()) { assertArrayEquals(expected, stream.readAllBytes()); }
         auth("CUSTOMER", UUID.randomUUID(), CUSTOMER_USER, OWN);
-        assertThrows(EntityNotFoundException.class, () -> service.readOwn(v.verificationId()));
+        assertEquals("IDENTITY_VERIFICATION_NOT_FOUND", assertThrows(EntityNotFoundException.class, () -> service.readOwn(v.verificationId())).getErrorCode());
         for (String permission : List.of("customer:read", "document:review", "loan:read", "partner:manage", "approval:decide", "loan:disburse")) {
             auth("STAFF", null, OFFICER, Set.of(permission)); assertThrows(AuthorizationException.class, () -> service.pending(0, 25)); assertThrows(AuthorizationException.class, () -> service.readStaff(v.verificationId()));
         }
-        staff(); try (var stream = service.readStaff(v.verificationId()).content()) { assertTrue(stream.readAllBytes().length > 0); }
+        staff();
+        var staffContent = service.readStaff(v.verificationId());
+        assertEquals(ownContent.filename(), staffContent.filename()); assertEquals(ownContent.mimeType(), staffContent.mimeType());
+        assertEquals(ownContent.byteSize(), staffContent.byteSize());
+        try (var stream = staffContent.content()) { assertArrayEquals(expected, stream.readAllBytes()); }
     }
-    @Test void intakeBothProductsBindExactExistingBytesAndStaleOrWrongEvidenceFails() {
+    @Test void intakeBothProductsBindExactExistingBytesAndStaleOrWrongEvidenceFails() throws Exception {
         for (ProductCode product : List.of(ProductCode.UNSECURED_CONSUMER_LOAN, ProductCode.COLLATERAL_LOAN)) {
             staff(); var c = cases.createCase(new CreateAssistedOriginationCaseRequest(product, customerId));
             var uploaded = intake.upload(new UploadIntakeEvidenceCommand(c.assistedOriginationCaseId(), IntakeEvidenceType.CUSTOMER_IDENTITY, UUID.randomUUID(), null, "intake.pdf", "application/pdf", pdf("intake")));
@@ -280,6 +289,10 @@ class CustomerIdentityVerificationPostgreSqlIntegrationTest {
             assertTrue(documentReferences.existsStorageReference(jdbc.queryForObject("select storage_key from intake_document_versions where id=?", String.class, uploaded.intakeDocumentVersionId())));
             assertEquals(0, jdbc.queryForObject("select count(*) from customer_identity_documents where customer_id = ?", Integer.class, customerId));
             var replacement = intake.upload(new UploadIntakeEvidenceCommand(c.assistedOriginationCaseId(), IntakeEvidenceType.CUSTOMER_IDENTITY, UUID.randomUUID(), uploaded.intakeDocumentVersionId(), "replacement.pdf", "application/pdf", pdf("replacement")));
+            var historical = service.readStaff(v.verificationId());
+            assertEquals("intake.pdf", historical.filename()); assertEquals("application/pdf", historical.mimeType());
+            byte[] expected = pdf("intake").readAllBytes(); assertEquals(expected.length, historical.byteSize());
+            try (var stream = historical.content()) { assertArrayEquals(expected, stream.readAllBytes()); }
             assertEquals("IDENTITY_VERIFICATION_EVIDENCE_STALE", assertThrows(BusinessStateConflictException.class, () -> service.decide(v.verificationId(), true, verifyRequest(v))).getErrorCode());
             var current = service.submitIntake(c.assistedOriginationCaseId(), replacement.intakeDocumentVersionId());
             service.decide(current.verificationId(), false, new CustomerIdentityDecisionRequest(UUID.randomUUID(), current.evidence().versionId(), null, RejectionReason.UNACCEPTABLE_EVIDENCE));
