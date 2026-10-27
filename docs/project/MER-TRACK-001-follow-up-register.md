@@ -954,6 +954,9 @@ Blocking: No current documentation checkpoint or production workflow blocker.
 Problem:
 The aligned architecture defines narrow cross-context collaboration through public application contracts and boundary adapters, but current feature application and domain packages still contain some foreign internal imports. `ArchitectureRulesTest` proves layer isolation, concrete-security isolation, and `shared` independence, but does not fully enforce feature-module public surfaces, legal module dependencies, module cycles, or named-interface/public-contract boundaries. Spring Modulith dependency metadata alone is not executable proof of those rules.
 
+Partial completion:
+S1 replaces the Customer identity content output-port result exposed by the input contract and web adapter with the application-owned `CustomerIdentityContent`. Customer application code maps the evidence result without consuming or closing its stream. Focused service, HTTP/security, PostgreSQL, and architecture regressions pass, including exact content and headers, authorization before evidence access, historical evidence-version reads, and signature-leak rejection. `ArchitectureRulesTest` rejects direct output-port dependencies from inbound web adapters and application input ports across the backend. S2–S5 remain outstanding; full public-contract and module-cycle enforcement is not complete.
+
 Recommendation:
 Inventory every foreign internal dependency and distinguish legitimate public application contracts from internal leakage. Replace illegal dependencies with the intended consumer-owned output port and boundary adapter, provider public application contract, or inbound event adapter where asynchronous intake is intended. Add focused architecture enforcement for module dependencies, public surfaces, and cycles while preserving bounded-context ownership and runtime behavior; do not redesign business workflows merely to satisfy package aesthetics.
 

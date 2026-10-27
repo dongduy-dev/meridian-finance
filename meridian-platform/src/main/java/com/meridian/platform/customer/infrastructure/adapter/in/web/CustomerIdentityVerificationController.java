@@ -2,7 +2,6 @@ package com.meridian.platform.customer.infrastructure.adapter.in.web;
 
 import com.meridian.platform.customer.application.dto.*;
 import com.meridian.platform.customer.application.port.in.CustomerIdentityVerificationUseCase;
-import com.meridian.platform.customer.application.port.out.CustomerIdentityEvidencePort;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
 import org.springframework.core.io.InputStreamResource;
@@ -54,7 +53,7 @@ public class CustomerIdentityVerificationController {
     @GetMapping("/api/v1/staff/customer-identity-verifications/{id}/content")
     @PreAuthorize("hasAuthority('customer:identity:verify')")
     public ResponseEntity<InputStreamResource> staffContent(@PathVariable UUID id) { return content(useCase.readStaff(id)); }
-    private ResponseEntity<InputStreamResource> content(CustomerIdentityEvidencePort.Content c) {
+    private ResponseEntity<InputStreamResource> content(CustomerIdentityContent c) {
         return ResponseEntity.ok().contentType(MediaType.parseMediaType(c.mimeType())).contentLength(c.byteSize())
                 .cacheControl(CacheControl.noStore().cachePrivate()).header("X-Content-Type-Options", "nosniff")
                 .header(HttpHeaders.CONTENT_DISPOSITION, ContentDisposition.attachment().filename(c.filename(), StandardCharsets.UTF_8).build().toString())
