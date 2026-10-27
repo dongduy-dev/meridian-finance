@@ -1,7 +1,7 @@
 package com.meridian.platform.loan.application.service;
 
-import com.meridian.platform.document.domain.model.DocumentRequirementStatus;
-import com.meridian.platform.document.domain.model.DocumentType;
+import com.meridian.platform.loan.application.port.out.LoanDocumentChecklistPort.RequirementStatus;
+import com.meridian.platform.loan.domain.model.LoanDocumentType;
 import com.meridian.platform.loan.application.mapper.LoanMapper;
 import com.meridian.platform.loan.application.port.out.CollateralLoanOfferPolicyRepository;
 import com.meridian.platform.loan.application.port.out.LoanDocumentChecklistPort;
@@ -78,12 +78,12 @@ class QueryLoanProductServiceTest {
                 .thenReturn(List.of());
         when(documents.resolveSubmissionRequirements(ProductCode.UNSECURED_CONSUMER_LOAN))
                 .thenReturn(List.of(
-                        requirement(DocumentType.INCOME_PROOF),
-                        requirement(DocumentType.BANK_STATEMENT),
-                        requirement(DocumentType.EMPLOYMENT_PROOF)
+                        requirement(LoanDocumentType.INCOME_PROOF),
+                        requirement(LoanDocumentType.BANK_STATEMENT),
+                        requirement(LoanDocumentType.EMPLOYMENT_PROOF)
                 ));
         when(documents.resolveSubmissionRequirements(ProductCode.COLLATERAL_LOAN))
-                .thenReturn(List.of(requirement(DocumentType.COLLATERAL_OWNERSHIP_EVIDENCE)));
+                .thenReturn(List.of(requirement(LoanDocumentType.COLLATERAL_OWNERSHIP_EVIDENCE)));
 
         var result = service.findActiveLoanProducts();
 
@@ -113,11 +113,11 @@ class QueryLoanProductServiceTest {
     }
 
     private static LoanDocumentChecklistPort.SubmissionEvidenceRequirement requirement(
-            DocumentType documentType
+            LoanDocumentType documentType
     ) {
         return new LoanDocumentChecklistPort.SubmissionEvidenceRequirement(
                 documentType,
-                DocumentRequirementStatus.REQUIRED
+                RequirementStatus.REQUIRED
         );
     }
 

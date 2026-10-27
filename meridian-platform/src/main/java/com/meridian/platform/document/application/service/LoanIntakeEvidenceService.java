@@ -2,14 +2,14 @@ package com.meridian.platform.document.application.service;
 
 import com.meridian.platform.document.application.port.out.IntakeDocumentRepository;
 import com.meridian.platform.document.domain.model.IntakeEvidenceType;
-import com.meridian.platform.loan.application.port.out.LoanIntakeEvidencePort;
+import com.meridian.platform.document.application.port.in.LoanIntakeEvidenceUseCase;
 import com.meridian.platform.shared.domain.exception.BusinessRuleViolationException;
 import org.springframework.stereotype.Service;
 
 import java.util.UUID;
 
 @Service
-public class LoanIntakeEvidenceService implements LoanIntakeEvidencePort {
+public class LoanIntakeEvidenceService implements LoanIntakeEvidenceUseCase {
 
     private final IntakeDocumentRepository documents;
 

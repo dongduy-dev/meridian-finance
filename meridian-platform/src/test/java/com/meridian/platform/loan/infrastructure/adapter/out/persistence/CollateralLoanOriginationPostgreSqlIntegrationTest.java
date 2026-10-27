@@ -3,7 +3,7 @@ package com.meridian.platform.loan.infrastructure.adapter.out.persistence;
 import com.meridian.platform.MeridianPlatformApplication;
 import com.meridian.platform.document.application.dto.UploadDocumentCommand;
 import com.meridian.platform.document.application.port.in.UploadDocumentUseCase;
-import com.meridian.platform.document.application.service.DocumentChecklistService;
+import com.meridian.platform.loan.infrastructure.adapter.out.document.LoanDocumentChecklistAdapter;
 import com.meridian.platform.document.domain.model.DocumentUploaderActorType;
 import com.meridian.platform.loan.application.dto.CollateralDetailsRequest;
 import com.meridian.platform.loan.application.dto.AssistedOriginationCaseDto;
@@ -548,7 +548,7 @@ class CollateralLoanOriginationPostgreSqlIntegrationTest {
 
         @Bean
         @Primary
-        FailingChecklistPort failingChecklistPort(DocumentChecklistService delegate) {
+        FailingChecklistPort failingChecklistPort(LoanDocumentChecklistAdapter delegate) {
             return new FailingChecklistPort(delegate);
         }
 

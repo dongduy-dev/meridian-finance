@@ -1,7 +1,6 @@
 package com.meridian.platform.loan.application.port.out;
 
-import com.meridian.platform.document.domain.model.DocumentType;
-import com.meridian.platform.document.domain.model.DocumentRequirementStatus;
+import com.meridian.platform.loan.domain.model.LoanDocumentType;
 import com.meridian.platform.loan.domain.model.ProductCode;
 import com.meridian.platform.shared.application.operation.BusinessOperationContext;
 
@@ -34,7 +33,7 @@ public interface LoanDocumentChecklistPort {
 
     default UUID createRequiredItem(
             UUID loanApplicationId,
-            DocumentType documentType,
+            LoanDocumentType documentType,
             BusinessOperationContext operationContext
     ) {
         throw new UnsupportedOperationException("On-demand checklist items are not supported.");
@@ -78,12 +77,18 @@ public interface LoanDocumentChecklistPort {
         throw new UnsupportedOperationException("Document review proof is not supported.");
     }
 
+    enum RequirementStatus {
+        REQUIRED,
+        OPTIONAL,
+        NOT_REQUIRED
+    }
+
     record SubmissionChecklistInitialState(boolean uploadComplete) {
     }
 
     record SubmissionEvidenceRequirement(
-            DocumentType documentType,
-            DocumentRequirementStatus requirementStatus
+            LoanDocumentType documentType,
+            RequirementStatus requirementStatus
     ) {
     }
 
@@ -95,8 +100,8 @@ public interface LoanDocumentChecklistPort {
 
     record SubmissionChecklistItemSnapshot(
             UUID checklistItemId,
-            DocumentType documentType,
-            DocumentRequirementStatus requirementStatus
+            LoanDocumentType documentType,
+            RequirementStatus requirementStatus
     ) {
     }
 
@@ -104,15 +109,15 @@ public interface LoanDocumentChecklistPort {
     }
 
     record CurrentDocumentVersionSnapshot(
-            DocumentType documentType,
+            LoanDocumentType documentType,
             UUID documentVersionId
     ) {
     }
 
     record CurrentDocumentVersionTargetSnapshot(
             UUID checklistItemId,
-            DocumentType documentType,
-            DocumentRequirementStatus requirementStatus,
+            LoanDocumentType documentType,
+            RequirementStatus requirementStatus,
             UUID currentDocumentVersionId
     ) {
     }

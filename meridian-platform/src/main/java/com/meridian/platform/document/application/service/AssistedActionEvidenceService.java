@@ -4,7 +4,7 @@ import com.meridian.platform.document.application.dto.*;
 import com.meridian.platform.document.application.port.in.ManageAssistedActionEvidenceUseCase;
 import com.meridian.platform.document.application.port.out.*;
 import com.meridian.platform.document.domain.model.*;
-import com.meridian.platform.loan.application.port.out.LoanAssistedActionEvidencePort;
+import com.meridian.platform.document.application.port.in.AssistedActionEvidenceUseCase;
 import com.meridian.platform.shared.application.audit.*;
 import com.meridian.platform.shared.application.operation.BusinessOperationContext;
 import com.meridian.platform.shared.application.security.AuthenticatedUser;
@@ -26,7 +26,7 @@ import java.util.UUID;
 
 @Service
 public class AssistedActionEvidenceService
-        implements ManageAssistedActionEvidenceUseCase, LoanAssistedActionEvidencePort {
+        implements ManageAssistedActionEvidenceUseCase, AssistedActionEvidenceUseCase {
 
     private static final String PERMISSION = "document:upload:assisted-action";
 

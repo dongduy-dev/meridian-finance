@@ -9,6 +9,7 @@ import com.meridian.platform.loan.application.port.out.LoanCorrectionRepository;
 import com.meridian.platform.loan.application.port.out.LoanDocumentChecklistPort;
 import com.meridian.platform.loan.application.port.out.LoanReviewCycleRepository;
 import com.meridian.platform.loan.domain.model.LoanApplication;
+import com.meridian.platform.loan.domain.model.LoanDocumentType;
 import com.meridian.platform.loan.domain.model.LoanApplicationReviewCycle;
 import com.meridian.platform.loan.domain.model.LoanCorrectionRequest;
 import com.meridian.platform.loan.domain.model.LoanCorrectionRequestStatus;
@@ -129,7 +130,7 @@ public class CustomerCorrectionWorkflowService {
             UUID baselineVersionId = plannedTask.baselineDocumentVersionId();
             if (plannedTask.createChecklistItem()) {
                 checklistItemId = documentChecklistPort.createRequiredItem(
-                        application.id(), plannedTask.documentType(), operationContext
+                        application.id(), LoanDocumentType.valueOf(plannedTask.documentType().name()), operationContext
                 );
             } else {
                 documentChecklistPort.requireCurrentVersion(
@@ -229,7 +230,7 @@ public class CustomerCorrectionWorkflowService {
                             task.checklistItemId(),
                             task.baselineDocumentVersionId()
                     );
-            if (document.documentType() != task.documentType()) {
+            if (document.documentType() != LoanDocumentType.valueOf(task.documentType().name())) {
                 throw invalidPlan("Correction document type does not match the checklist item.");
             }
         }
@@ -263,7 +264,7 @@ public class CustomerCorrectionWorkflowService {
                             task.checklistItemId(),
                             task.baselineDocumentVersionId()
                     );
-            if (document.documentType() != DocumentType.COLLATERAL_OWNERSHIP_EVIDENCE) {
+            if (document.documentType() != LoanDocumentType.COLLATERAL_OWNERSHIP_EVIDENCE) {
                 throw invalidPlan("Correction document type does not match the ownership checklist item.");
             }
         }

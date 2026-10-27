@@ -3,7 +3,7 @@ package com.meridian.platform.document.application.service;
 import com.meridian.platform.document.domain.model.DocumentChecklistItem;
 import com.meridian.platform.document.domain.model.DocumentRequirementStatus;
 import com.meridian.platform.document.domain.model.DocumentType;
-import com.meridian.platform.loan.domain.model.ProductCode;
+import com.meridian.platform.document.application.port.in.DocumentChecklistUseCase.SubmissionProduct;
 import org.junit.jupiter.api.Test;
 
 import java.time.LocalDateTime;
@@ -27,7 +27,7 @@ class ProductDocumentChecklistResolverTest {
     void resolvesThreeRequiredUclEvidenceCategories() {
         List<DocumentChecklistItem> items = uclResolver.resolve(
                 UUID.randomUUID(),
-                ProductCode.UNSECURED_CONSUMER_LOAN,
+                SubmissionProduct.UNSECURED_CONSUMER_LOAN,
                 LocalDateTime.parse("2026-08-11T09:00:00")
         );
 
@@ -44,7 +44,7 @@ class ProductDocumentChecklistResolverTest {
     void preservesEmptySalaryAdvanceSubmissionChecklist() {
         assertTrue(salaryResolver.resolve(
                 UUID.randomUUID(),
-                ProductCode.SALARY_ADVANCE,
+                SubmissionProduct.SALARY_ADVANCE,
                 LocalDateTime.MIN
         ).isEmpty());
     }
@@ -52,7 +52,7 @@ class ProductDocumentChecklistResolverTest {
     @Test
     void resolvesOneRequiredCollateralOwnershipEvidenceItem() {
         List<DocumentChecklistItem> items = collateralResolver.resolve(
-                UUID.randomUUID(), ProductCode.COLLATERAL_LOAN, LocalDateTime.MIN
+                UUID.randomUUID(), SubmissionProduct.COLLATERAL_LOAN, LocalDateTime.MIN
         );
 
         assertEquals(1, items.size());
@@ -63,13 +63,13 @@ class ProductDocumentChecklistResolverTest {
     @Test
     void resolversRejectUnsupportedProducts() {
         assertThrows(IllegalArgumentException.class, () -> salaryResolver.resolve(
-                UUID.randomUUID(), ProductCode.UNSECURED_CONSUMER_LOAN, LocalDateTime.MIN
+                UUID.randomUUID(), SubmissionProduct.UNSECURED_CONSUMER_LOAN, LocalDateTime.MIN
         ));
         assertThrows(IllegalArgumentException.class, () -> uclResolver.resolve(
-                UUID.randomUUID(), ProductCode.COLLATERAL_LOAN, LocalDateTime.MIN
+                UUID.randomUUID(), SubmissionProduct.COLLATERAL_LOAN, LocalDateTime.MIN
         ));
         assertThrows(IllegalArgumentException.class, () -> collateralResolver.resolve(
-                UUID.randomUUID(), ProductCode.UNSECURED_CONSUMER_LOAN, LocalDateTime.MIN
+                UUID.randomUUID(), SubmissionProduct.UNSECURED_CONSUMER_LOAN, LocalDateTime.MIN
         ));
     }
 }

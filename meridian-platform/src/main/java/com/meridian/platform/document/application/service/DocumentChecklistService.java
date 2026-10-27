@@ -9,8 +9,7 @@ import com.meridian.platform.document.domain.model.DocumentChecklistStage;
 import com.meridian.platform.document.domain.model.DocumentReviewOutcome;
 import com.meridian.platform.document.domain.model.DocumentRequirementStatus;
 import com.meridian.platform.document.domain.model.DocumentType;
-import com.meridian.platform.loan.application.port.out.LoanDocumentChecklistPort;
-import com.meridian.platform.loan.domain.model.ProductCode;
+import com.meridian.platform.document.application.port.in.DocumentChecklistUseCase;
 import com.meridian.platform.shared.application.audit.BusinessAuditEntry;
 import com.meridian.platform.shared.application.audit.BusinessAuditEvent;
 import com.meridian.platform.shared.application.audit.BusinessAuditPublisher;
@@ -28,7 +27,7 @@ import java.util.Objects;
 import java.util.UUID;
 
 @Service
-public class DocumentChecklistService implements LoanDocumentChecklistPort {
+public class DocumentChecklistService implements DocumentChecklistUseCase {
 
     private final DocumentChecklistRepository checklistRepository;
     private final DocumentRepository documentRepository;
@@ -54,7 +53,7 @@ public class DocumentChecklistService implements LoanDocumentChecklistPort {
     }
 
     @Override
-    public SubmissionChecklistInitialState resolveSubmissionInitialState(ProductCode productCode) {
+    public SubmissionChecklistInitialState resolveSubmissionInitialState(SubmissionProduct productCode) {
         List<DocumentChecklistItem> items = resolveChecklistItems(
                 UUID.randomUUID(),
                 productCode,
@@ -64,12 +63,12 @@ public class DocumentChecklistService implements LoanDocumentChecklistPort {
     }
 
     @Override
-    public List<SubmissionEvidenceRequirement> resolveSubmissionRequirements(ProductCode productCode) {
+    public List<SubmissionEvidenceRequirement> resolveSubmissionRequirements(SubmissionProduct productCode) {
         return resolveChecklistItems(UUID.randomUUID(), productCode, java.time.LocalDateTime.MIN)
                 .stream()
                 .map(item -> new SubmissionEvidenceRequirement(
-                        item.documentType(),
-                        item.requirementStatus()
+                        item.documentType().name(),
+                        item.requirementStatus().name()
                 ))
                 .toList();
     }
@@ -77,7 +76,7 @@ public class DocumentChecklistService implements LoanDocumentChecklistPort {
     @Override
     public SubmissionChecklistSnapshot createSubmissionChecklist(
             UUID loanApplicationId,
-            ProductCode productCode,
+            SubmissionProduct productCode,
             BusinessOperationContext operationContext
     ) {
         Objects.requireNonNull(loanApplicationId, "loanApplicationId must not be null");
@@ -112,8 +111,8 @@ public class DocumentChecklistService implements LoanDocumentChecklistPort {
         return new SubmissionChecklistSnapshot(saved.items().stream()
                 .map(item -> new SubmissionChecklistItemSnapshot(
                         item.id(),
-                        item.documentType(),
-                        item.requirementStatus()
+                        item.documentType().name(),
+                        item.requirementStatus().name()
                 ))
                 .toList());
     }
@@ -153,8 +152,8 @@ public class DocumentChecklistService implements LoanDocumentChecklistPort {
                         .filter(document -> document.currentVersionId() != null)
                         .map(document -> new CurrentDocumentVersionTargetSnapshot(
                                 item.id(),
-                                item.documentType(),
-                                item.requirementStatus(),
+                                item.documentType().name(),
+                                item.requirementStatus().name(),
                                 document.currentVersionId()
                         )))
                 .flatMap(java.util.Optional::stream)
@@ -164,10 +163,11 @@ public class DocumentChecklistService implements LoanDocumentChecklistPort {
     @Override
     public UUID createRequiredItem(
             UUID loanApplicationId,
-            DocumentType documentType,
+            String documentTypeCode,
             BusinessOperationContext operationContext
     ) {
         DocumentChecklist checklist = requireChecklist(loanApplicationId);
+        DocumentType documentType = documentTypeCode == null ? null : DocumentType.valueOf(documentTypeCode);
         if (checklist.items().stream().anyMatch(item -> item.documentType() == documentType)) {
             throw new BusinessStateConflictException(
                     "DOCUMENT_CHECKLIST_ITEM_EXISTS",
@@ -240,7 +240,7 @@ public class DocumentChecklistService implements LoanDocumentChecklistPort {
                     "The expected document version is no longer current."
             );
         }
-        return new CurrentDocumentVersionSnapshot(item.documentType(), currentVersionId);
+        return new CurrentDocumentVersionSnapshot(item.documentType().name(), currentVersionId);
     }
 
     @Override
@@ -312,7 +312,7 @@ public class DocumentChecklistService implements LoanDocumentChecklistPort {
 
     private List<DocumentChecklistItem> resolveChecklistItems(
             UUID checklistId,
-            ProductCode productCode,
+            SubmissionProduct productCode,
             java.time.LocalDateTime createdAt
     ) {
         return switch (productCode) {

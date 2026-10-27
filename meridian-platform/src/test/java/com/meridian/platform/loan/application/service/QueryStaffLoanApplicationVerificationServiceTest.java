@@ -1,7 +1,6 @@
 package com.meridian.platform.loan.application.service;
 
-import com.meridian.platform.document.domain.model.DocumentRequirementStatus;
-import com.meridian.platform.document.domain.model.DocumentType;
+import com.meridian.platform.loan.domain.model.LoanDocumentType;
 import com.meridian.platform.loan.application.port.out.CollateralLoanVerificationRepository;
 import com.meridian.platform.loan.application.port.out.CollateralRepository;
 import com.meridian.platform.loan.application.port.out.LoanApplicationRepository;
@@ -152,14 +151,14 @@ class QueryStaffLoanApplicationVerificationServiceTest {
         when(documents.currentVersionTargets(APPLICATION_ID)).thenReturn(List.of(
                 new LoanDocumentChecklistPort.CurrentDocumentVersionTargetSnapshot(
                         CHECKLIST_ITEM_ID,
-                        DocumentType.BANK_STATEMENT,
-                        DocumentRequirementStatus.REQUIRED,
+                        LoanDocumentType.BANK_STATEMENT,
+                        LoanDocumentChecklistPort.RequirementStatus.REQUIRED,
                         VERSION_ID
                 ),
                 new LoanDocumentChecklistPort.CurrentDocumentVersionTargetSnapshot(
                         UUID.randomUUID(),
-                        DocumentType.COLLATERAL_OWNERSHIP_EVIDENCE,
-                        DocumentRequirementStatus.REQUIRED,
+                        LoanDocumentType.COLLATERAL_OWNERSHIP_EVIDENCE,
+                        LoanDocumentChecklistPort.RequirementStatus.REQUIRED,
                         UUID.randomUUID()
                 )
         ));
@@ -205,8 +204,8 @@ class QueryStaffLoanApplicationVerificationServiceTest {
         when(documents.currentVersionTargets(APPLICATION_ID)).thenReturn(List.of(
                 new LoanDocumentChecklistPort.CurrentDocumentVersionTargetSnapshot(
                         CHECKLIST_ITEM_ID,
-                        DocumentType.COLLATERAL_OWNERSHIP_EVIDENCE,
-                        DocumentRequirementStatus.REQUIRED,
+                        LoanDocumentType.COLLATERAL_OWNERSHIP_EVIDENCE,
+                        LoanDocumentChecklistPort.RequirementStatus.REQUIRED,
                         VERSION_ID
                 )
         ));
