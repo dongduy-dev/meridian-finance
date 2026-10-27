@@ -3,6 +3,8 @@ package com.meridian.platform.approval.application.mapper;
 import com.meridian.platform.approval.application.dto.ApprovalDecisionDto;
 import com.meridian.platform.approval.application.dto.CorrectionPlanRequest;
 import com.meridian.platform.approval.application.dto.ReviewRecommendationDto;
+import com.meridian.platform.approval.application.event.CorrectionPlanFacts;
+import com.meridian.platform.approval.application.event.CorrectionTaskFacts;
 import com.meridian.platform.approval.application.event.ApprovalDecisionEventAction;
 import com.meridian.platform.approval.application.event.ApprovalDecisionRecordedEvent;
 import com.meridian.platform.approval.application.event.ReviewRecommendationEventAction;
@@ -47,8 +49,8 @@ public class ApprovalMapper {
                 recommendation.loanOfficerUserId(),
                 ReviewRecommendationEventAction.valueOf(recommendation.action().name()),
                 recommendation.reason(),
-                recommendation.reasonCode(),
-                correctionPlan,
+                code(recommendation.reasonCode()),
+                toFacts(correctionPlan),
                 recommendation.submittedAt(),
                 operationContext
         );
@@ -88,10 +90,26 @@ public class ApprovalMapper {
                 decision.approverUserId(),
                 ApprovalDecisionEventAction.valueOf(decision.action().name()),
                 decision.reason(),
-                decision.reasonCode(),
-                correctionPlan,
+                code(decision.reasonCode()),
+                toFacts(correctionPlan),
                 decision.decidedAt(),
                 operationContext
         );
+    }
+
+    private CorrectionPlanFacts toFacts(CorrectionPlanRequest plan) {
+        if (plan == null) {
+            return null;
+        }
+        return new CorrectionPlanFacts(plan.tasks() == null ? null : plan.tasks().stream()
+                .map(task -> task == null ? null : new CorrectionTaskFacts(
+                        code(task.scope()), code(task.responsibleParty()), code(task.documentType()),
+                        task.createChecklistItem(), task.checklistItemId(), task.baselineDocumentVersionId(),
+                        task.customerInstruction(), task.staffInstruction()))
+                .toList());
+    }
+
+    private String code(Enum<?> value) {
+        return value == null ? null : value.name();
     }
 }

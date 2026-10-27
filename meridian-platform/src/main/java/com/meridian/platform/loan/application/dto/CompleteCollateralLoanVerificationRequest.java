@@ -1,8 +1,8 @@
 package com.meridian.platform.loan.application.dto;
 
 import com.fasterxml.jackson.annotation.JsonAnySetter;
-import com.meridian.platform.approval.application.dto.CorrectionPlanRequest;
-import com.meridian.platform.approval.domain.model.CorrectionReasonCode;
+import com.meridian.platform.loan.application.dto.LoanCorrectionPlanRequest;
+import com.meridian.platform.loan.domain.model.LoanCorrectionReasonCode;
 import com.meridian.platform.loan.domain.model.collateral.CollateralLoanManualVerificationOutcome;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
@@ -19,9 +19,9 @@ public record CompleteCollateralLoanVerificationRequest(
         @NotBlank
         @Size(max = 2000)
         String assessmentNote,
-        CorrectionReasonCode reasonCode,
+        LoanCorrectionReasonCode reasonCode,
         @Valid
-        CorrectionPlanRequest correctionPlan
+        LoanCorrectionPlanRequest correctionPlan
 ) {
 
     @JsonAnySetter

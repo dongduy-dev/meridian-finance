@@ -1,0 +1,537 @@
+{
+  "paths" : {
+    "/api/v1/loan-applications/{loanApplicationId}/unsecured-consumer-loan-verification/complete" : {
+      "post" : {
+        "tags" : [ "unsecured-consumer-loan-verification-controller" ],
+        "operationId" : "completeManualVerification",
+        "parameters" : [ {
+          "name" : "loanApplicationId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/CompleteUnsecuredConsumerLoanVerificationRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/UnsecuredConsumerLoanVerificationDto"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/loan-applications/{loanApplicationId}/review-recommendations" : {
+      "post" : {
+        "tags" : [ "review-recommendation-controller" ],
+        "operationId" : "submitReviewRecommendation",
+        "parameters" : [ {
+          "name" : "loanApplicationId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ReviewRecommendationRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "201" : {
+            "description" : "Created",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ReviewRecommendationDto"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/loan-applications/{loanApplicationId}/document-review-items/{checklistItemId}/reviews" : {
+      "post" : {
+        "tags" : [ "document-review-controller" ],
+        "operationId" : "review",
+        "parameters" : [ {
+          "name" : "loanApplicationId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        }, {
+          "name" : "checklistItemId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ReviewDocumentRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/DocumentReviewDto"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/loan-applications/{loanApplicationId}/collateral-loan-verification/complete" : {
+      "post" : {
+        "tags" : [ "collateral-loan-verification-controller" ],
+        "operationId" : "completeManualVerification_1",
+        "parameters" : [ {
+          "name" : "loanApplicationId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/CompleteCollateralLoanVerificationRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/CollateralLoanVerificationDto"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/loan-applications/{loanApplicationId}/approval-decisions" : {
+      "post" : {
+        "tags" : [ "approval-decision-controller" ],
+        "operationId" : "submitApprovalDecision",
+        "parameters" : [ {
+          "name" : "loanApplicationId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ApprovalDecisionRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "201" : {
+            "description" : "Created",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApprovalDecisionDto"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "schemas" : {
+    "CompleteUnsecuredConsumerLoanVerificationRequest" : {
+      "type" : "object",
+      "properties" : {
+        "outcome" : {
+          "type" : "string",
+          "enum" : [ "VERIFIED", "FAILED", "REQUIRES_MORE_INFORMATION" ]
+        },
+        "assessmentNote" : {
+          "type" : "string",
+          "maxLength" : 2000,
+          "minLength" : 0
+        },
+        "reasonCode" : {
+          "type" : "string",
+          "enum" : [ "SUPPORTING_DOCUMENT_REQUIRED", "RECENT_PAYSLIP_REQUIRED", "DOCUMENT_REPLACEMENT_REQUIRED", "DOCUMENT_REVIEW_REQUIRED" ]
+        },
+        "correctionPlan" : {
+          "$ref" : "#/components/schemas/CorrectionPlanRequest"
+        }
+      },
+      "required" : [ "assessmentNote", "outcome" ]
+    },
+    "UnsecuredConsumerLoanVerificationDto" : {
+      "type" : "object",
+      "properties" : {
+        "loanApplicationId" : {
+          "type" : "string",
+          "format" : "uuid"
+        },
+        "status" : {
+          "type" : "string"
+        },
+        "productVerificationResult" : {
+          "type" : "string"
+        },
+        "reviewedAt" : {
+          "type" : "string",
+          "format" : "date-time"
+        }
+      }
+    },
+    "ReviewRecommendationRequest" : {
+      "type" : "object",
+      "properties" : {
+        "action" : {
+          "type" : "string",
+          "enum" : [ "RECOMMEND_APPROVAL", "RECOMMEND_REJECTION", "RETURN_TO_CUSTOMER_REVISION", "REQUEST_STAFF_CORRECTION" ]
+        },
+        "reason" : {
+          "type" : "string",
+          "maxLength" : 2000,
+          "minLength" : 0
+        },
+        "internalNotes" : {
+          "type" : "string",
+          "maxLength" : 2000,
+          "minLength" : 0
+        },
+        "expectedReviewCycleId" : {
+          "type" : "string",
+          "format" : "uuid"
+        },
+        "reasonCode" : {
+          "type" : "string",
+          "enum" : [ "SUPPORTING_DOCUMENT_REQUIRED", "RECENT_PAYSLIP_REQUIRED", "DOCUMENT_REPLACEMENT_REQUIRED", "DOCUMENT_REVIEW_REQUIRED" ]
+        },
+        "correctionPlan" : {
+          "$ref" : "#/components/schemas/CorrectionPlanRequest"
+        }
+      },
+      "required" : [ "action", "expectedReviewCycleId" ]
+    },
+    "ReviewRecommendationDto" : {
+      "type" : "object",
+      "properties" : {
+        "recommendationId" : {
+          "type" : "string",
+          "format" : "uuid"
+        },
+        "loanApplicationId" : {
+          "type" : "string",
+          "format" : "uuid"
+        },
+        "reviewCycleId" : {
+          "type" : "string",
+          "format" : "uuid"
+        },
+        "loanOfficerUserId" : {
+          "type" : "string",
+          "format" : "uuid"
+        },
+        "action" : {
+          "type" : "string"
+        },
+        "reason" : {
+          "type" : "string"
+        },
+        "reasonCode" : {
+          "type" : "string"
+        },
+        "submittedAt" : {
+          "type" : "string",
+          "format" : "date-time"
+        }
+      }
+    },
+    "ReviewDocumentRequest" : {
+      "type" : "object",
+      "properties" : {
+        "reviewRequestId" : {
+          "type" : "string",
+          "format" : "uuid"
+        },
+        "documentVersionId" : {
+          "type" : "string",
+          "format" : "uuid"
+        },
+        "outcome" : {
+          "type" : "string",
+          "enum" : [ "ACCEPT_DOCUMENT", "WAIVE_DOCUMENT", "REQUEST_REPLACEMENT" ]
+        },
+        "waiverReasonCode" : {
+          "type" : "string",
+          "enum" : [ "EVIDENCE_SATISFIED_BY_VERIFIED_SOURCE", "DOCUMENT_NOT_APPLICABLE" ]
+        },
+        "restrictedStaffNotes" : {
+          "type" : "string",
+          "maxLength" : 2000,
+          "minLength" : 0
+        },
+        "correctionReasonCode" : {
+          "type" : "string",
+          "enum" : [ "SUPPORTING_DOCUMENT_REQUIRED", "RECENT_PAYSLIP_REQUIRED", "DOCUMENT_REPLACEMENT_REQUIRED", "DOCUMENT_REVIEW_REQUIRED" ]
+        },
+        "customerInstruction" : {
+          "type" : "string",
+          "maxLength" : 500,
+          "minLength" : 0
+        }
+      },
+      "required" : [ "documentVersionId", "outcome", "reviewRequestId" ]
+    },
+    "DocumentReviewDto" : {
+      "type" : "object",
+      "properties" : {
+        "reviewDecisionId" : {
+          "type" : "string",
+          "format" : "uuid"
+        },
+        "checklistItemId" : {
+          "type" : "string",
+          "format" : "uuid"
+        },
+        "documentVersionId" : {
+          "type" : "string",
+          "format" : "uuid"
+        },
+        "outcome" : {
+          "type" : "string"
+        },
+        "waiverReasonCode" : {
+          "type" : "string"
+        },
+        "decidedAt" : {
+          "type" : "string",
+          "format" : "date-time"
+        }
+      }
+    },
+    "CompleteCollateralLoanVerificationRequest" : {
+      "type" : "object",
+      "properties" : {
+        "expectedVerificationId" : {
+          "type" : "string",
+          "format" : "uuid"
+        },
+        "outcome" : {
+          "type" : "string",
+          "enum" : [ "VERIFIED", "FAILED", "REQUIRES_MORE_INFORMATION" ]
+        },
+        "assessmentNote" : {
+          "type" : "string",
+          "maxLength" : 2000,
+          "minLength" : 0
+        },
+        "reasonCode" : {
+          "type" : "string",
+          "enum" : [ "SUPPORTING_DOCUMENT_REQUIRED", "RECENT_PAYSLIP_REQUIRED", "DOCUMENT_REPLACEMENT_REQUIRED", "DOCUMENT_REVIEW_REQUIRED" ]
+        },
+        "correctionPlan" : {
+          "$ref" : "#/components/schemas/CorrectionPlanRequest"
+        }
+      },
+      "required" : [ "assessmentNote", "expectedVerificationId", "outcome" ]
+    },
+    "CollateralLoanVerificationDto" : {
+      "type" : "object",
+      "properties" : {
+        "verificationId" : {
+          "type" : "string",
+          "format" : "uuid"
+        },
+        "loanApplicationId" : {
+          "type" : "string",
+          "format" : "uuid"
+        },
+        "status" : {
+          "type" : "string"
+        },
+        "productVerificationResult" : {
+          "type" : "string"
+        },
+        "reviewedAt" : {
+          "type" : "string",
+          "format" : "date-time"
+        }
+      }
+    },
+    "ApprovalDecisionRequest" : {
+      "type" : "object",
+      "properties" : {
+        "action" : {
+          "type" : "string",
+          "enum" : [ "APPROVE", "REJECT", "RETURN_TO_LOAN_OFFICER_REVIEW", "REQUEST_CUSTOMER_OR_STAFF_CORRECTION" ]
+        },
+        "reason" : {
+          "type" : "string",
+          "maxLength" : 2000,
+          "minLength" : 0
+        },
+        "internalNotes" : {
+          "type" : "string",
+          "maxLength" : 2000,
+          "minLength" : 0
+        },
+        "expectedReviewRecommendationId" : {
+          "type" : "string",
+          "format" : "uuid"
+        },
+        "expectedReviewCycleId" : {
+          "type" : "string",
+          "format" : "uuid"
+        },
+        "reasonCode" : {
+          "type" : "string",
+          "enum" : [ "SUPPORTING_DOCUMENT_REQUIRED", "RECENT_PAYSLIP_REQUIRED", "DOCUMENT_REPLACEMENT_REQUIRED", "DOCUMENT_REVIEW_REQUIRED" ]
+        },
+        "correctionPlan" : {
+          "$ref" : "#/components/schemas/CorrectionPlanRequest"
+        }
+      },
+      "required" : [ "action", "expectedReviewCycleId", "expectedReviewRecommendationId" ]
+    },
+    "ApprovalDecisionDto" : {
+      "type" : "object",
+      "properties" : {
+        "decisionId" : {
+          "type" : "string",
+          "format" : "uuid"
+        },
+        "loanApplicationId" : {
+          "type" : "string",
+          "format" : "uuid"
+        },
+        "reviewRecommendationId" : {
+          "type" : "string",
+          "format" : "uuid"
+        },
+        "approverUserId" : {
+          "type" : "string",
+          "format" : "uuid"
+        },
+        "action" : {
+          "type" : "string"
+        },
+        "reason" : {
+          "type" : "string"
+        },
+        "reasonCode" : {
+          "type" : "string"
+        },
+        "decidedAt" : {
+          "type" : "string",
+          "format" : "date-time"
+        }
+      }
+    },
+    "CorrectionPlanRequest" : {
+      "type" : "object",
+      "properties" : {
+        "tasks" : {
+          "type" : "array",
+          "items" : {
+            "$ref" : "#/components/schemas/CorrectionTaskRequest"
+          },
+          "maxItems" : 10,
+          "minItems" : 1
+        }
+      }
+    },
+    "CorrectionTaskRequest" : {
+      "type" : "object",
+      "properties" : {
+        "scope" : {
+          "type" : "string",
+          "enum" : [ "SUPPORTING_DOCUMENT_UPLOAD", "DOCUMENT_REPLACEMENT", "DOCUMENT_REVIEW", "APPLICATION_TERMS" ]
+        },
+        "responsibleParty" : {
+          "type" : "string",
+          "enum" : [ "CUSTOMER", "STAFF" ]
+        },
+        "documentType" : {
+          "type" : "string",
+          "enum" : [ "RECENT_PAYSLIP", "INCOME_PROOF", "BANK_STATEMENT", "EMPLOYMENT_PROOF", "COLLATERAL_OWNERSHIP_EVIDENCE" ]
+        },
+        "createChecklistItem" : {
+          "type" : "boolean"
+        },
+        "checklistItemId" : {
+          "type" : "string",
+          "format" : "uuid"
+        },
+        "baselineDocumentVersionId" : {
+          "type" : "string",
+          "format" : "uuid"
+        },
+        "customerInstruction" : {
+          "type" : "string",
+          "maxLength" : 500,
+          "minLength" : 0
+        },
+        "staffInstruction" : {
+          "type" : "string",
+          "maxLength" : 500,
+          "minLength" : 0
+        }
+      }
+    }
+  }
+}

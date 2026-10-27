@@ -1,6 +1,5 @@
 package com.meridian.platform.document.application.dto;
 
-import com.meridian.platform.approval.domain.model.CorrectionReasonCode;
 import com.meridian.platform.document.domain.model.DocumentReviewOutcome;
 import com.meridian.platform.document.domain.model.DocumentWaiverReasonCode;
 import jakarta.validation.constraints.NotNull;
@@ -14,7 +13,7 @@ public record ReviewDocumentRequest(
         @NotNull DocumentReviewOutcome outcome,
         DocumentWaiverReasonCode waiverReasonCode,
         @Size(max = 2000) String restrictedStaffNotes,
-        CorrectionReasonCode correctionReasonCode,
+        DocumentCorrectionReasonCode correctionReasonCode,
         @Size(max = 500) String customerInstruction
 ) {
 }

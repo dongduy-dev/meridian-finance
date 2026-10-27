@@ -11,7 +11,7 @@ import com.meridian.platform.loan.application.port.in.QueryStaffCorrectionCaseUs
 import com.meridian.platform.loan.application.port.out.LoanCorrectionRepository;
 import com.meridian.platform.loan.application.port.out.LoanApplicationStatusTransitionRepository;
 import com.meridian.platform.loan.domain.model.*;
-import com.meridian.platform.approval.domain.model.CorrectionReasonCode;
+import com.meridian.platform.loan.domain.model.LoanCorrectionReasonCode;
 import com.meridian.platform.shared.application.security.AuthenticatedUser;
 import com.meridian.platform.shared.application.security.CurrentUserProvider;
 import com.meridian.platform.shared.domain.model.ActorType;
@@ -141,10 +141,10 @@ class StaffEvidenceProvenancePostgreSqlIntegrationTest {
         UUID last = UUID.randomUUID();
         corrections.saveRequest(request(second, app, NOW, NOW.plusSeconds(2)));
         corrections.saveRequest(request(first, app, NOW, NOW.plusSeconds(1)));
-        corrections.saveRequest(new LoanCorrectionRequest(last, app, null, "REQUEST_STAFF_CORRECTION", CorrectionReasonCode.DOCUMENT_REVIEW_REQUIRED,
+        corrections.saveRequest(new LoanCorrectionRequest(last, app, null, "REQUEST_STAFF_CORRECTION", LoanCorrectionReasonCode.DOCUMENT_REVIEW_REQUIRED,
                 STAFF, LoanCorrectionRequestStatus.OPEN, null, NOW.plusSeconds(3), null, null));
         transitions.save(new LoanApplicationStatusTransition(UUID.randomUUID(), app, UUID.randomUUID(), 1,
-                LoanApplicationStatus.RETURNED_FOR_REVISION, LoanApplicationStatus.SUBMITTED, LoanApplicationTransitionAction.RESUBMIT_CORRECTION,
+                com.meridian.platform.loan.domain.model.LoanApplicationStatus.RETURNED_FOR_REVISION, com.meridian.platform.loan.domain.model.LoanApplicationStatus.SUBMITTED, LoanApplicationTransitionAction.RESUBMIT_CORRECTION,
                 null, ActorType.USER, customerUser, NOW.plusSeconds(1)));
         var records = corrections.findRequestsByApplicationId(app);
         assertEquals(List.of(first, second, last), records.stream().map(LoanCorrectionRequest::id).toList());
@@ -161,7 +161,7 @@ class StaffEvidenceProvenancePostgreSqlIntegrationTest {
     }
 
     private LoanCorrectionRequest request(UUID id, UUID app, LocalDateTime created, LocalDateTime resubmitted) {
-        return new LoanCorrectionRequest(id, app, null, "REQUEST_REPLACEMENT", CorrectionReasonCode.DOCUMENT_REPLACEMENT_REQUIRED,
+        return new LoanCorrectionRequest(id, app, null, "REQUEST_REPLACEMENT", LoanCorrectionReasonCode.DOCUMENT_REPLACEMENT_REQUIRED,
                 STAFF, LoanCorrectionRequestStatus.RESUBMITTED, UUID.randomUUID(), created, resubmitted.minusNanos(1000), resubmitted);
     }
 

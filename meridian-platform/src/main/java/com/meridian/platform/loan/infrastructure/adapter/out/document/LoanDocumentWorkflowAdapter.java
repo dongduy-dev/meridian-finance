@@ -28,8 +28,8 @@ public class LoanDocumentWorkflowAdapter implements LoanDocumentWorkflowPort {
         return new LoanDocumentWorkflowSnapshot(
                 loanApplication.id(),
                 loanApplication.customerId(),
-                loanApplication.originationChannel(),
-                loanApplication.status()
+                loanApplication.originationChannel().name(),
+                loanApplication.status().name()
         );
     }
 
@@ -43,8 +43,8 @@ public class LoanDocumentWorkflowAdapter implements LoanDocumentWorkflowPort {
         return new LoanDocumentWorkflowSnapshot(
                 loanApplication.id(),
                 loanApplication.customerId(),
-                loanApplication.originationChannel(),
-                loanApplication.status()
+                loanApplication.originationChannel().name(),
+                loanApplication.status().name()
         );
     }
 }

@@ -6,6 +6,9 @@ import com.tngtech.archunit.base.DescribedPredicate;
 import com.tngtech.archunit.core.importer.ClassFileImporter;
 import com.tngtech.archunit.core.importer.ImportOption;
 import com.tngtech.archunit.lang.ArchRule;
+import com.tngtech.archunit.lang.ArchCondition;
+import com.tngtech.archunit.lang.ConditionEvents;
+import com.tngtech.archunit.lang.SimpleConditionEvent;
 import com.meridian.platform.document.application.port.in.DocumentChecklistUseCase;
 import com.meridian.platform.document.application.port.in.LoanIntakeEvidenceUseCase;
 import com.meridian.platform.document.application.port.in.AssistedActionEvidenceUseCase;
@@ -18,6 +21,133 @@ import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.classes;
 
 class ArchitectureRulesTest {
+
+    private static final Set<String> FEATURES = Set.of(
+            "identity", "customer", "partner", "loan", "approval", "document", "audit", "notification");
+
+    private static final Set<String> PUBLISHED_APPLICATION_SUPPORT = Set.of(
+            "com.meridian.platform.partner.application.dto.CustomerPartnerEmployeeEligibilityDto",
+            "com.meridian.platform.partner.application.dto.CustomerPartnerEmployeeEligibilityDto$Status",
+            "com.meridian.platform.partner.application.dto.CustomerPartnerEmployeeLinkSnapshotDto",
+            "com.meridian.platform.customer.application.port.in.SensitiveContractBankAccount");
+
+    private static String feature(JavaClass type) {
+        String name = type.getPackageName();
+        String root = "com.meridian.platform.";
+        if (!name.startsWith(root)) return null;
+        name = name.substring(root.length());
+        if (name.startsWith("testsupport.architecture.")) {
+            name = name.substring("testsupport.architecture.".length());
+        }
+        String owner = name.split("\\.")[0];
+        return FEATURES.contains(owner) ? owner : null;
+    }
+
+    private static ArchRule contextIsolation(String layer) {
+        return classes().that().resideInAPackage(".." + layer + "..")
+                .should(new ArchCondition<>("keep foreign internal vocabulary behind infrastructure boundaries") {
+                    @Override
+                    public void check(JavaClass origin, ConditionEvents events) {
+                        String owner = feature(origin);
+                        if (owner == null) return;
+                        origin.getDirectDependenciesFromSelf().forEach(dependency -> {
+                            JavaClass target = dependency.getTargetClass();
+                            String provider = feature(target);
+                            String name = target.getPackageName();
+                            boolean internal = name.contains(".domain.")
+                                    || name.contains(".application.service")
+                                    || name.contains(".application.mapper")
+                                    || name.contains(".application.dto")
+                                    || name.contains(".application.port.out");
+                            if (provider != null && !owner.equals(provider)
+                                    && (layer.equals("domain")
+                                    || (internal && !PUBLISHED_APPLICATION_SUPPORT.contains(baseTypeName(target))))) {
+                                events.add(SimpleConditionEvent.violated(origin, dependency.getDescription()));
+                            }
+                        });
+                    }
+                });
+    }
+
+    private static final Set<String> APPROVAL_EVENT_TYPES = Set.of(
+            "com.meridian.platform.approval.application.event.ApprovalDecisionRecordedEvent",
+            "com.meridian.platform.approval.application.event.ReviewRecommendationRecordedEvent",
+            "com.meridian.platform.approval.application.event.ApprovalDecisionEventAction",
+            "com.meridian.platform.approval.application.event.ReviewRecommendationEventAction",
+            "com.meridian.platform.approval.application.event.CorrectionPlanFacts",
+            "com.meridian.platform.approval.application.event.CorrectionTaskFacts");
+
+    private static final ArchRule APPROVAL_EVENT_CLOSURE = classes()
+            .that().resideInAPackage("..approval.application.event..")
+            .should().onlyDependOnClassesThat(new DescribedPredicate<>("are immutable published facts or technical envelope types") {
+                @Override
+                public boolean test(JavaClass type) {
+                    String name = baseTypeName(type);
+                    return name.startsWith("java.") || APPROVAL_EVENT_TYPES.contains(name)
+                            || name.equals("com.meridian.platform.shared.application.operation.BusinessOperationContext");
+                }
+            });
+
+    private static final ArchRule PRIVATE_APPROVAL_CORRECTION_POLICY = noClasses()
+            .that().resideOutsideOfPackage("com.meridian.platform.approval..")
+            .should().dependOnClassesThat()
+            .haveFullyQualifiedName("com.meridian.platform.approval.application.service.CorrectionPlanPolicy");
+
+    private static final ArchRule PRIVATE_LOAN_CORRECTION_POLICY = noClasses()
+            .that().resideOutsideOfPackage("com.meridian.platform.loan..")
+            .should().dependOnClassesThat()
+            .haveFullyQualifiedName("com.meridian.platform.loan.application.service.LoanCorrectionPlanPolicy");
+
+    @Test
+    void domainAndApplicationKeepForeignInternalVocabularyIsolated() {
+        contextIsolation("domain").check(importedClasses);
+        contextIsolation("application").check(importedClasses);
+        PRIVATE_APPROVAL_CORRECTION_POLICY.check(importedClasses);
+        PRIVATE_LOAN_CORRECTION_POLICY.check(importedClasses);
+    }
+
+    @Test
+    void publishedApprovalEventsExposeOnlyTheExplicitFactClosure() {
+        APPROVAL_EVENT_CLOSURE.check(importedClasses);
+    }
+
+    @Test
+    void contextIsolationRejectsForeignDomainAndPolicyFixtures() {
+        assertRuleRejects(contextIsolation("domain"),
+                com.meridian.platform.testsupport.architecture.loan.domain.ForeignCorrectionReason.class,
+                "CorrectionReasonCode");
+        Class<?> policy = com.meridian.platform.testsupport.architecture.loan.application.ForeignCorrectionPolicy.class;
+        assertRuleRejects(contextIsolation("application"), policy, "CorrectionPlanPolicy");
+        assertRuleRejects(PRIVATE_APPROVAL_CORRECTION_POLICY, policy, "CorrectionPlanPolicy");
+        assertRuleRejects(contextIsolation("application"),
+                com.meridian.platform.testsupport.architecture.loan.application.ForeignCorrectionReason.class,
+                "CorrectionReasonCode");
+        assertRuleRejects(PRIVATE_LOAN_CORRECTION_POLICY,
+                com.meridian.platform.testsupport.architecture.document.infrastructure.ForeignLoanCorrectionPolicy.class,
+                "LoanCorrectionPlanPolicy");
+    }
+
+    @Test
+    void existingPublishedPartnerFactsAndClearableCustomerCarrierRemainLegal() {
+        contextIsolation("application").check(new ClassFileImporter().importClasses(
+                com.meridian.platform.testsupport.architecture.loan.application.PublishedSupport.class));
+    }
+
+    @Test
+    void publishedEventClosureRejectsNestedRequestAndDomainEnumLeaks() {
+        assertRuleRejects(APPROVAL_EVENT_CLOSURE,
+                com.meridian.platform.testsupport.architecture.approval.application.event.RequestLeak.class,
+                "CorrectionPlanRequest");
+        assertRuleRejects(APPROVAL_EVENT_CLOSURE,
+                com.meridian.platform.testsupport.architecture.approval.application.event.DomainEnumLeak.class,
+                "CorrectionReasonCode");
+    }
+
+    private void assertRuleRejects(ArchRule rule, Class<?> fixture, String leakedType) {
+        var result = rule.evaluate(new ClassFileImporter().importClasses(fixture));
+        assertTrue(result.hasViolation());
+        assertTrue(result.getFailureReport().toString().contains(leakedType));
+    }
 
     private final JavaClasses importedClasses = new ClassFileImporter()
             .withImportOption(ImportOption.Predefined.DO_NOT_INCLUDE_TESTS)

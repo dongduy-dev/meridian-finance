@@ -1,7 +1,7 @@
 package com.meridian.platform.loan.application.service;
 
-import com.meridian.platform.approval.domain.model.CorrectionReasonCode;
-import com.meridian.platform.document.domain.model.DocumentType;
+import com.meridian.platform.loan.domain.model.LoanCorrectionReasonCode;
+import com.meridian.platform.loan.domain.model.LoanDocumentType;
 import com.meridian.platform.loan.application.port.out.LoanApplicationRepository;
 import com.meridian.platform.loan.application.port.out.LoanCorrectionRepository;
 import com.meridian.platform.loan.application.port.out.LoanApplicationCancellationRepository;
@@ -86,17 +86,17 @@ class QueryStaffCorrectionCaseServiceTest {
     void projectsMixedTasksProofAndCurrentActorMakerChecker() {
         LoanCorrectionRequest request = new LoanCorrectionRequest(
                 REQUEST_ID, APPLICATION_ID, UUID.randomUUID(), "REQUEST_CORRECTION",
-                CorrectionReasonCode.DOCUMENT_REVIEW_REQUIRED, CREATOR_ID,
+                LoanCorrectionReasonCode.DOCUMENT_REVIEW_REQUIRED, CREATOR_ID,
                 LoanCorrectionRequestStatus.OPEN, null, NOW.minusHours(3), null, null);
         LoanCorrectionTask customer = new LoanCorrectionTask(
                 UUID.randomUUID(), REQUEST_ID, 1, LoanCorrectionResponsibility.CUSTOMER,
-                LoanCorrectionScope.DOCUMENT_REPLACEMENT, DocumentType.BANK_STATEMENT,
+                LoanCorrectionScope.DOCUMENT_REPLACEMENT, LoanDocumentType.BANK_STATEMENT,
                 false, ITEM_ID, VERSION_ID, "Replace it.", null,
                 LoanCorrectionTaskStatus.COMPLETED, UUID.randomUUID(), UUID.randomUUID(),
                 NOW.minusHours(1), NOW.minusHours(2));
         LoanCorrectionTask staff = new LoanCorrectionTask(
                 UUID.randomUUID(), REQUEST_ID, 2, LoanCorrectionResponsibility.STAFF,
-                LoanCorrectionScope.DOCUMENT_REVIEW, DocumentType.BANK_STATEMENT,
+                LoanCorrectionScope.DOCUMENT_REVIEW, LoanDocumentType.BANK_STATEMENT,
                 false, ITEM_ID, VERSION_ID, null, "Review replacement.",
                 LoanCorrectionTaskStatus.OPEN, null, null, null, NOW.minusHours(2));
         UUID replacementId = UUID.randomUUID();
@@ -281,7 +281,7 @@ class QueryStaffCorrectionCaseServiceTest {
     private static LoanCorrectionRequest request(LoanCorrectionRequestStatus status) {
         return new LoanCorrectionRequest(
                 REQUEST_ID, APPLICATION_ID, UUID.randomUUID(), "REQUEST_CORRECTION",
-                CorrectionReasonCode.DOCUMENT_REVIEW_REQUIRED, UUID.randomUUID(), status,
+                LoanCorrectionReasonCode.DOCUMENT_REVIEW_REQUIRED, UUID.randomUUID(), status,
                 null, NOW.minusHours(3), null, null
         );
     }
@@ -294,10 +294,10 @@ class QueryStaffCorrectionCaseServiceTest {
         UUID oldRequestId = UUID.randomUUID();
         var old = historicalRequest(oldRequestId, NOW.minusDays(1), NOW.minusHours(2));
         var latest = new LoanCorrectionRequest(REQUEST_ID, APPLICATION_ID, UUID.randomUUID(), "REQUEST_STAFF_CORRECTION",
-                CorrectionReasonCode.DOCUMENT_REVIEW_REQUIRED, CREATOR_ID, LoanCorrectionRequestStatus.READY_FOR_RESUBMISSION,
+                LoanCorrectionReasonCode.DOCUMENT_REVIEW_REQUIRED, CREATOR_ID, LoanCorrectionRequestStatus.READY_FOR_RESUBMISSION,
                 null, NOW.minusHours(1), NOW, null);
         var completed = new LoanCorrectionTask(UUID.randomUUID(), oldRequestId, 1, LoanCorrectionResponsibility.CUSTOMER,
-                LoanCorrectionScope.DOCUMENT_REPLACEMENT, DocumentType.BANK_STATEMENT, false, ITEM_ID, VERSION_ID,
+                LoanCorrectionScope.DOCUMENT_REPLACEMENT, LoanDocumentType.BANK_STATEMENT, false, ITEM_ID, VERSION_ID,
                 "Replace statement.", null, LoanCorrectionTaskStatus.COMPLETED, customerUserId, UUID.randomUUID(),
                 NOW.minusHours(3), NOW.minusDays(1));
         var staffTask = task(2, LoanCorrectionResponsibility.STAFF, LoanCorrectionTaskStatus.COMPLETED);
@@ -418,7 +418,7 @@ class QueryStaffCorrectionCaseServiceTest {
 
     private static LoanCorrectionRequest historicalRequest(UUID id, LocalDateTime created, LocalDateTime resubmitted) {
         return new LoanCorrectionRequest(id, APPLICATION_ID, UUID.randomUUID(), "REQUEST_CORRECTION",
-                CorrectionReasonCode.DOCUMENT_REVIEW_REQUIRED, CREATOR_ID, LoanCorrectionRequestStatus.RESUBMITTED,
+                LoanCorrectionReasonCode.DOCUMENT_REVIEW_REQUIRED, CREATOR_ID, LoanCorrectionRequestStatus.RESUBMITTED,
                 UUID.randomUUID(), created, resubmitted.minusMinutes(1), resubmitted);
     }
 
@@ -445,7 +445,7 @@ class QueryStaffCorrectionCaseServiceTest {
                 responsibility == LoanCorrectionResponsibility.STAFF
                         ? LoanCorrectionScope.SUPPORTING_DOCUMENT_UPLOAD
                         : LoanCorrectionScope.DOCUMENT_REPLACEMENT,
-                DocumentType.BANK_STATEMENT, false, ITEM_ID, VERSION_ID,
+                LoanDocumentType.BANK_STATEMENT, false, ITEM_ID, VERSION_ID,
                 responsibility == LoanCorrectionResponsibility.CUSTOMER ? "Replace it." : null,
                 responsibility == LoanCorrectionResponsibility.STAFF ? "Upload it." : null,
                 status,

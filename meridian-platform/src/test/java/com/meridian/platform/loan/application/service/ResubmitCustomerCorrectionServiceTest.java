@@ -1,7 +1,7 @@
 package com.meridian.platform.loan.application.service;
 
-import com.meridian.platform.approval.domain.model.CorrectionReasonCode;
-import com.meridian.platform.document.domain.model.DocumentType;
+import com.meridian.platform.loan.domain.model.LoanCorrectionReasonCode;
+import com.meridian.platform.loan.domain.model.LoanDocumentType;
 import com.meridian.platform.loan.application.dto.CorrectionResubmissionDto;
 import com.meridian.platform.loan.application.dto.CorrectionResubmissionRequest;
 import com.meridian.platform.loan.application.port.out.CustomerReadinessPort;
@@ -193,7 +193,7 @@ class ResubmitCustomerCorrectionServiceTest {
                 APPLICATION_ID,
                 sourceCycleId,
                 "RETURN_TO_CUSTOMER_REVISION",
-                CorrectionReasonCode.DOCUMENT_REPLACEMENT_REQUIRED,
+                LoanCorrectionReasonCode.DOCUMENT_REPLACEMENT_REQUIRED,
                 assignedOfficerId,
                 LoanCorrectionRequestStatus.OPEN,
                 null,
@@ -461,7 +461,7 @@ class ResubmitCustomerCorrectionServiceTest {
                 APPLICATION_ID,
                 null,
                 "COMPLETE_PRODUCT_VERIFICATION",
-                CorrectionReasonCode.DOCUMENT_REPLACEMENT_REQUIRED,
+                LoanCorrectionReasonCode.DOCUMENT_REPLACEMENT_REQUIRED,
                 UUID.randomUUID(),
                 LoanCorrectionRequestStatus.OPEN,
                 null,
@@ -479,7 +479,7 @@ class ResubmitCustomerCorrectionServiceTest {
                 1,
                 LoanCorrectionResponsibility.CUSTOMER,
                 LoanCorrectionScope.DOCUMENT_REPLACEMENT,
-                DocumentType.INCOME_PROOF,
+                LoanDocumentType.INCOME_PROOF,
                 false,
                 UUID.randomUUID(),
                 UUID.randomUUID(),

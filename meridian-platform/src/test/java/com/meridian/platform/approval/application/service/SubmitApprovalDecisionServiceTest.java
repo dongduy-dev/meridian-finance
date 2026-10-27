@@ -18,7 +18,7 @@ import com.meridian.platform.approval.domain.model.ReviewRecommendation;
 import com.meridian.platform.approval.domain.model.ReviewRecommendationAction;
 import com.meridian.platform.shared.application.audit.BusinessAuditEvent;
 import com.meridian.platform.shared.application.audit.BusinessAuditPublisher;
-import com.meridian.platform.document.domain.model.DocumentType;
+import com.meridian.platform.approval.application.dto.CorrectionDocumentType;
 import com.meridian.platform.shared.application.security.AuthenticatedUser;
 import com.meridian.platform.shared.application.security.CurrentUserProvider;
 import com.meridian.platform.shared.domain.audit.BusinessAuditAction;
@@ -97,7 +97,7 @@ class SubmitApprovalDecisionServiceTest {
                 new CorrectionTaskRequest(
                         CorrectionScope.SUPPORTING_DOCUMENT_UPLOAD,
                         CorrectionResponsibility.CUSTOMER,
-                        DocumentType.RECENT_PAYSLIP,
+                        CorrectionDocumentType.RECENT_PAYSLIP,
                         true,
                         null,
                         null,
@@ -107,7 +107,7 @@ class SubmitApprovalDecisionServiceTest {
                 new CorrectionTaskRequest(
                         CorrectionScope.DOCUMENT_REVIEW,
                         CorrectionResponsibility.STAFF,
-                        DocumentType.RECENT_PAYSLIP,
+                        CorrectionDocumentType.RECENT_PAYSLIP,
                         false,
                         checklistItemId,
                         baselineVersionId,
@@ -130,7 +130,8 @@ class SubmitApprovalDecisionServiceTest {
         );
 
         assertEquals("REQUEST_CUSTOMER_OR_STAFF_CORRECTION", result.action());
-        assertEquals(plan, eventPublisher.publishedEvent.correctionPlan());
+        assertEquals(tools.jackson.databind.json.JsonMapper.builder().build().valueToTree(plan),
+                tools.jackson.databind.json.JsonMapper.builder().build().valueToTree(eventPublisher.publishedEvent.correctionPlan()));
         assertEquals(REVIEW_CYCLE_ID, eventPublisher.publishedEvent.reviewCycleId());
         assertNotNull(approvalDecisionRepository.savedDecision);
         assertNotNull(auditPublisher.publishedEvent);

@@ -137,6 +137,10 @@ class CustomerCorrectionWorkflowPostgreSqlIntegrationTest {
     @Autowired private ThreadLocalCurrentUserProvider currentUserProvider;
     @Autowired private Clock clock;
     @MockitoSpyBean private BusinessAuditPublisher auditPublisher;
+    @Autowired private com.meridian.platform.document.application.port.out.LoanDocumentWorkflowPort documentWorkflow;
+    @Autowired private com.meridian.platform.loan.application.port.out.LoanCorrectionRepository corrections;
+    @Autowired private org.springframework.transaction.PlatformTransactionManager transactionManager;
+
 
     private Fixture fixture;
 
@@ -167,6 +171,82 @@ class CustomerCorrectionWorkflowPostgreSqlIntegrationTest {
     }
 
     @Test
+    void workflowFindHasNoAdvisoryOrRowLockWhileLockJoinsTheCallerTransaction() {
+        UUID applicationId = submissionUseCase.startSalaryAdvanceApplication(
+                new SalaryAdvanceApplicationRequest(fixture.linkId(), money(3_000_000), 1)).loanApplicationId();
+        var transaction = new org.springframework.transaction.support.TransactionTemplate(transactionManager);
+        transaction.executeWithoutResult(status -> {
+            var found = documentWorkflow.find(applicationId);
+            assertEquals("CUSTOMER_DIGITAL", found.originationChannel());
+            assertEquals("SUBMITTED", found.status());
+            assertEquals(0, count("SELECT count(*) FROM pg_locks WHERE pid = pg_backend_pid() AND locktype = 'advisory'"));
+            assertEquals(0, count("SELECT count(*) FROM pg_locks WHERE pid = pg_backend_pid() AND relation = 'loan_applications'::regclass AND mode = 'RowShareLock'"));
+            assertEquals(found, documentWorkflow.lock(applicationId));
+            assertTrue(count("SELECT count(*) FROM pg_locks WHERE pid = pg_backend_pid() AND locktype = 'advisory'") > 0);
+            assertTrue(count("SELECT count(*) FROM pg_locks WHERE pid = pg_backend_pid() AND relation = 'loan_applications'::regclass AND mode = 'RowShareLock'") > 0);
+        });
+    }
+
+    @Test
+    void historicalStoredReasonStringsLoadAndResaveAsLoanOwnedValues() {
+        UUID applicationId = submissionUseCase.startSalaryAdvanceApplication(
+                new SalaryAdvanceApplicationRequest(fixture.linkId(), money(3_000_000), 1)).loanApplicationId();
+        UUID requestId = UUID.randomUUID();
+        jdbcTemplate.update("""
+                INSERT INTO loan_correction_requests
+                    (id, loan_application_id, source_action, reason_code, created_by_user_id, status, created_at, updated_at)
+                VALUES (?, ?, 'REQUEST_REPLACEMENT', 'DOCUMENT_REPLACEMENT_REQUIRED', ?, 'OPEN', now(), now())
+                """, requestId, applicationId, LOAN_OFFICER_USER_ID);
+        for (String oldCode : List.of("SUPPORTING_DOCUMENT_REQUIRED", "RECENT_PAYSLIP_REQUIRED", "DOCUMENT_REPLACEMENT_REQUIRED", "DOCUMENT_REVIEW_REQUIRED")) {
+            jdbcTemplate.update("UPDATE loan_correction_requests SET reason_code = ? WHERE id = ?", oldCode, requestId);
+            var request = corrections.findRequestById(requestId).orElseThrow();
+            assertEquals(com.meridian.platform.loan.domain.model.LoanCorrectionReasonCode.valueOf(oldCode), request.reasonCode());
+            assertEquals(request, corrections.saveRequest(request));
+            assertEquals(oldCode, jdbcTemplate.queryForObject("SELECT reason_code FROM loan_correction_requests WHERE id = ?", String.class, requestId));
+        }
+    }
+
+    @Test
+    void documentReplacementLateAuditFailureRollsBackReviewCorrectionHistoryAndAudit() {
+        UUID applicationId = submissionUseCase.startSalaryAdvanceApplication(
+                new SalaryAdvanceApplicationRequest(fixture.linkId(), money(3_000_000), 1)).loanApplicationId();
+        useLoanOfficer();
+        reviewStartUseCase.startReview(applicationId);
+        recommendationUseCase.submitReviewRecommendation(applicationId, new ReviewRecommendationRequest(
+                ReviewRecommendationAction.RETURN_TO_CUSTOMER_REVISION, null, null, activeCycle(applicationId),
+                CorrectionReasonCode.RECENT_PAYSLIP_REQUIRED,
+                new CorrectionPlanRequest(List.of(new CorrectionTaskRequest(
+                        CorrectionScope.SUPPORTING_DOCUMENT_UPLOAD, CorrectionResponsibility.CUSTOMER,
+                        com.meridian.platform.approval.application.dto.CorrectionDocumentType.RECENT_PAYSLIP,
+                        true, null, null, "Upload a payslip.", null)))));
+        useCustomer();
+        var task = onlyTask(applicationId);
+        var version = upload(applicationId, task.checklistItemId(), null, "rollback-payslip.pdf");
+        customerTaskCompletion.complete(applicationId, task.correctionTaskId(), new CompleteCorrectionTaskRequest(UUID.randomUUID()));
+        customerResubmission.resubmit(applicationId, new CorrectionResubmissionRequest(UUID.randomUUID()));
+        int requestsBefore = count("SELECT count(*) FROM loan_correction_requests WHERE loan_application_id = ?", applicationId);
+        int tasksBefore = count("SELECT count(*) FROM loan_correction_tasks WHERE correction_request_id IN (SELECT id FROM loan_correction_requests WHERE loan_application_id = ?)", applicationId);
+        int historyBefore = count("SELECT count(*) FROM loan_application_status_transitions WHERE loan_application_id = ?", applicationId);
+        int auditsBefore = count("SELECT count(*) FROM audit_events");
+        useLoanOfficer();
+        doThrow(new IllegalStateException("late replacement audit failure")).when(auditPublisher)
+                .publish(argThat(event -> event.entries().stream().anyMatch(entry -> entry.action() == BusinessAuditAction.DOCUMENT_REPLACEMENT_REQUESTED)));
+        var failure = assertThrows(IllegalStateException.class, () -> documentReviewUseCase.review(new ReviewDocumentCommand(
+                applicationId, task.checklistItemId(), version.documentVersionId(), UUID.randomUUID(),
+                DocumentReviewOutcome.REQUEST_REPLACEMENT, null, "Restricted rollback note.",
+                com.meridian.platform.document.application.dto.DocumentCorrectionReasonCode.DOCUMENT_REPLACEMENT_REQUIRED,
+                "Replace the payslip.", LOAN_OFFICER_USER_ID, false)));
+        assertEquals("late replacement audit failure", failure.getMessage());
+        assertEquals("SUBMITTED", status(applicationId));
+        assertEquals(requestsBefore, count("SELECT count(*) FROM loan_correction_requests WHERE loan_application_id = ?", applicationId));
+        assertEquals(tasksBefore, count("SELECT count(*) FROM loan_correction_tasks WHERE correction_request_id IN (SELECT id FROM loan_correction_requests WHERE loan_application_id = ?)", applicationId));
+        assertEquals(historyBefore, count("SELECT count(*) FROM loan_application_status_transitions WHERE loan_application_id = ?", applicationId));
+        assertEquals(auditsBefore, count("SELECT count(*) FROM audit_events"));
+        assertEquals(0, count("SELECT count(*) FROM document_review_decisions WHERE checklist_item_id = ?", task.checklistItemId()));
+        assertEquals(0, count("SELECT count(*) FROM document_checklist_items WHERE id = ? AND current_review_decision_id IS NOT NULL", task.checklistItemId()));
+    }
+
+    @Test
     void customerRevisionReplacementAndNewReviewCycleReachContractPending() {
         SalaryAdvanceApplicationDto application = submissionUseCase.startSalaryAdvanceApplication(
                 new SalaryAdvanceApplicationRequest(fixture.linkId(), money(3_000_000), 1)
@@ -191,7 +271,7 @@ class CustomerCorrectionWorkflowPostgreSqlIntegrationTest {
                         new CorrectionPlanRequest(List.of(new CorrectionTaskRequest(
                                 CorrectionScope.SUPPORTING_DOCUMENT_UPLOAD,
                                 CorrectionResponsibility.CUSTOMER,
-                                DocumentType.RECENT_PAYSLIP,
+                                com.meridian.platform.approval.application.dto.CorrectionDocumentType.RECENT_PAYSLIP,
                                 true,
                                 null,
                                 null,
@@ -228,7 +308,7 @@ class CustomerCorrectionWorkflowPostgreSqlIntegrationTest {
                 DocumentReviewOutcome.REQUEST_REPLACEMENT,
                 null,
                 "Restricted reviewer note.",
-                CorrectionReasonCode.DOCUMENT_REPLACEMENT_REQUIRED,
+                com.meridian.platform.document.application.dto.DocumentCorrectionReasonCode.DOCUMENT_REPLACEMENT_REQUIRED,
                 "Replace the payslip with a clearer copy.",
                 LOAN_OFFICER_USER_ID,
                 false
@@ -320,7 +400,7 @@ class CustomerCorrectionWorkflowPostgreSqlIntegrationTest {
                         new CorrectionPlanRequest(List.of(new CorrectionTaskRequest(
                                 CorrectionScope.SUPPORTING_DOCUMENT_UPLOAD,
                                 CorrectionResponsibility.CUSTOMER,
-                                DocumentType.RECENT_PAYSLIP,
+                                com.meridian.platform.approval.application.dto.CorrectionDocumentType.RECENT_PAYSLIP,
                                 true,
                                 null,
                                 null,
@@ -674,7 +754,7 @@ class CustomerCorrectionWorkflowPostgreSqlIntegrationTest {
                         new CorrectionPlanRequest(List.of(new CorrectionTaskRequest(
                                 CorrectionScope.SUPPORTING_DOCUMENT_UPLOAD,
                                 CorrectionResponsibility.STAFF,
-                                DocumentType.RECENT_PAYSLIP,
+                                com.meridian.platform.approval.application.dto.CorrectionDocumentType.RECENT_PAYSLIP,
                                 true,
                                 null,
                                 null,
@@ -750,7 +830,7 @@ class CustomerCorrectionWorkflowPostgreSqlIntegrationTest {
                                 new CorrectionTaskRequest(
                                         CorrectionScope.DOCUMENT_REPLACEMENT,
                                         CorrectionResponsibility.CUSTOMER,
-                                        DocumentType.RECENT_PAYSLIP,
+                                        com.meridian.platform.approval.application.dto.CorrectionDocumentType.RECENT_PAYSLIP,
                                         false,
                                         uploadTask.checklistItemId(),
                                         version1.documentVersionId(),
@@ -760,7 +840,7 @@ class CustomerCorrectionWorkflowPostgreSqlIntegrationTest {
                                 new CorrectionTaskRequest(
                                         CorrectionScope.DOCUMENT_REVIEW,
                                         CorrectionResponsibility.STAFF,
-                                        DocumentType.RECENT_PAYSLIP,
+                                        com.meridian.platform.approval.application.dto.CorrectionDocumentType.RECENT_PAYSLIP,
                                         false,
                                         uploadTask.checklistItemId(),
                                         version1.documentVersionId(),
@@ -878,7 +958,7 @@ class CustomerCorrectionWorkflowPostgreSqlIntegrationTest {
                         new CorrectionPlanRequest(List.of(new CorrectionTaskRequest(
                                 CorrectionScope.SUPPORTING_DOCUMENT_UPLOAD,
                                 CorrectionResponsibility.CUSTOMER,
-                                DocumentType.RECENT_PAYSLIP,
+                                com.meridian.platform.approval.application.dto.CorrectionDocumentType.RECENT_PAYSLIP,
                                 true,
                                 null,
                                 null,

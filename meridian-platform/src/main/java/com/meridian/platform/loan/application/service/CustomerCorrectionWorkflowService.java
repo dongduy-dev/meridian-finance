@@ -1,15 +1,13 @@
 package com.meridian.platform.loan.application.service;
 
-import com.meridian.platform.approval.application.dto.CorrectionPlanRequest;
-import com.meridian.platform.approval.application.dto.CorrectionTaskRequest;
-import com.meridian.platform.approval.application.service.CorrectionPlanPolicy;
-import com.meridian.platform.approval.domain.model.CorrectionReasonCode;
-import com.meridian.platform.document.domain.model.DocumentType;
+import com.meridian.platform.loan.application.dto.correction.LoanCorrectionPlan;
+import com.meridian.platform.loan.application.dto.correction.LoanCorrectionPlan.Task;
+import com.meridian.platform.loan.domain.model.LoanCorrectionReasonCode;
+import com.meridian.platform.loan.domain.model.LoanDocumentType;
 import com.meridian.platform.loan.application.port.out.LoanCorrectionRepository;
 import com.meridian.platform.loan.application.port.out.LoanDocumentChecklistPort;
 import com.meridian.platform.loan.application.port.out.LoanReviewCycleRepository;
 import com.meridian.platform.loan.domain.model.LoanApplication;
-import com.meridian.platform.loan.domain.model.LoanDocumentType;
 import com.meridian.platform.loan.domain.model.LoanApplicationReviewCycle;
 import com.meridian.platform.loan.domain.model.LoanCorrectionRequest;
 import com.meridian.platform.loan.domain.model.LoanCorrectionRequestStatus;
@@ -34,17 +32,17 @@ import java.util.Set;
 
 @Service
 public class CustomerCorrectionWorkflowService {
-    private static final Set<DocumentType> UCL_DOCUMENT_TYPES = Set.of(
-            DocumentType.INCOME_PROOF,
-            DocumentType.BANK_STATEMENT,
-            DocumentType.EMPLOYMENT_PROOF
+    private static final Set<LoanDocumentType> UCL_DOCUMENT_TYPES = Set.of(
+            LoanDocumentType.INCOME_PROOF,
+            LoanDocumentType.BANK_STATEMENT,
+            LoanDocumentType.EMPLOYMENT_PROOF
     );
 
     private final LoanCorrectionRepository correctionRepository;
     private final LoanReviewCycleRepository reviewCycleRepository;
     private final LoanDocumentChecklistPort documentChecklistPort;
     private final BusinessAuditPublisher auditPublisher;
-    private final CorrectionPlanPolicy correctionPlanPolicy = new CorrectionPlanPolicy();
+    private final LoanCorrectionPlanPolicy correctionPlanPolicy = new LoanCorrectionPlanPolicy();
 
     public CustomerCorrectionWorkflowService(
             LoanCorrectionRepository correctionRepository,
@@ -62,8 +60,8 @@ public class CustomerCorrectionWorkflowService {
             LoanApplication application,
             LoanApplicationReviewCycle activeCycle,
             String sourceAction,
-            CorrectionReasonCode reasonCode,
-            CorrectionPlanRequest plan,
+            LoanCorrectionReasonCode reasonCode,
+            LoanCorrectionPlan plan,
             BusinessOperationContext operationContext
     ) {
         return create(
@@ -78,8 +76,8 @@ public class CustomerCorrectionWorkflowService {
 
     public LoanCorrectionRequest createFromProductVerification(
             LoanApplication application,
-            CorrectionReasonCode reasonCode,
-            CorrectionPlanRequest plan,
+            LoanCorrectionReasonCode reasonCode,
+            LoanCorrectionPlan plan,
             BusinessOperationContext operationContext
     ) {
         return create(
@@ -96,8 +94,8 @@ public class CustomerCorrectionWorkflowService {
             LoanApplication application,
             LoanApplicationReviewCycle sourceReviewCycle,
             String sourceAction,
-            CorrectionReasonCode reasonCode,
-            CorrectionPlanRequest plan,
+            LoanCorrectionReasonCode reasonCode,
+            LoanCorrectionPlan plan,
             BusinessOperationContext operationContext
     ) {
         validateProductPlan(application, reasonCode, plan);
@@ -125,12 +123,12 @@ public class CustomerCorrectionWorkflowService {
         ));
 
         int sequence = 1;
-        for (CorrectionTaskRequest plannedTask : plan.tasks()) {
+        for (Task plannedTask : plan.tasks()) {
             UUID checklistItemId = plannedTask.checklistItemId();
             UUID baselineVersionId = plannedTask.baselineDocumentVersionId();
             if (plannedTask.createChecklistItem()) {
                 checklistItemId = documentChecklistPort.createRequiredItem(
-                        application.id(), LoanDocumentType.valueOf(plannedTask.documentType().name()), operationContext
+                        application.id(), plannedTask.documentType(), operationContext
                 );
             } else {
                 documentChecklistPort.requireCurrentVersion(
@@ -178,8 +176,8 @@ public class CustomerCorrectionWorkflowService {
 
     private void validateProductPlan(
             LoanApplication application,
-            CorrectionReasonCode reasonCode,
-            CorrectionPlanRequest plan
+            LoanCorrectionReasonCode reasonCode,
+            LoanCorrectionPlan plan
     ) {
         if (reasonCode == null) {
             throw invalidPlan("A controlled correction reason is required.");
@@ -200,9 +198,9 @@ public class CustomerCorrectionWorkflowService {
         }
     }
 
-    private void validateSalaryAdvancePlan(CorrectionPlanRequest plan) {
+    private void validateSalaryAdvancePlan(LoanCorrectionPlan plan) {
         if (plan.tasks().stream().anyMatch(
-                task -> task.documentType() != DocumentType.RECENT_PAYSLIP
+                task -> task.documentType() != LoanDocumentType.RECENT_PAYSLIP
         )) {
             throw invalidPlan("Salary Advance correction tasks require RECENT_PAYSLIP evidence.");
         }
@@ -210,16 +208,16 @@ public class CustomerCorrectionWorkflowService {
 
     private void validateUnsecuredConsumerLoanPlan(
             LoanApplication application,
-            CorrectionReasonCode reasonCode,
-            CorrectionPlanRequest plan
+            LoanCorrectionReasonCode reasonCode,
+            LoanCorrectionPlan plan
     ) {
-        if (reasonCode == CorrectionReasonCode.RECENT_PAYSLIP_REQUIRED) {
+        if (reasonCode == LoanCorrectionReasonCode.RECENT_PAYSLIP_REQUIRED) {
             throw invalidPlan("RECENT_PAYSLIP is not valid Unsecured Consumer Loan evidence.");
         }
-        for (CorrectionTaskRequest task : plan.tasks()) {
+        for (Task task : plan.tasks()) {
             if (!UCL_DOCUMENT_TYPES.contains(task.documentType())
                     || task.scope()
-                    == com.meridian.platform.approval.domain.model.CorrectionScope.SUPPORTING_DOCUMENT_UPLOAD) {
+                    == com.meridian.platform.loan.application.dto.correction.CorrectionScope.SUPPORTING_DOCUMENT_UPLOAD) {
                 throw invalidPlan(
                         "Unsecured Consumer Loan corrections require replacement or review of existing base evidence."
                 );
@@ -230,7 +228,7 @@ public class CustomerCorrectionWorkflowService {
                             task.checklistItemId(),
                             task.baselineDocumentVersionId()
                     );
-            if (document.documentType() != LoanDocumentType.valueOf(task.documentType().name())) {
+            if (document.documentType() != task.documentType()) {
                 throw invalidPlan("Correction document type does not match the checklist item.");
             }
         }
@@ -238,20 +236,20 @@ public class CustomerCorrectionWorkflowService {
 
     private void validateCollateralLoanPlan(
             LoanApplication application,
-            CorrectionReasonCode reasonCode,
-            CorrectionPlanRequest plan
+            LoanCorrectionReasonCode reasonCode,
+            LoanCorrectionPlan plan
     ) {
-        if (reasonCode != CorrectionReasonCode.DOCUMENT_REPLACEMENT_REQUIRED
-                && reasonCode != CorrectionReasonCode.DOCUMENT_REVIEW_REQUIRED) {
+        if (reasonCode != LoanCorrectionReasonCode.DOCUMENT_REPLACEMENT_REQUIRED
+                && reasonCode != LoanCorrectionReasonCode.DOCUMENT_REVIEW_REQUIRED) {
             throw invalidPlan(
                     "Collateral Loan correction requires a document replacement or review reason."
             );
         }
         UUID checklistItemId = plan.tasks().getFirst().checklistItemId();
-        for (CorrectionTaskRequest task : plan.tasks()) {
-            if (task.documentType() != DocumentType.COLLATERAL_OWNERSHIP_EVIDENCE
+        for (Task task : plan.tasks()) {
+            if (task.documentType() != LoanDocumentType.COLLATERAL_OWNERSHIP_EVIDENCE
                     || task.scope()
-                    == com.meridian.platform.approval.domain.model.CorrectionScope.SUPPORTING_DOCUMENT_UPLOAD
+                    == com.meridian.platform.loan.application.dto.correction.CorrectionScope.SUPPORTING_DOCUMENT_UPLOAD
                     || task.createChecklistItem()
                     || !checklistItemId.equals(task.checklistItemId())) {
                 throw invalidPlan(
@@ -278,8 +276,8 @@ public class CustomerCorrectionWorkflowService {
             LoanApplication application,
             LoanApplicationReviewCycle activeCycle,
             String sourceAction,
-            CorrectionReasonCode reasonCode,
-            CorrectionPlanRequest plan,
+            LoanCorrectionReasonCode reasonCode,
+            LoanCorrectionPlan plan,
             BusinessOperationContext operationContext
     ) {
         return createFromRecommendation(

@@ -1,6 +1,6 @@
 package com.meridian.platform.loan.infrastructure.adapter.out.persistence;
 
-import com.meridian.platform.approval.domain.model.CorrectionReasonCode;
+import com.meridian.platform.loan.domain.model.LoanCorrectionReasonCode;
 import com.meridian.platform.loan.domain.model.LoanCorrectionRequest;
 import com.meridian.platform.loan.domain.model.LoanCorrectionRequestStatus;
 import jakarta.persistence.Column;
@@ -20,7 +20,7 @@ public class LoanCorrectionRequestJpaEntity {
     @Column(name = "loan_application_id", nullable = false) private UUID loanApplicationId;
     @Column(name = "source_review_cycle_id") private UUID sourceReviewCycleId;
     @Column(name = "source_action", nullable = false) private String sourceAction;
-    @Enumerated(EnumType.STRING) @Column(name = "reason_code", nullable = false) private CorrectionReasonCode reasonCode;
+    @Enumerated(EnumType.STRING) @Column(name = "reason_code", nullable = false) private LoanCorrectionReasonCode reasonCode;
     @Column(name = "created_by_user_id", nullable = false) private UUID createdByUserId;
     @Enumerated(EnumType.STRING) @Column(name = "status", nullable = false) private LoanCorrectionRequestStatus status;
     @Column(name = "resubmission_request_id") private UUID resubmissionRequestId;

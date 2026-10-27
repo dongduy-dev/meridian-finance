@@ -18,8 +18,6 @@ import com.meridian.platform.document.domain.model.DocumentChecklistStage;
 import com.meridian.platform.document.domain.model.DocumentUploaderActorType;
 import com.meridian.platform.document.domain.model.DocumentVersion;
 import com.meridian.platform.document.domain.model.StoredDocument;
-import com.meridian.platform.loan.domain.model.LoanApplicationStatus;
-import com.meridian.platform.loan.domain.model.OriginationChannel;
 import com.meridian.platform.shared.application.audit.BusinessAuditEntry;
 import com.meridian.platform.shared.application.audit.BusinessAuditEvent;
 import com.meridian.platform.shared.application.audit.BusinessAuditPublisher;
@@ -145,12 +143,12 @@ public class TransactionalDocumentUploadService {
             return toDto(idempotent, item.id());
         }
         boolean initialCustomerUpload = command.uploaderActorType() == DocumentUploaderActorType.CUSTOMER
-                && workflow.status() == LoanApplicationStatus.DOCUMENTS_PENDING
+                && "DOCUMENTS_PENDING".equals(workflow.status())
                 && document.currentVersionId() == null
                 && command.expectedCurrentVersionId() == null;
         boolean assistedInitialUpload = command.uploaderActorType() == DocumentUploaderActorType.STAFF
-                && workflow.originationChannel() == OriginationChannel.STAFF_ASSISTED
-                && workflow.status() == LoanApplicationStatus.DOCUMENTS_PENDING;
+                && "STAFF_ASSISTED".equals(workflow.originationChannel())
+                && "DOCUMENTS_PENDING".equals(workflow.status());
         if (command.uploaderActorType() == DocumentUploaderActorType.CUSTOMER && !initialCustomerUpload) {
             correctionPort.authorizeCustomerUpload(
                     command.loanApplicationId(), item.id(), command.expectedCurrentVersionId());
@@ -221,7 +219,7 @@ public class TransactionalDocumentUploadService {
                 command.loanApplicationId(),
                 DocumentChecklistStage.SUBMISSION
         );
-        if (workflow.status() == LoanApplicationStatus.DOCUMENTS_PENDING && readiness.uploadComplete()) {
+        if ("DOCUMENTS_PENDING".equals(workflow.status()) && readiness.uploadComplete()) {
             workflowEventPublisher.publish(new DocumentUploadsCompletedEvent(
                     command.loanApplicationId(),
                     operation
@@ -278,15 +276,15 @@ public class TransactionalDocumentUploadService {
             LoanDocumentWorkflowPort.LoanDocumentWorkflowSnapshot workflow
     ) {
         if (command.uploaderActorType() == DocumentUploaderActorType.CUSTOMER
-                && workflow.originationChannel() != OriginationChannel.CUSTOMER_DIGITAL) {
+                && !"CUSTOMER_DIGITAL".equals(workflow.originationChannel())) {
             throw new AuthorizationException(
                     "CUSTOMER_DIRECT_ACTION_NOT_ALLOWED",
                     "Customer-direct document upload is not allowed for this application."
             );
         }
         if (command.uploaderActorType() == DocumentUploaderActorType.STAFF) {
-            boolean assistedInitial = workflow.originationChannel() == OriginationChannel.STAFF_ASSISTED
-                    && workflow.status() == LoanApplicationStatus.DOCUMENTS_PENDING;
+            boolean assistedInitial = "STAFF_ASSISTED".equals(workflow.originationChannel())
+                    && "DOCUMENTS_PENDING".equals(workflow.status());
             boolean permitted = assistedInitial
                     ? actor.hasPermission("document:upload:assisted")
                     : actor.hasPermission("document:upload:staff")

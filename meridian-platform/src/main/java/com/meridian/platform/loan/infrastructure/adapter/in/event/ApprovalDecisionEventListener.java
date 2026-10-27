@@ -5,6 +5,7 @@ import com.meridian.platform.approval.application.event.ApprovalDecisionRecorded
 import com.meridian.platform.loan.application.dto.ApplyApprovalDecisionCommand;
 import com.meridian.platform.loan.application.port.in.ApplyApprovalDecisionUseCase;
 import com.meridian.platform.loan.domain.model.LoanApprovalDecisionAction;
+import com.meridian.platform.loan.domain.model.LoanCorrectionReasonCode;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 
@@ -28,8 +29,8 @@ public class ApprovalDecisionEventListener {
                 event.approverUserId(),
                 toLoanAction(event.action()),
                 event.reason(),
-                event.reasonCode(),
-                event.correctionPlan(),
+                event.reasonCode() == null ? null : LoanCorrectionReasonCode.valueOf(event.reasonCode()),
+                LoanCorrectionEventMapper.toPlan(event.correctionPlan()),
                 event.decidedAt(),
                 event.operationContext()
         ));

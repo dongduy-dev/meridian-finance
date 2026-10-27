@@ -4,12 +4,12 @@ import com.meridian.platform.loan.application.service.collateral.CollateralLoanA
 import com.meridian.platform.loan.application.service.collateral.CollateralLoanReviewGate;
 import com.meridian.platform.loan.application.service.salaryadvance.SalaryAdvanceReservationReleaseService;
 
-import com.meridian.platform.approval.application.dto.CorrectionPlanRequest;
-import com.meridian.platform.approval.application.dto.CorrectionTaskRequest;
-import com.meridian.platform.approval.domain.model.CorrectionReasonCode;
-import com.meridian.platform.approval.domain.model.CorrectionResponsibility;
-import com.meridian.platform.approval.domain.model.CorrectionScope;
-import com.meridian.platform.document.domain.model.DocumentType;
+import com.meridian.platform.loan.application.dto.correction.LoanCorrectionPlan;
+import com.meridian.platform.loan.application.dto.correction.LoanCorrectionPlan.Task;
+import com.meridian.platform.loan.domain.model.LoanCorrectionReasonCode;
+import com.meridian.platform.loan.application.dto.correction.CorrectionResponsibility;
+import com.meridian.platform.loan.application.dto.correction.CorrectionScope;
+import com.meridian.platform.loan.domain.model.LoanDocumentType;
 import com.meridian.platform.loan.application.dto.ApplyApprovalDecisionCommand;
 import com.meridian.platform.loan.application.dto.LoanApplicationReviewDto;
 import com.meridian.platform.loan.application.port.out.ApprovedOfferRepository;
@@ -340,7 +340,7 @@ class ApplyApprovalDecisionServiceTest {
                 org.mockito.ArgumentMatchers.any(),
                 org.mockito.ArgumentMatchers.any(),
                 org.mockito.ArgumentMatchers.eq("REQUEST_CUSTOMER_OR_STAFF_CORRECTION"),
-                org.mockito.ArgumentMatchers.eq(CorrectionReasonCode.DOCUMENT_REPLACEMENT_REQUIRED),
+                org.mockito.ArgumentMatchers.eq(LoanCorrectionReasonCode.DOCUMENT_REPLACEMENT_REQUIRED),
                 org.mockito.ArgumentMatchers.any(),
                 org.mockito.ArgumentMatchers.any()
         );
@@ -428,7 +428,7 @@ class ApplyApprovalDecisionServiceTest {
                 org.mockito.ArgumentMatchers.any(),
                 org.mockito.ArgumentMatchers.any(),
                 org.mockito.ArgumentMatchers.eq("REQUEST_CUSTOMER_OR_STAFF_CORRECTION"),
-                org.mockito.ArgumentMatchers.eq(CorrectionReasonCode.DOCUMENT_REPLACEMENT_REQUIRED),
+                org.mockito.ArgumentMatchers.eq(LoanCorrectionReasonCode.DOCUMENT_REPLACEMENT_REQUIRED),
                 org.mockito.ArgumentMatchers.any(),
                 org.mockito.ArgumentMatchers.any()
         );
@@ -550,24 +550,24 @@ class ApplyApprovalDecisionServiceTest {
                 APPROVER_USER_ID,
                 action,
                 action == LoanApprovalDecisionAction.REJECT ? "Business-facing reason" : null,
-                correction ? CorrectionReasonCode.DOCUMENT_REPLACEMENT_REQUIRED : null,
+                correction ? LoanCorrectionReasonCode.DOCUMENT_REPLACEMENT_REQUIRED : null,
                 correction ? correctionPlan() : null,
                 DECIDED_AT,
                 operationContext
         );
     }
 
-    private CorrectionPlanRequest correctionPlan() {
+    private LoanCorrectionPlan correctionPlan() {
         return loanApplicationRepository.application.productCode() == ProductCode.COLLATERAL_LOAN
                 ? collateralCorrectionPlan()
                 : uclCorrectionPlan();
     }
 
-    private static CorrectionPlanRequest uclCorrectionPlan() {
-        return new CorrectionPlanRequest(List.of(new CorrectionTaskRequest(
+    private static LoanCorrectionPlan uclCorrectionPlan() {
+        return new LoanCorrectionPlan(List.of(new Task(
                 CorrectionScope.DOCUMENT_REPLACEMENT,
                 CorrectionResponsibility.CUSTOMER,
-                DocumentType.INCOME_PROOF,
+                LoanDocumentType.INCOME_PROOF,
                 false,
                 UUID.randomUUID(),
                 UUID.randomUUID(),
@@ -576,22 +576,22 @@ class ApplyApprovalDecisionServiceTest {
         )));
     }
 
-    private static CorrectionPlanRequest collateralCorrectionPlan() {
-        return new CorrectionPlanRequest(List.of(
-                new CorrectionTaskRequest(
+    private static LoanCorrectionPlan collateralCorrectionPlan() {
+        return new LoanCorrectionPlan(List.of(
+                new Task(
                         CorrectionScope.DOCUMENT_REPLACEMENT,
                         CorrectionResponsibility.CUSTOMER,
-                        DocumentType.COLLATERAL_OWNERSHIP_EVIDENCE,
+                        LoanDocumentType.COLLATERAL_OWNERSHIP_EVIDENCE,
                         false,
                         UUID.randomUUID(),
                         UUID.randomUUID(),
                         "Replace the ownership evidence.",
                         null
                 ),
-                new CorrectionTaskRequest(
+                new Task(
                         CorrectionScope.DOCUMENT_REVIEW,
                         CorrectionResponsibility.STAFF,
-                        DocumentType.COLLATERAL_OWNERSHIP_EVIDENCE,
+                        LoanDocumentType.COLLATERAL_OWNERSHIP_EVIDENCE,
                         false,
                         UUID.randomUUID(),
                         UUID.randomUUID(),

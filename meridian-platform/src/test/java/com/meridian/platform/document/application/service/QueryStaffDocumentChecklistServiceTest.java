@@ -13,7 +13,6 @@ import com.meridian.platform.document.domain.model.DocumentType;
 import com.meridian.platform.document.domain.model.DocumentUploaderActorType;
 import com.meridian.platform.document.domain.model.DocumentVersion;
 import com.meridian.platform.document.domain.model.StoredDocument;
-import com.meridian.platform.loan.domain.model.LoanApplicationStatus;
 import com.meridian.platform.shared.application.security.AuthenticatedUser;
 import com.meridian.platform.shared.application.security.CurrentUserProvider;
 import com.meridian.platform.shared.domain.exception.AuthorizationException;
@@ -67,7 +66,7 @@ class QueryStaffDocumentChecklistServiceTest {
         when(currentUserProvider.currentUser()).thenReturn(staff(permission));
         when(workflows.find(APPLICATION_ID)).thenReturn(new LoanDocumentWorkflowPort
                 .LoanDocumentWorkflowSnapshot(APPLICATION_ID, UUID.randomUUID(),
-                LoanApplicationStatus.SUBMITTED));
+                "SUBMITTED"));
         DocumentChecklistItem item = new DocumentChecklistItem(
                 ITEM_ID, CHECKLIST_ID, DocumentType.BANK_STATEMENT,
                 DocumentRequirementStatus.REQUIRED, DECISION_ID, NOW, NOW);
@@ -147,7 +146,7 @@ class QueryStaffDocumentChecklistServiceTest {
         when(currentUserProvider.currentUser()).thenReturn(staff("document:review"));
         when(workflows.find(APPLICATION_ID)).thenReturn(new LoanDocumentWorkflowPort
                 .LoanDocumentWorkflowSnapshot(APPLICATION_ID, UUID.randomUUID(),
-                LoanApplicationStatus.SUBMITTED));
+                "SUBMITTED"));
         DocumentChecklistItem item = new DocumentChecklistItem(
                 ITEM_ID, CHECKLIST_ID, DocumentType.BANK_STATEMENT,
                 DocumentRequirementStatus.REQUIRED, null, NOW, NOW);

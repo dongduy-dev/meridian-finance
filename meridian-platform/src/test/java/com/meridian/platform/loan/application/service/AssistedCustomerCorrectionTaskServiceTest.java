@@ -1,7 +1,7 @@
 package com.meridian.platform.loan.application.service;
 
-import com.meridian.platform.approval.domain.model.CorrectionReasonCode;
-import com.meridian.platform.document.domain.model.DocumentType;
+import com.meridian.platform.loan.domain.model.LoanCorrectionReasonCode;
+import com.meridian.platform.loan.domain.model.LoanDocumentType;
 import com.meridian.platform.loan.application.dto.CompleteCorrectionTaskRequest;
 import com.meridian.platform.loan.application.port.out.LoanApplicationRepository;
 import com.meridian.platform.loan.application.port.out.LoanCorrectionRepository;
@@ -127,7 +127,7 @@ class AssistedCustomerCorrectionTaskServiceTest {
                 .thenReturn(Optional.of(request(UUID.randomUUID())));
         LoanCorrectionTask staffTask = new LoanCorrectionTask(
                 TASK_ID, REQUEST_ID, 1, LoanCorrectionResponsibility.STAFF,
-                LoanCorrectionScope.DOCUMENT_REPLACEMENT, DocumentType.BANK_STATEMENT,
+                LoanCorrectionScope.DOCUMENT_REPLACEMENT, LoanDocumentType.BANK_STATEMENT,
                 false, ITEM_ID, BASELINE_ID, null, "Review it.",
                 LoanCorrectionTaskStatus.OPEN, null, null, null, NOW.minusHours(1));
         when(corrections.findTaskByIdForUpdate(TASK_ID)).thenReturn(Optional.of(staffTask));
@@ -171,7 +171,7 @@ class AssistedCustomerCorrectionTaskServiceTest {
     private LoanCorrectionRequest request(UUID creatorId) {
         return new LoanCorrectionRequest(
                 REQUEST_ID, APPLICATION_ID, null, "COMPLETE_PRODUCT_VERIFICATION",
-                CorrectionReasonCode.DOCUMENT_REPLACEMENT_REQUIRED, creatorId,
+                LoanCorrectionReasonCode.DOCUMENT_REPLACEMENT_REQUIRED, creatorId,
                 LoanCorrectionRequestStatus.OPEN, null, NOW.minusHours(2), null, null);
     }
 
@@ -182,7 +182,7 @@ class AssistedCustomerCorrectionTaskServiceTest {
     ) {
         return new LoanCorrectionTask(
                 TASK_ID, REQUEST_ID, 1, LoanCorrectionResponsibility.CUSTOMER,
-                LoanCorrectionScope.DOCUMENT_REPLACEMENT, DocumentType.BANK_STATEMENT,
+                LoanCorrectionScope.DOCUMENT_REPLACEMENT, LoanDocumentType.BANK_STATEMENT,
                 false, ITEM_ID, BASELINE_ID, "Replace the Customer bank statement.", null,
                 status, completedBy, completionRequestId,
                 status == LoanCorrectionTaskStatus.COMPLETED ? NOW.minusMinutes(5) : null,

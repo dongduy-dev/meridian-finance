@@ -5,6 +5,7 @@ import com.meridian.platform.approval.application.event.ReviewRecommendationReco
 import com.meridian.platform.loan.application.dto.ApplyReviewRecommendationCommand;
 import com.meridian.platform.loan.application.port.in.ApplyReviewRecommendationUseCase;
 import com.meridian.platform.loan.domain.model.LoanReviewRecommendationAction;
+import com.meridian.platform.loan.domain.model.LoanCorrectionReasonCode;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 
@@ -27,8 +28,8 @@ public class ReviewRecommendationEventListener {
                 event.loanOfficerUserId(),
                 toLoanAction(event.action()),
                 event.reason(),
-                event.reasonCode(),
-                event.correctionPlan(),
+                event.reasonCode() == null ? null : LoanCorrectionReasonCode.valueOf(event.reasonCode()),
+                LoanCorrectionEventMapper.toPlan(event.correctionPlan()),
                 event.recordedAt(),
                 event.operationContext()
         ));

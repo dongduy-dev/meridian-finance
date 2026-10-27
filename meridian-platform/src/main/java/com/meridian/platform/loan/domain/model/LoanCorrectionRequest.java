@@ -1,6 +1,5 @@
 package com.meridian.platform.loan.domain.model;
 
-import com.meridian.platform.approval.domain.model.CorrectionReasonCode;
 import com.meridian.platform.shared.domain.exception.BusinessStateConflictException;
 
 import java.time.LocalDateTime;
@@ -13,7 +12,7 @@ public record LoanCorrectionRequest(
         UUID loanApplicationId,
         UUID sourceReviewCycleId,
         String sourceAction,
-        CorrectionReasonCode reasonCode,
+        LoanCorrectionReasonCode reasonCode,
         UUID createdByUserId,
         LoanCorrectionRequestStatus status,
         UUID resubmissionRequestId,
@@ -27,7 +26,7 @@ public record LoanCorrectionRequest(
             UUID loanApplicationId,
             UUID sourceReviewCycleId,
             String sourceAction,
-            CorrectionReasonCode reasonCode,
+            LoanCorrectionReasonCode reasonCode,
             UUID createdByUserId,
             LoanCorrectionRequestStatus status,
             UUID resubmissionRequestId,

@@ -94,7 +94,7 @@ class LoanDocumentCorrectionAdapterTest {
                 responsibility == LoanCorrectionResponsibility.CUSTOMER
                         ? LoanCorrectionScope.DOCUMENT_REPLACEMENT
                         : LoanCorrectionScope.SUPPORTING_DOCUMENT_UPLOAD,
-                DocumentType.BANK_STATEMENT, false, ITEM_ID, BASELINE_ID,
+                com.meridian.platform.loan.domain.model.LoanDocumentType.BANK_STATEMENT, false, ITEM_ID, BASELINE_ID,
                 responsibility == LoanCorrectionResponsibility.CUSTOMER ? "Replace it." : null,
                 responsibility == LoanCorrectionResponsibility.STAFF ? "Upload it." : null,
                 LoanCorrectionTaskStatus.OPEN, null, null, null,

@@ -653,8 +653,8 @@ class CollateralLoanManualVerificationPostgreSqlIntegrationTest {
                 verificationId,
                 CollateralLoanManualVerificationOutcome.REQUIRES_MORE_INFORMATION,
                 note,
-                CorrectionReasonCode.DOCUMENT_REPLACEMENT_REQUIRED,
-                replacementPlan(ready)
+                com.meridian.platform.loan.domain.model.LoanCorrectionReasonCode.DOCUMENT_REPLACEMENT_REQUIRED,
+                com.meridian.platform.testsupport.CorrectionRequestFixtures.loanRequest(replacementPlan(ready))
         );
     }
 
@@ -662,7 +662,7 @@ class CollateralLoanManualVerificationPostgreSqlIntegrationTest {
         return new CorrectionPlanRequest(List.of(new CorrectionTaskRequest(
                 CorrectionScope.DOCUMENT_REPLACEMENT,
                 CorrectionResponsibility.CUSTOMER,
-                DocumentType.COLLATERAL_OWNERSHIP_EVIDENCE,
+                com.meridian.platform.approval.application.dto.CorrectionDocumentType.COLLATERAL_OWNERSHIP_EVIDENCE,
                 false,
                 ready.checklistItemId(),
                 ready.documentVersionId(),
@@ -677,7 +677,7 @@ class CollateralLoanManualVerificationPostgreSqlIntegrationTest {
                 new CorrectionTaskRequest(
                         CorrectionScope.DOCUMENT_REVIEW,
                         CorrectionResponsibility.STAFF,
-                        DocumentType.COLLATERAL_OWNERSHIP_EVIDENCE,
+                        com.meridian.platform.approval.application.dto.CorrectionDocumentType.COLLATERAL_OWNERSHIP_EVIDENCE,
                         false,
                         ready.checklistItemId(),
                         ready.documentVersionId(),

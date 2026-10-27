@@ -1,6 +1,5 @@
 package com.meridian.platform.loan.domain.model;
 
-import com.meridian.platform.document.domain.model.DocumentType;
 import com.meridian.platform.shared.domain.exception.BusinessStateConflictException;
 
 import java.time.LocalDateTime;
@@ -13,7 +12,7 @@ public record LoanCorrectionTask(
         int sequence,
         LoanCorrectionResponsibility responsibleParty,
         LoanCorrectionScope scope,
-        DocumentType documentType,
+        LoanDocumentType documentType,
         boolean createChecklistItem,
         UUID checklistItemId,
         UUID baselineDocumentVersionId,

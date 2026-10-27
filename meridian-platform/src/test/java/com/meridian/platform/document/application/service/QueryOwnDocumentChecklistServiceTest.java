@@ -14,7 +14,6 @@ import com.meridian.platform.document.domain.model.DocumentUploaderActorType;
 import com.meridian.platform.document.domain.model.DocumentVersion;
 import com.meridian.platform.document.domain.model.DocumentWaiverReasonCode;
 import com.meridian.platform.document.domain.model.StoredDocument;
-import com.meridian.platform.loan.domain.model.LoanApplicationStatus;
 import com.meridian.platform.shared.application.security.AuthenticatedUser;
 import com.meridian.platform.shared.application.security.CurrentUserProvider;
 import com.meridian.platform.shared.domain.exception.EntityNotFoundException;
@@ -56,7 +55,7 @@ class QueryOwnDocumentChecklistServiceTest {
         when(currentUserProvider.currentUser()).thenReturn(customer(CUSTOMER_ID));
         when(workflows.find(APPLICATION_ID)).thenReturn(new LoanDocumentWorkflowPort
                 .LoanDocumentWorkflowSnapshot(
-                        APPLICATION_ID, CUSTOMER_ID, LoanApplicationStatus.DOCUMENTS_PENDING
+                        APPLICATION_ID, CUSTOMER_ID, "DOCUMENTS_PENDING"
                 ));
     }
 
@@ -121,7 +120,7 @@ class QueryOwnDocumentChecklistServiceTest {
     void foreignOwnershipAndMissingChecklistUseConcealedNotFound() {
         when(workflows.find(APPLICATION_ID)).thenReturn(new LoanDocumentWorkflowPort
                 .LoanDocumentWorkflowSnapshot(
-                        APPLICATION_ID, UUID.randomUUID(), LoanApplicationStatus.SUBMITTED
+                        APPLICATION_ID, UUID.randomUUID(), "SUBMITTED"
                 ));
         EntityNotFoundException foreign = assertThrows(
                 EntityNotFoundException.class, () -> service.query(APPLICATION_ID));

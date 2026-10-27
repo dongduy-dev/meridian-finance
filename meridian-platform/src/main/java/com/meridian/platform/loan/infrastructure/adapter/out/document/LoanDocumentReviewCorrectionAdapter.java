@@ -1,6 +1,6 @@
 package com.meridian.platform.loan.infrastructure.adapter.out.document;
 
-import com.meridian.platform.approval.domain.model.CorrectionReasonCode;
+import com.meridian.platform.loan.domain.model.LoanCorrectionReasonCode;
 import com.meridian.platform.document.application.port.out.LoanDocumentReviewCorrectionPort;
 import com.meridian.platform.loan.application.service.PreReviewDocumentCorrectionService;
 import com.meridian.platform.shared.application.operation.BusinessOperationContext;
@@ -21,13 +21,13 @@ public class LoanDocumentReviewCorrectionAdapter implements LoanDocumentReviewCo
             UUID loanApplicationId,
             UUID checklistItemId,
             UUID baselineDocumentVersionId,
-            CorrectionReasonCode reasonCode,
+            String reasonCode,
             String customerInstruction,
             BusinessOperationContext operationContext
     ) {
         correctionService.requestReplacement(
                 loanApplicationId, checklistItemId, baselineDocumentVersionId,
-                reasonCode, customerInstruction, operationContext
+                reasonCode == null ? null : LoanCorrectionReasonCode.valueOf(reasonCode), customerInstruction, operationContext
         );
     }
 }

@@ -4,7 +4,7 @@ import com.meridian.platform.approval.application.dto.CorrectionPlanRequest;
 import com.meridian.platform.approval.application.dto.CorrectionTaskRequest;
 import com.meridian.platform.approval.domain.model.CorrectionResponsibility;
 import com.meridian.platform.approval.domain.model.CorrectionScope;
-import com.meridian.platform.document.domain.model.DocumentType;
+import com.meridian.platform.approval.application.dto.CorrectionDocumentType;
 import com.meridian.platform.shared.domain.exception.BusinessRuleViolationException;
 import org.junit.jupiter.api.Test;
 
@@ -24,7 +24,7 @@ class CorrectionPlanPolicyTest {
         CorrectionTaskRequest task = new CorrectionTaskRequest(
                 CorrectionScope.SUPPORTING_DOCUMENT_UPLOAD,
                 CorrectionResponsibility.CUSTOMER,
-                DocumentType.RECENT_PAYSLIP,
+                CorrectionDocumentType.RECENT_PAYSLIP,
                 true,
                 null,
                 null,
@@ -49,7 +49,7 @@ class CorrectionPlanPolicyTest {
         assertInvalid(new CorrectionPlanRequest(List.of(new CorrectionTaskRequest(
                 CorrectionScope.DOCUMENT_REPLACEMENT,
                 CorrectionResponsibility.CUSTOMER,
-                DocumentType.RECENT_PAYSLIP,
+                CorrectionDocumentType.RECENT_PAYSLIP,
                 false,
                 itemId,
                 null,
@@ -59,7 +59,7 @@ class CorrectionPlanPolicyTest {
         assertInvalid(new CorrectionPlanRequest(List.of(new CorrectionTaskRequest(
                 CorrectionScope.DOCUMENT_REPLACEMENT,
                 CorrectionResponsibility.STAFF,
-                DocumentType.RECENT_PAYSLIP,
+                CorrectionDocumentType.RECENT_PAYSLIP,
                 false,
                 itemId,
                 baselineId,
@@ -73,7 +73,7 @@ class CorrectionPlanPolicyTest {
         assertInvalidCustomer(new CorrectionPlanRequest(List.of(new CorrectionTaskRequest(
                 CorrectionScope.DOCUMENT_REVIEW,
                 CorrectionResponsibility.STAFF,
-                DocumentType.RECENT_PAYSLIP,
+                CorrectionDocumentType.RECENT_PAYSLIP,
                 false,
                 UUID.randomUUID(),
                 UUID.randomUUID(),
@@ -83,7 +83,7 @@ class CorrectionPlanPolicyTest {
         assertInvalid(new CorrectionPlanRequest(List.of(new CorrectionTaskRequest(
                 CorrectionScope.SUPPORTING_DOCUMENT_UPLOAD,
                 CorrectionResponsibility.CUSTOMER,
-                DocumentType.RECENT_PAYSLIP,
+                CorrectionDocumentType.RECENT_PAYSLIP,
                 true,
                 null,
                 null,
@@ -93,7 +93,7 @@ class CorrectionPlanPolicyTest {
         assertInvalid(new CorrectionPlanRequest(List.of(new CorrectionTaskRequest(
                 CorrectionScope.DOCUMENT_REVIEW,
                 CorrectionResponsibility.STAFF,
-                DocumentType.INCOME_PROOF,
+                CorrectionDocumentType.INCOME_PROOF,
                 false,
                 UUID.randomUUID(),
                 UUID.randomUUID(),
@@ -120,7 +120,7 @@ class CorrectionPlanPolicyTest {
         CorrectionTaskRequest staffUpload = new CorrectionTaskRequest(
                 CorrectionScope.SUPPORTING_DOCUMENT_UPLOAD,
                 CorrectionResponsibility.STAFF,
-                DocumentType.RECENT_PAYSLIP,
+                CorrectionDocumentType.RECENT_PAYSLIP,
                 true, null, null, null, "Upload the requested payslip."
         );
         assertDoesNotThrow(() ->
@@ -130,7 +130,7 @@ class CorrectionPlanPolicyTest {
         CorrectionTaskRequest staffReview = new CorrectionTaskRequest(
                 CorrectionScope.DOCUMENT_REVIEW,
                 CorrectionResponsibility.STAFF,
-                DocumentType.RECENT_PAYSLIP,
+                CorrectionDocumentType.RECENT_PAYSLIP,
                 false, UUID.randomUUID(), UUID.randomUUID(),
                 null, "Review the current payslip."
         );
@@ -150,7 +150,7 @@ class CorrectionPlanPolicyTest {
         CorrectionTaskRequest staffUpload = new CorrectionTaskRequest(
                 CorrectionScope.SUPPORTING_DOCUMENT_UPLOAD,
                 CorrectionResponsibility.STAFF,
-                DocumentType.RECENT_PAYSLIP,
+                CorrectionDocumentType.RECENT_PAYSLIP,
                 true, null, null, null, "Upload the requested payslip."
         );
         assertInvalid(new CorrectionPlanRequest(List.of(supportingUpload(), staffUpload)));
@@ -160,7 +160,7 @@ class CorrectionPlanPolicyTest {
         return new CorrectionTaskRequest(
                 CorrectionScope.SUPPORTING_DOCUMENT_UPLOAD,
                 CorrectionResponsibility.CUSTOMER,
-                DocumentType.RECENT_PAYSLIP,
+                CorrectionDocumentType.RECENT_PAYSLIP,
                 true,
                 null,
                 null,

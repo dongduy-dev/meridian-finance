@@ -1,7 +1,7 @@
 package com.meridian.platform.loan.application.service;
 
-import com.meridian.platform.approval.domain.model.CorrectionReasonCode;
-import com.meridian.platform.document.domain.model.DocumentType;
+import com.meridian.platform.loan.domain.model.LoanCorrectionReasonCode;
+import com.meridian.platform.loan.domain.model.LoanDocumentType;
 import com.meridian.platform.loan.application.dto.CompleteCorrectionTaskRequest;
 import com.meridian.platform.loan.application.port.out.LoanCorrectionRepository;
 import com.meridian.platform.loan.application.port.out.LoanDocumentChecklistPort;
@@ -110,7 +110,7 @@ class StaffCorrectionTaskServiceTest {
     void documentReviewTaskRequiresPersistedReviewOfBaselineVersion() {
         LoanCorrectionTask task = new LoanCorrectionTask(
                 TASK_ID, REQUEST_ID, 1, LoanCorrectionResponsibility.STAFF,
-                LoanCorrectionScope.DOCUMENT_REVIEW, DocumentType.RECENT_PAYSLIP,
+                LoanCorrectionScope.DOCUMENT_REVIEW, LoanDocumentType.RECENT_PAYSLIP,
                 false, ITEM_ID, VERSION_ID, null, "Review the payslip.",
                 LoanCorrectionTaskStatus.OPEN, null, null, null, NOW.minusHours(1)
         );
@@ -132,7 +132,7 @@ class StaffCorrectionTaskServiceTest {
     private LoanCorrectionRequest request(UUID creatorId) {
         return new LoanCorrectionRequest(
                 REQUEST_ID, APPLICATION_ID, UUID.randomUUID(),
-                "REQUEST_STAFF_CORRECTION", CorrectionReasonCode.DOCUMENT_REVIEW_REQUIRED,
+                "REQUEST_STAFF_CORRECTION", LoanCorrectionReasonCode.DOCUMENT_REVIEW_REQUIRED,
                 creatorId, LoanCorrectionRequestStatus.OPEN, null,
                 NOW.minusHours(2), null, null
         );
@@ -141,7 +141,7 @@ class StaffCorrectionTaskServiceTest {
     private LoanCorrectionTask uploadTask() {
         return new LoanCorrectionTask(
                 TASK_ID, REQUEST_ID, 1, LoanCorrectionResponsibility.STAFF,
-                LoanCorrectionScope.SUPPORTING_DOCUMENT_UPLOAD, DocumentType.RECENT_PAYSLIP,
+                LoanCorrectionScope.SUPPORTING_DOCUMENT_UPLOAD, LoanDocumentType.RECENT_PAYSLIP,
                 true, ITEM_ID, null, null, "Upload the requested payslip.",
                 LoanCorrectionTaskStatus.OPEN, null, null, null, NOW.minusHours(1)
         );

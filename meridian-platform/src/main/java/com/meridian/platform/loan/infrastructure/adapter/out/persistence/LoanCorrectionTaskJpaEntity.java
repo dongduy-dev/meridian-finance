@@ -1,6 +1,6 @@
 package com.meridian.platform.loan.infrastructure.adapter.out.persistence;
 
-import com.meridian.platform.document.domain.model.DocumentType;
+import com.meridian.platform.loan.domain.model.LoanDocumentType;
 import com.meridian.platform.loan.domain.model.LoanCorrectionResponsibility;
 import com.meridian.platform.loan.domain.model.LoanCorrectionScope;
 import com.meridian.platform.loan.domain.model.LoanCorrectionTask;
@@ -23,7 +23,7 @@ public class LoanCorrectionTaskJpaEntity {
     @Column(name = "task_sequence", nullable = false) private int taskSequence;
     @Enumerated(EnumType.STRING) @Column(name = "responsible_party", nullable = false) private LoanCorrectionResponsibility responsibleParty;
     @Enumerated(EnumType.STRING) @Column(name = "scope", nullable = false) private LoanCorrectionScope scope;
-    @Enumerated(EnumType.STRING) @Column(name = "document_type") private DocumentType documentType;
+    @Enumerated(EnumType.STRING) @Column(name = "document_type") private LoanDocumentType documentType;
     @Column(name = "create_checklist_item", nullable = false) private boolean createChecklistItem;
     @Column(name = "checklist_item_id") private UUID checklistItemId;
     @Column(name = "baseline_document_version_id") private UUID baselineDocumentVersionId;

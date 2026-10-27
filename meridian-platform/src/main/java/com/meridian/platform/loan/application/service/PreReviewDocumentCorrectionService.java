@@ -1,7 +1,7 @@
 package com.meridian.platform.loan.application.service;
 
-import com.meridian.platform.approval.domain.model.CorrectionReasonCode;
-import com.meridian.platform.document.domain.model.DocumentType;
+import com.meridian.platform.loan.domain.model.LoanCorrectionReasonCode;
+import com.meridian.platform.loan.domain.model.LoanDocumentType;
 import com.meridian.platform.loan.application.port.out.LoanApplicationRepository;
 import com.meridian.platform.loan.application.port.out.LoanCorrectionRepository;
 import com.meridian.platform.loan.application.port.out.LoanDocumentChecklistPort;
@@ -32,10 +32,10 @@ import java.util.Set;
 
 @Service
 public class PreReviewDocumentCorrectionService {
-    private static final Set<DocumentType> UCL_DOCUMENT_TYPES = Set.of(
-            DocumentType.INCOME_PROOF,
-            DocumentType.BANK_STATEMENT,
-            DocumentType.EMPLOYMENT_PROOF
+    private static final Set<LoanDocumentType> UCL_DOCUMENT_TYPES = Set.of(
+            LoanDocumentType.INCOME_PROOF,
+            LoanDocumentType.BANK_STATEMENT,
+            LoanDocumentType.EMPLOYMENT_PROOF
     );
 
     private final LoanApplicationRepository applicationRepository;
@@ -62,11 +62,11 @@ public class PreReviewDocumentCorrectionService {
             UUID loanApplicationId,
             UUID checklistItemId,
             UUID baselineVersionId,
-            CorrectionReasonCode reasonCode,
+            LoanCorrectionReasonCode reasonCode,
             String customerInstruction,
             BusinessOperationContext operation
     ) {
-        if (reasonCode != CorrectionReasonCode.DOCUMENT_REPLACEMENT_REQUIRED) {
+        if (reasonCode != LoanCorrectionReasonCode.DOCUMENT_REPLACEMENT_REQUIRED) {
             throw new BusinessRuleViolationException(
                     "INVALID_CORRECTION_PLAN", "Document replacement requires its controlled reason code.");
         }
@@ -84,7 +84,7 @@ public class PreReviewDocumentCorrectionService {
         LoanApplication application = applicationRepository.findByIdForUpdate(loanApplicationId)
                 .orElseThrow(() -> new EntityNotFoundException(
                         "LOAN_APPLICATION_NOT_FOUND", "Loan Application was not found."));
-        requireProductDocumentCompatibility(application.productCode(), DocumentType.valueOf(document.documentType().name()));
+        requireProductDocumentCompatibility(application.productCode(), document.documentType());
         var activeRequest = correctionRepository.findActiveRequestByApplicationIdForUpdate(loanApplicationId);
         if (activeRequest.isPresent()) {
             LoanCorrectionRequest request = activeRequest.get();
@@ -102,7 +102,7 @@ public class PreReviewDocumentCorrectionService {
             correctionRepository.saveTask(new LoanCorrectionTask(
                     UUID.randomUUID(), request.id(), correctionRepository.nextTaskSequence(request.id()),
                     LoanCorrectionResponsibility.CUSTOMER, LoanCorrectionScope.DOCUMENT_REPLACEMENT,
-                    DocumentType.valueOf(document.documentType().name()), false, checklistItemId, baselineVersionId,
+                    document.documentType(), false, checklistItemId, baselineVersionId,
                     instruction, null, LoanCorrectionTaskStatus.OPEN, null, null, null,
                     operation.occurredAt()
             ));
@@ -117,7 +117,7 @@ public class PreReviewDocumentCorrectionService {
         ));
         correctionRepository.saveTask(new LoanCorrectionTask(
                 UUID.randomUUID(), request.id(), 1, LoanCorrectionResponsibility.CUSTOMER,
-                LoanCorrectionScope.DOCUMENT_REPLACEMENT, DocumentType.valueOf(document.documentType().name()),
+                LoanCorrectionScope.DOCUMENT_REPLACEMENT, document.documentType(),
                 false, checklistItemId, baselineVersionId, instruction, null,
                 LoanCorrectionTaskStatus.OPEN, null, null, null, operation.occurredAt()
         ));
@@ -137,12 +137,12 @@ public class PreReviewDocumentCorrectionService {
 
     private void requireProductDocumentCompatibility(
             ProductCode productCode,
-            DocumentType documentType
+            LoanDocumentType documentType
     ) {
         boolean valid = switch (productCode) {
-            case SALARY_ADVANCE -> documentType == DocumentType.RECENT_PAYSLIP;
+            case SALARY_ADVANCE -> documentType == LoanDocumentType.RECENT_PAYSLIP;
             case UNSECURED_CONSUMER_LOAN -> UCL_DOCUMENT_TYPES.contains(documentType);
-            case COLLATERAL_LOAN -> documentType == DocumentType.COLLATERAL_OWNERSHIP_EVIDENCE;
+            case COLLATERAL_LOAN -> documentType == LoanDocumentType.COLLATERAL_OWNERSHIP_EVIDENCE;
         };
         if (!valid) {
             throw new BusinessRuleViolationException(
