@@ -5,7 +5,7 @@ import com.meridian.platform.document.application.dto.DocumentVersionDto;
 import com.meridian.platform.document.application.port.in.QueryOwnDocumentChecklistUseCase;
 import com.meridian.platform.document.application.port.out.DocumentChecklistRepository;
 import com.meridian.platform.document.application.port.out.DocumentRepository;
-import com.meridian.platform.document.application.port.out.LoanDocumentWorkflowPort;
+import com.meridian.platform.document.application.spi.loan.LoanDocumentWorkflowSpi;
 import com.meridian.platform.document.domain.model.DocumentChecklist;
 import com.meridian.platform.document.domain.model.DocumentChecklistItem;
 import com.meridian.platform.document.domain.model.DocumentChecklistItemState;
@@ -28,13 +28,13 @@ import java.util.UUID;
 @Service
 public class QueryOwnDocumentChecklistService implements QueryOwnDocumentChecklistUseCase {
 
-    private final LoanDocumentWorkflowPort workflows;
+    private final LoanDocumentWorkflowSpi workflows;
     private final DocumentChecklistRepository checklists;
     private final DocumentRepository documents;
     private final CurrentUserProvider currentUserProvider;
 
     public QueryOwnDocumentChecklistService(
-            LoanDocumentWorkflowPort workflows,
+            LoanDocumentWorkflowSpi workflows,
             DocumentChecklistRepository checklists,
             DocumentRepository documents,
             CurrentUserProvider currentUserProvider
@@ -55,7 +55,7 @@ public class QueryOwnDocumentChecklistService implements QueryOwnDocumentCheckli
                     "Customer document access is denied."
             );
         }
-        LoanDocumentWorkflowPort.LoanDocumentWorkflowSnapshot workflow;
+        LoanDocumentWorkflowSpi.LoanDocumentWorkflowSnapshot workflow;
         try {
             workflow = workflows.find(loanApplicationId);
         } catch (EntityNotFoundException exception) {

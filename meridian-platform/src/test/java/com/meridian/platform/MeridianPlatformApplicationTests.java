@@ -34,6 +34,23 @@ import com.meridian.platform.loan.application.port.in.QueryApprovalLoanReviewHis
 import com.meridian.platform.loan.application.service.QueryApprovalLoanReviewHistoryService;
 import com.meridian.platform.loan.infrastructure.adapter.in.approval.ApprovalLoanReviewHistoryAdapter;
 
+import com.meridian.platform.document.application.spi.loan.*;
+import com.meridian.platform.document.application.spi.identity.DocumentStaffActorDirectorySpi;
+import com.meridian.platform.loan.application.port.in.LoanDocumentWorkflowUseCase;
+import com.meridian.platform.loan.application.port.in.AuthorizeDocumentCorrectionUploadUseCase;
+import com.meridian.platform.loan.application.port.in.RequestPreReviewDocumentCorrectionUseCase;
+import com.meridian.platform.loan.application.port.in.AuthorizeAssistedOriginationEvidenceUseCase;
+import com.meridian.platform.loan.application.port.in.AuthorizeAssistedActionEvidenceUseCase;
+import com.meridian.platform.loan.application.service.LoanDocumentWorkflowService;
+import com.meridian.platform.loan.application.service.DocumentCorrectionUploadAuthorizationService;
+import com.meridian.platform.loan.application.service.PreReviewDocumentCorrectionService;
+import com.meridian.platform.loan.application.service.AssistedOriginationService;
+import com.meridian.platform.loan.application.service.AssistedActionEvidenceAuthorizationService;
+import com.meridian.platform.loan.infrastructure.adapter.in.document.*;
+import com.meridian.platform.identity.application.port.in.QueryStaffActorSummariesUseCase;
+import com.meridian.platform.identity.application.service.QueryStaffActorSummariesService;
+import com.meridian.platform.identity.infrastructure.adapter.in.document.DocumentStaffActorDirectoryAdapter;
+
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -81,6 +98,37 @@ class MeridianPlatformApplicationTests {
         assertSingleBinding(QueryApprovalLoanReviewHistoryUseCase.class, QueryApprovalLoanReviewHistoryService.class);
         assertThrows(ClassNotFoundException.class, () -> Class.forName(
                 "com.meridian.platform.approval.application.port.out.ApprovalLoanReviewHistoryPort"));
+    }
+
+    @Test
+    void documentSpisHaveOneProviderBindingAndRetainExistingTransactionProxies() {
+        assertSingleBinding(LoanDocumentWorkflowSpi.class, LoanDocumentWorkflowAdapter.class);
+        assertSingleBinding(LoanDocumentWorkflowUseCase.class, LoanDocumentWorkflowService.class);
+        assertSingleBinding(LoanDocumentCorrectionSpi.class, LoanDocumentCorrectionAdapter.class);
+        assertSingleBinding(AuthorizeDocumentCorrectionUploadUseCase.class, DocumentCorrectionUploadAuthorizationService.class);
+        assertSingleBinding(LoanDocumentReviewCorrectionSpi.class, LoanDocumentReviewCorrectionAdapter.class);
+        assertSingleBinding(RequestPreReviewDocumentCorrectionUseCase.class, PreReviewDocumentCorrectionService.class);
+        assertSingleBinding(LoanAssistedOriginationSpi.class, AssistedOriginationEvidenceAuthorizationAdapter.class);
+        assertSingleBinding(AuthorizeAssistedOriginationEvidenceUseCase.class, AssistedOriginationService.class);
+        assertSingleBinding(LoanAssistedActionAuthorizationSpi.class, AssistedActionEvidenceAuthorizationAdapter.class);
+        assertSingleBinding(AuthorizeAssistedActionEvidenceUseCase.class, AssistedActionEvidenceAuthorizationService.class);
+        assertSingleBinding(DocumentStaffActorDirectorySpi.class, DocumentStaffActorDirectoryAdapter.class);
+        assertSingleBinding(QueryStaffActorSummariesUseCase.class, QueryStaffActorSummariesService.class);
+        for (Class<?> input : java.util.List.of(AuthorizeAssistedOriginationEvidenceUseCase.class,
+                AuthorizeAssistedActionEvidenceUseCase.class, QueryStaffActorSummariesUseCase.class)) {
+            org.junit.jupiter.api.Assertions.assertTrue(AopUtils.isAopProxy(context.getBean(input)), input.getName());
+        }
+        for (Class<?> helper : java.util.List.of(LoanDocumentWorkflowUseCase.class,
+                AuthorizeDocumentCorrectionUploadUseCase.class, RequestPreReviewDocumentCorrectionUseCase.class,
+                LoanDocumentWorkflowSpi.class, LoanDocumentCorrectionSpi.class, LoanDocumentReviewCorrectionSpi.class,
+                LoanAssistedOriginationSpi.class, LoanAssistedActionAuthorizationSpi.class, DocumentStaffActorDirectorySpi.class)) {
+            org.junit.jupiter.api.Assertions.assertFalse(AopUtils.isAopProxy(context.getBean(helper)), helper.getName());
+        }
+        for (String retired : java.util.List.of("LoanDocumentWorkflowPort", "LoanDocumentCorrectionPort", "LoanDocumentReviewCorrectionPort",
+                "LoanAssistedOriginationPort", "LoanAssistedActionAuthorizationPort", "DocumentStaffActorDirectoryPort")) {
+            assertThrows(ClassNotFoundException.class, () -> Class.forName(
+                    "com.meridian.platform.document.application.port.out." + retired));
+        }
     }
 
     private void assertSingleBinding(Class<?> contract, Class<?> implementation) {

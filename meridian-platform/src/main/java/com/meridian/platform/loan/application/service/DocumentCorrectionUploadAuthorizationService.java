@@ -1,6 +1,6 @@
-package com.meridian.platform.loan.infrastructure.adapter.out.document;
+package com.meridian.platform.loan.application.service;
 
-import com.meridian.platform.document.application.port.out.LoanDocumentCorrectionPort;
+import com.meridian.platform.loan.application.port.in.AuthorizeDocumentCorrectionUploadUseCase;
 import com.meridian.platform.loan.application.port.out.LoanCorrectionRepository;
 import com.meridian.platform.loan.application.port.out.LoanApplicationRepository;
 import com.meridian.platform.loan.domain.model.LoanApplication;
@@ -8,17 +8,17 @@ import com.meridian.platform.loan.domain.model.LoanApplicationStatus;
 import com.meridian.platform.loan.domain.model.LoanCorrectionTask;
 import com.meridian.platform.shared.domain.exception.AuthorizationException;
 import com.meridian.platform.shared.domain.exception.BusinessStateConflictException;
-import org.springframework.stereotype.Component;
+import org.springframework.stereotype.Service;
 
 import java.util.Objects;
 import java.util.UUID;
 
-@Component
-public class LoanDocumentCorrectionAdapter implements LoanDocumentCorrectionPort {
+@Service
+public class DocumentCorrectionUploadAuthorizationService implements AuthorizeDocumentCorrectionUploadUseCase {
     private final LoanCorrectionRepository correctionRepository;
     private final LoanApplicationRepository applicationRepository;
 
-    public LoanDocumentCorrectionAdapter(
+    public DocumentCorrectionUploadAuthorizationService(
             LoanCorrectionRepository correctionRepository,
             LoanApplicationRepository applicationRepository
     ) {

@@ -1,6 +1,6 @@
-package com.meridian.platform.loan.infrastructure.adapter.out.document;
+package com.meridian.platform.loan.infrastructure.adapter.in.document;
 
-import com.meridian.platform.loan.application.service.PreReviewDocumentCorrectionService;
+import com.meridian.platform.loan.application.port.in.RequestPreReviewDocumentCorrectionUseCase;
 import com.meridian.platform.loan.domain.model.LoanCorrectionReasonCode;
 import com.meridian.platform.shared.application.operation.BusinessOperationContext;
 import org.junit.jupiter.api.Test;
@@ -22,7 +22,7 @@ class LoanDocumentReviewCorrectionAdapterTest {
     @ParameterizedTest
     @EnumSource(LoanCorrectionReasonCode.class)
     void exactCodesAndUnmodifiedEvidenceArgumentsReachLoanValidation(LoanCorrectionReasonCode reason) {
-        var service = mock(PreReviewDocumentCorrectionService.class);
+        var service = mock(RequestPreReviewDocumentCorrectionUseCase.class);
         new LoanDocumentReviewCorrectionAdapter(service).requestCustomerReplacement(app, item, baseline,
                 reason.name(), "  Replace exactly  ", operation);
         verify(service).requestReplacement(app, item, baseline, reason, "  Replace exactly  ", operation);
@@ -31,11 +31,19 @@ class LoanDocumentReviewCorrectionAdapterTest {
 
     @Test
     void nullReasonAndLoanFailureAreNotHiddenByTheBoundary() {
-        var service = mock(PreReviewDocumentCorrectionService.class);
+        var service = mock(RequestPreReviewDocumentCorrectionUseCase.class);
         var failure = new IllegalStateException("mandatory correction failure");
         doThrow(failure).when(service).requestReplacement(app, item, baseline, null, "Replace", operation);
         var adapter = new LoanDocumentReviewCorrectionAdapter(service);
         assertSame(failure, assertThrows(IllegalStateException.class,
                 () -> adapter.requestCustomerReplacement(app, item, baseline, null, "Replace", operation)));
+    }
+
+    @Test
+    void unrecognizedReasonRetainsEnumMappingFailureBeforeLoanIsInvoked() {
+        var input = mock(RequestPreReviewDocumentCorrectionUseCase.class);
+        assertThrows(IllegalArgumentException.class, () -> new LoanDocumentReviewCorrectionAdapter(input)
+                .requestCustomerReplacement(app, item, baseline, "UNKNOWN", "Replace", operation));
+        verifyNoInteractions(input);
     }
 }

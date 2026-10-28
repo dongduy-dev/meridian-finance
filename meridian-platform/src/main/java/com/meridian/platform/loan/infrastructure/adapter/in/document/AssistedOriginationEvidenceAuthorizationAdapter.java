@@ -1,13 +1,13 @@
-package com.meridian.platform.loan.infrastructure.adapter.out.document;
+package com.meridian.platform.loan.infrastructure.adapter.in.document;
 
-import com.meridian.platform.document.application.port.out.LoanAssistedOriginationPort;
+import com.meridian.platform.document.application.spi.loan.LoanAssistedOriginationSpi;
 import com.meridian.platform.loan.application.port.in.AuthorizeAssistedOriginationEvidenceUseCase;
 import org.springframework.stereotype.Component;
 
 import java.util.UUID;
 
 @Component
-public class AssistedOriginationEvidenceAuthorizationAdapter implements LoanAssistedOriginationPort {
+public class AssistedOriginationEvidenceAuthorizationAdapter implements LoanAssistedOriginationSpi {
 
     private final AuthorizeAssistedOriginationEvidenceUseCase useCase;
 

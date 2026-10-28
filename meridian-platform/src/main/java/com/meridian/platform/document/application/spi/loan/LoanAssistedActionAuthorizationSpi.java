@@ -1,8 +1,8 @@
-package com.meridian.platform.document.application.port.out;
+package com.meridian.platform.document.application.spi.loan;
 
 import java.util.UUID;
 
-public interface LoanAssistedActionAuthorizationPort {
+public interface LoanAssistedActionAuthorizationSpi {
 
     void authorizeOfferEvidence(UUID loanApplicationId, UUID approvedOfferId, String declaredDecision);
 

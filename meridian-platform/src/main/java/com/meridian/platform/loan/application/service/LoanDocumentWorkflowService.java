@@ -1,19 +1,19 @@
-package com.meridian.platform.loan.infrastructure.adapter.out.document;
+package com.meridian.platform.loan.application.service;
 
-import com.meridian.platform.document.application.port.out.LoanDocumentWorkflowPort;
+import com.meridian.platform.loan.application.port.in.LoanDocumentWorkflowUseCase;
 import com.meridian.platform.loan.application.port.out.LoanApplicationRepository;
 import com.meridian.platform.loan.domain.model.LoanApplication;
 import com.meridian.platform.shared.domain.exception.EntityNotFoundException;
-import org.springframework.stereotype.Component;
+import org.springframework.stereotype.Service;
 
 import java.util.UUID;
 
-@Component
-public class LoanDocumentWorkflowAdapter implements LoanDocumentWorkflowPort {
+@Service
+public class LoanDocumentWorkflowService implements LoanDocumentWorkflowUseCase {
 
     private final LoanApplicationRepository loanApplicationRepository;
 
-    public LoanDocumentWorkflowAdapter(LoanApplicationRepository loanApplicationRepository) {
+    public LoanDocumentWorkflowService(LoanApplicationRepository loanApplicationRepository) {
         this.loanApplicationRepository = loanApplicationRepository;
     }
 
@@ -28,8 +28,8 @@ public class LoanDocumentWorkflowAdapter implements LoanDocumentWorkflowPort {
         return new LoanDocumentWorkflowSnapshot(
                 loanApplication.id(),
                 loanApplication.customerId(),
-                loanApplication.originationChannel().name(),
-                loanApplication.status().name()
+                loanApplication.originationChannel(),
+                loanApplication.status()
         );
     }
 
@@ -43,8 +43,8 @@ public class LoanDocumentWorkflowAdapter implements LoanDocumentWorkflowPort {
         return new LoanDocumentWorkflowSnapshot(
                 loanApplication.id(),
                 loanApplication.customerId(),
-                loanApplication.originationChannel().name(),
-                loanApplication.status().name()
+                loanApplication.originationChannel(),
+                loanApplication.status()
         );
     }
 }

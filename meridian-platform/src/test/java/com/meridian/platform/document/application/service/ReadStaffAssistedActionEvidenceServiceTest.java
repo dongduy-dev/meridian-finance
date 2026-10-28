@@ -1,5 +1,7 @@
 package com.meridian.platform.document.application.service;
 
+import com.meridian.platform.document.application.spi.loan.LoanDocumentWorkflowSpi;
+
 import com.meridian.platform.document.application.port.out.*;
 import com.meridian.platform.document.domain.model.*;
 import com.meridian.platform.shared.application.security.*;
@@ -24,7 +26,7 @@ import static org.mockito.Mockito.*;
 class ReadStaffAssistedActionEvidenceServiceTest {
     @Mock AssistedActionDocumentRepository documents;
     @Mock DocumentStoragePort storage;
-    @Mock LoanDocumentWorkflowPort workflows;
+    @Mock LoanDocumentWorkflowSpi workflows;
     @Mock CurrentUserProvider users;
     ReadStaffAssistedActionEvidenceService service;
     final UUID applicationId = UUID.randomUUID();

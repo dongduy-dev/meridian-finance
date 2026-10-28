@@ -1,18 +1,18 @@
-package com.meridian.platform.loan.infrastructure.adapter.out.document;
+package com.meridian.platform.loan.infrastructure.adapter.in.document;
 
 import com.meridian.platform.loan.domain.model.LoanCorrectionReasonCode;
-import com.meridian.platform.document.application.port.out.LoanDocumentReviewCorrectionPort;
-import com.meridian.platform.loan.application.service.PreReviewDocumentCorrectionService;
+import com.meridian.platform.document.application.spi.loan.LoanDocumentReviewCorrectionSpi;
+import com.meridian.platform.loan.application.port.in.RequestPreReviewDocumentCorrectionUseCase;
 import com.meridian.platform.shared.application.operation.BusinessOperationContext;
 import org.springframework.stereotype.Component;
 
 import java.util.UUID;
 
 @Component
-public class LoanDocumentReviewCorrectionAdapter implements LoanDocumentReviewCorrectionPort {
-    private final PreReviewDocumentCorrectionService correctionService;
+public class LoanDocumentReviewCorrectionAdapter implements LoanDocumentReviewCorrectionSpi {
+    private final RequestPreReviewDocumentCorrectionUseCase correctionService;
 
-    public LoanDocumentReviewCorrectionAdapter(PreReviewDocumentCorrectionService correctionService) {
+    public LoanDocumentReviewCorrectionAdapter(RequestPreReviewDocumentCorrectionUseCase correctionService) {
         this.correctionService = correctionService;
     }
 

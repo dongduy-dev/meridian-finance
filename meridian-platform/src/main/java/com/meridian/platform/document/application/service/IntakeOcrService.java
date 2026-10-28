@@ -3,7 +3,7 @@ package com.meridian.platform.document.application.service;
 import com.meridian.platform.document.application.dto.IntakeOcrJobDto;
 import com.meridian.platform.document.application.port.in.ManageIntakeOcrUseCase;
 import com.meridian.platform.document.application.port.out.IntakeDocumentRepository;
-import com.meridian.platform.document.application.port.out.LoanAssistedOriginationPort;
+import com.meridian.platform.document.application.spi.loan.LoanAssistedOriginationSpi;
 import com.meridian.platform.document.application.port.out.OcrJobRepository;
 import com.meridian.platform.document.domain.model.IntakeDocument;
 import com.meridian.platform.document.domain.model.IntakeDocumentVersion;
@@ -37,7 +37,7 @@ public class IntakeOcrService implements ManageIntakeOcrUseCase {
 
     private final IntakeDocumentRepository documents;
     private final OcrJobRepository jobs;
-    private final LoanAssistedOriginationPort assistedOriginations;
+    private final LoanAssistedOriginationSpi assistedOriginations;
     private final CurrentUserProvider currentUsers;
     private final BusinessAuditPublisher auditPublisher;
     private final Clock clock;
@@ -45,7 +45,7 @@ public class IntakeOcrService implements ManageIntakeOcrUseCase {
     public IntakeOcrService(
             IntakeDocumentRepository documents,
             OcrJobRepository jobs,
-            LoanAssistedOriginationPort assistedOriginations,
+            LoanAssistedOriginationSpi assistedOriginations,
             CurrentUserProvider currentUsers,
             BusinessAuditPublisher auditPublisher,
             Clock clock

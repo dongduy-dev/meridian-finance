@@ -1,8 +1,8 @@
-package com.meridian.platform.document.application.port.out;
+package com.meridian.platform.document.application.spi.loan;
 
 import java.util.UUID;
 
-public interface LoanDocumentCorrectionPort {
+public interface LoanDocumentCorrectionSpi {
     enum StaffUploadAuthority {
         STAFF_CORRECTION,
         ASSISTED_CUSTOMER_CORRECTION
@@ -14,11 +14,9 @@ public interface LoanDocumentCorrectionPort {
             UUID expectedCurrentVersionId
     );
 
-    default StaffUploadAuthority authorizeStaffUpload(
+    StaffUploadAuthority authorizeStaffUpload(
             UUID loanApplicationId,
             UUID checklistItemId,
             UUID expectedCurrentVersionId
-    ) {
-        throw new UnsupportedOperationException("Staff document upload is not supported.");
-    }
+    );
 }

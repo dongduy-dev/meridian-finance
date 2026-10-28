@@ -1,7 +1,7 @@
 package com.meridian.platform.document.infrastructure.adapter.out.persistence;
 
 import com.meridian.platform.document.application.dto.IntakeOcrJobDto;
-import com.meridian.platform.document.application.port.out.LoanAssistedOriginationPort;
+import com.meridian.platform.document.application.spi.loan.LoanAssistedOriginationSpi;
 import com.meridian.platform.document.application.service.IntakeOcrService;
 import com.meridian.platform.document.domain.model.IntakeEvidenceType;
 import com.meridian.platform.shared.application.audit.BusinessAuditPublisher;
@@ -35,7 +35,7 @@ class IntakeOcrCreationPostgreSqlIntegrationTest {
     @Autowired IntakeOcrService service;
     @Autowired JdbcTemplate jdbc;
     @MockitoBean CurrentUserProvider currentUsers;
-    @MockitoBean LoanAssistedOriginationPort assistedOriginations;
+    @MockitoBean LoanAssistedOriginationSpi assistedOriginations;
     @MockitoBean BusinessAuditPublisher auditPublisher;
 
     @DynamicPropertySource
@@ -74,7 +74,7 @@ class IntakeOcrCreationPostgreSqlIntegrationTest {
                 staffId, "loan.officer@meridian.local", "STAFF", null,
                 Set.of(), Set.of("document:upload:intake")));
         when(assistedOriginations.authorizeMutation(caseId)).thenReturn(
-                new LoanAssistedOriginationPort.AuthorizedIntake(caseId, "UNSECURED_CONSUMER_LOAN"));
+                new LoanAssistedOriginationSpi.AuthorizedIntake(caseId, "UNSECURED_CONSUMER_LOAN"));
 
         CountDownLatch ready = new CountDownLatch(2);
         CountDownLatch start = new CountDownLatch(1);

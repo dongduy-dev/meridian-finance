@@ -4,8 +4,8 @@ import com.meridian.platform.document.application.dto.DocumentCorrectionReasonCo
 import com.meridian.platform.document.application.dto.ReviewDocumentCommand;
 import com.meridian.platform.document.application.port.out.DocumentChecklistRepository;
 import com.meridian.platform.document.application.port.out.DocumentRepository;
-import com.meridian.platform.document.application.port.out.LoanDocumentReviewCorrectionPort;
-import com.meridian.platform.document.application.port.out.LoanDocumentWorkflowPort;
+import com.meridian.platform.document.application.spi.loan.LoanDocumentReviewCorrectionSpi;
+import com.meridian.platform.document.application.spi.loan.LoanDocumentWorkflowSpi;
 import com.meridian.platform.document.domain.model.DocumentChecklist;
 import com.meridian.platform.document.domain.model.DocumentChecklistItem;
 import com.meridian.platform.document.domain.model.DocumentChecklistStage;
@@ -52,10 +52,10 @@ class ReviewDocumentServiceTest {
     private static final UUID REQUEST_ID = UUID.randomUUID();
     private static final LocalDateTime NOW = LocalDateTime.of(2026, 9, 4, 9, 30);
 
-    @Mock LoanDocumentWorkflowPort workflowPort;
+    @Mock LoanDocumentWorkflowSpi workflowPort;
     @Mock DocumentChecklistRepository checklistRepository;
     @Mock DocumentRepository documentRepository;
-    @Mock LoanDocumentReviewCorrectionPort correctionPort;
+    @Mock LoanDocumentReviewCorrectionSpi correctionPort;
     @Mock BusinessAuditPublisher auditPublisher;
     @Mock CurrentUserProvider currentUserProvider;
     private ReviewDocumentService service;
@@ -72,7 +72,7 @@ class ReviewDocumentServiceTest {
                 Set.of("LOAN_OFFICER"), Set.of("document:review")
         ));
         when(workflowPort.lock(APPLICATION_ID)).thenReturn(
-                new LoanDocumentWorkflowPort.LoanDocumentWorkflowSnapshot(
+                new LoanDocumentWorkflowSpi.LoanDocumentWorkflowSnapshot(
                         APPLICATION_ID, CUSTOMER_ID, "UNDER_REVIEW"
                 )
         );

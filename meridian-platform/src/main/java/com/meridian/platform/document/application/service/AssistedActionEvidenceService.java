@@ -1,5 +1,7 @@
 package com.meridian.platform.document.application.service;
 
+import com.meridian.platform.document.application.spi.loan.LoanAssistedActionAuthorizationSpi;
+
 import com.meridian.platform.document.application.dto.*;
 import com.meridian.platform.document.application.port.in.ManageAssistedActionEvidenceUseCase;
 import com.meridian.platform.document.application.port.out.*;
@@ -33,7 +35,7 @@ public class AssistedActionEvidenceService
     private final AssistedActionDocumentRepository documents;
     private final DocumentStoragePort storage;
     private final DocumentPromotionService promotion;
-    private final LoanAssistedActionAuthorizationPort authorizations;
+    private final LoanAssistedActionAuthorizationSpi authorizations;
     private final CurrentUserProvider currentUsers;
     private final BusinessAuditPublisher auditPublisher;
     private final Clock clock;
@@ -42,7 +44,7 @@ public class AssistedActionEvidenceService
             AssistedActionDocumentRepository documents,
             DocumentStoragePort storage,
             DocumentPromotionService promotion,
-            LoanAssistedActionAuthorizationPort authorizations,
+            LoanAssistedActionAuthorizationSpi authorizations,
             CurrentUserProvider currentUsers,
             BusinessAuditPublisher auditPublisher,
             Clock clock

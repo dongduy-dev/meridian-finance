@@ -952,7 +952,7 @@ Status: Open
 Blocking: No current documentation checkpoint or production workflow blocker.
 
 Problem:
-The aligned architecture defines narrow cross-context collaboration through public application contracts and boundary adapters, but remaining infrastructure bindings still implement foreign private output ports. `ArchitectureRulesTest` proves layer isolation, concrete-security isolation, and `shared` independence, but does not fully enforce feature-module public surfaces, legal module dependencies, module cycles, or named-interface/public-contract boundaries. Spring Modulith dependency metadata alone is not executable proof of those rules.
+The aligned architecture requires narrow cross-context collaboration through explicitly published application contracts and boundary adapters. This item covers the foreign private-port bindings and gaps in executable public-contract, persistence, adapter, and feature-cycle enforcement. Spring Modulith dependency metadata alone is not proof of those boundaries.
 
 Partial completion:
 S1 replaces the Customer identity content output-port result exposed by the input contract and web adapter with the application-owned `CustomerIdentityContent`. Customer application code maps the evidence result without consuming or closing its stream. Focused service, HTTP/security, PostgreSQL, and architecture regressions pass, including exact content and headers, authorization before evidence access, historical evidence-version reads, and signature-leak rejection. `ArchitectureRulesTest` rejects direct output-port dependencies from inbound web adapters and application input ports across the backend.
@@ -963,10 +963,29 @@ S3 gives Loan its own correction request/command vocabulary, domain and persiste
 
 S4 replaces Approval's three private Loan query ports with published case/queue, active-cycle, and review-history SPIs. Designated Loan inbound adapters map Loan-owned query results; repository composition belongs to Loan application services. Focused regressions prove complete field translation, product-specific readiness/correction options, paging/order, legacy assignment handling, validation precedence, unique production wiring, caller transaction visibility/rollback, non-locking PostgreSQL reads, and retained synchronous Approval/audit rollback. Architecture checks enforce the exact Approval SPI/support closure, designated thin implementers, provider application isolation, retired private ports, and no Approval-to-Loan Java dependency, with negative fixtures. S1–S3 protections remain active. Normal Java 25 backend verification with PostgreSQL and ClamAV passes.
 
-S5 remains outstanding for the five Document/Loan SPIs, Document/Identity Staff-directory SPI, complete public-contract/adapter/persistence enforcement, and final eight-feature cycle proof. MER-FU-042 remains Open until those migrations and the final conformance gates pass.
+S5 replaces C1–C5 with `LoanDocumentWorkflowSpi`, `LoanDocumentCorrectionSpi`, `LoanDocumentReviewCorrectionSpi`, `LoanAssistedOriginationSpi`, and `LoanAssistedActionAuthorizationSpi`. Loan inbound adapters delegate to Loan-owned inputs: C1/C2 reads, locking, and correction-task authorization move into application services; C3's existing correction service implements its new input directly; C4/C5 retain their existing inputs and services. D1 replaces the private directory port with `DocumentStaffActorDirectorySpi`, implemented by Identity's inbound `DocumentStaffActorDirectoryAdapter` through `QueryStaffActorSummariesUseCase`. Identity retains finite Staff-only lookup; Document retains reviewer association and disclosure. All six retired Document private interfaces and their old outbound bindings are removed.
+
+Spring wiring tests resolve all nine SPIs uniquely to the designated inbound implementations in [ARCH-003's catalogue](../architecture/MER-ARCH-003-dependency-rules.md#published-consumer-spi-exception-design-s), with unique provider inputs/services and the three S2 Loan ports/Document inputs retained. B1–B3 and C1–C5/D1 private-port classes are absent. Architecture tests enforce the exact published input/support/event/SPI catalogue, provider-owned input results, designated thin SPI implementations, foreign internal/persistence isolation, web/event adapter restrictions, domain purity, shared independence, and approved feature roots. Independent negative fixtures run the production rules, including a cycle made only of otherwise legal published contracts/events.
+
+The production Java dependency graph calculated by the architecture test is:
+
+```text
+Loan         -> Approval, Customer, Document, Identity, Partner
+Approval     -> Customer, Identity
+Partner      -> Customer
+Identity     -> Customer, Document, Notification
+Customer     -> Document
+Document     -> none
+Audit        -> none
+Notification -> none
+```
+
+It matches the accepted twelve-edge target. All eight strongly connected components are singletons. Published contracts, event schemas, nested/generic/array signatures, inheritance, and direct class references contribute edges; `shared` is checked independently.
+
+Focused runtime regressions pass for evidence authorization/version identity, upload security/scanning/storage, correction validation, assisted intake/action workflows, Staff history, and the retained S1–S4 guarantees. PostgreSQL tests prove non-locking workflow reads, advisory-before-row locking held by the caller transaction, caller-uncommitted visibility, late-failure rollback, Staff-only directory filtering, and full Document/Loan/history/audit rollback after either a late Document audit failure or a late Loan correction-audit failure. Standard local Java 25 backend `verify` with PostgreSQL and ClamAV, deployment helper/Compose contract tests, and the application-container build pass. Hosted CI for the eventual S5 commit and independent final review remain required; MER-FU-042 stays Open.
 
 Recommendation:
-Inventory every foreign internal dependency and distinguish legitimate public application contracts from internal leakage. Replace illegal dependencies with the intended consumer-owned output port and boundary adapter, provider public application contract, or inbound event adapter where asynchronous intake is intended. Add focused architecture enforcement for module dependencies, public surfaces, and cycles while preserving bounded-context ownership and runtime behavior; do not redesign business workflows merely to satisfy package aesthetics.
+Run hosted CI against the exact authorized S5 commit and independently review final conformance and runtime preservation. Once those gates pass, close this item with a surgical register update. No additional architecture implementation phase is planned; named-interface adoption and broader package-visibility tightening are optional future decisions.
 
 Suggested future branch name:
 `refactor/architecture-module-boundary-conformance`

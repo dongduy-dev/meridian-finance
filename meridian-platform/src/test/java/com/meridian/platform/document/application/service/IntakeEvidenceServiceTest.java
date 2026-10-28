@@ -3,7 +3,7 @@ package com.meridian.platform.document.application.service;
 import com.meridian.platform.document.application.dto.UploadIntakeEvidenceCommand;
 import com.meridian.platform.document.application.port.out.DocumentStoragePort;
 import com.meridian.platform.document.application.port.out.IntakeDocumentRepository;
-import com.meridian.platform.document.application.port.out.LoanAssistedOriginationPort;
+import com.meridian.platform.document.application.spi.loan.LoanAssistedOriginationSpi;
 import com.meridian.platform.document.application.port.out.StagedDocument;
 import com.meridian.platform.document.application.port.out.StoredObject;
 import com.meridian.platform.document.domain.model.IntakeDocument;
@@ -42,7 +42,7 @@ class IntakeEvidenceServiceTest {
     private static final String HASH = "a".repeat(64);
     private final IntakeDocumentRepository documents = mock(IntakeDocumentRepository.class);
     private final DocumentStoragePort storage = mock(DocumentStoragePort.class);
-    private final LoanAssistedOriginationPort cases = mock(LoanAssistedOriginationPort.class);
+    private final LoanAssistedOriginationSpi cases = mock(LoanAssistedOriginationSpi.class);
     private final CurrentUserProvider users = mock(CurrentUserProvider.class);
     private final BusinessAuditPublisher audits = mock(BusinessAuditPublisher.class);
     private final UUID caseId = UUID.randomUUID();
@@ -57,7 +57,7 @@ class IntakeEvidenceServiceTest {
                 userId, "loan.officer@meridian.local", "STAFF", null,
                 Set.of(), Set.of("document:upload:intake")));
         when(cases.authorizeMutation(caseId)).thenReturn(
-                new LoanAssistedOriginationPort.AuthorizedIntake(caseId, "UNSECURED_CONSUMER_LOAN"));
+                new LoanAssistedOriginationSpi.AuthorizedIntake(caseId, "UNSECURED_CONSUMER_LOAN"));
         when(storage.stage(any(), any(), any())).thenReturn(staged());
         when(promotion.promote(any())).thenReturn(new StoredObject("intake/final/object"));
         when(documents.saveDocument(any())).thenAnswer(call -> call.getArgument(0));

@@ -6,7 +6,7 @@ import com.meridian.platform.document.application.dto.StaffDocumentChecklistDto;
 import com.meridian.platform.document.application.port.in.ReadStaffAssistedActionEvidenceUseCase;
 import com.meridian.platform.document.application.port.out.AssistedActionDocumentRepository;
 import com.meridian.platform.document.application.port.out.DocumentStoragePort;
-import com.meridian.platform.document.application.port.out.LoanDocumentWorkflowPort;
+import com.meridian.platform.document.application.spi.loan.LoanDocumentWorkflowSpi;
 import com.meridian.platform.document.domain.model.AssistedActionDocument;
 import com.meridian.platform.document.domain.model.AssistedActionDocumentVersion;
 import com.meridian.platform.document.domain.model.AssistedActionEvidenceType;
@@ -27,11 +27,11 @@ import java.util.UUID;
 public class ReadStaffAssistedActionEvidenceService implements ReadStaffAssistedActionEvidenceUseCase {
     private final AssistedActionDocumentRepository documents;
     private final DocumentStoragePort storage;
-    private final LoanDocumentWorkflowPort workflows;
+    private final LoanDocumentWorkflowSpi workflows;
     private final CurrentUserProvider currentUsers;
 
     public ReadStaffAssistedActionEvidenceService(AssistedActionDocumentRepository documents,
-            DocumentStoragePort storage, LoanDocumentWorkflowPort workflows, CurrentUserProvider currentUsers) {
+            DocumentStoragePort storage, LoanDocumentWorkflowSpi workflows, CurrentUserProvider currentUsers) {
         this.documents = documents;
         this.storage = storage;
         this.workflows = workflows;

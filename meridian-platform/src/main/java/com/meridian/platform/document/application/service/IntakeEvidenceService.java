@@ -7,7 +7,7 @@ import com.meridian.platform.document.application.dto.UploadIntakeEvidenceComman
 import com.meridian.platform.document.application.port.in.ManageIntakeEvidenceUseCase;
 import com.meridian.platform.document.application.port.out.DocumentStoragePort;
 import com.meridian.platform.document.application.port.out.IntakeDocumentRepository;
-import com.meridian.platform.document.application.port.out.LoanAssistedOriginationPort;
+import com.meridian.platform.document.application.spi.loan.LoanAssistedOriginationSpi;
 import com.meridian.platform.document.application.port.out.StagedDocument;
 import com.meridian.platform.document.application.port.out.StoredObject;
 import com.meridian.platform.document.domain.model.IntakeDocument;
@@ -45,7 +45,7 @@ public class IntakeEvidenceService implements ManageIntakeEvidenceUseCase {
     private final IntakeDocumentRepository documents;
     private final DocumentStoragePort storage;
     private final DocumentPromotionService promotion;
-    private final LoanAssistedOriginationPort assistedOriginations;
+    private final LoanAssistedOriginationSpi assistedOriginations;
     private final CurrentUserProvider currentUsers;
     private final BusinessAuditPublisher auditPublisher;
     private final Clock clock;
@@ -54,7 +54,7 @@ public class IntakeEvidenceService implements ManageIntakeEvidenceUseCase {
             IntakeDocumentRepository documents,
             DocumentStoragePort storage,
             DocumentPromotionService promotion,
-            LoanAssistedOriginationPort assistedOriginations,
+            LoanAssistedOriginationSpi assistedOriginations,
             CurrentUserProvider currentUsers,
             BusinessAuditPublisher auditPublisher,
             Clock clock

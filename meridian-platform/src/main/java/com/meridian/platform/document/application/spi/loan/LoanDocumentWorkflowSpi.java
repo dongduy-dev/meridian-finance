@@ -1,14 +1,12 @@
-package com.meridian.platform.document.application.port.out;
+package com.meridian.platform.document.application.spi.loan;
 
 import java.util.UUID;
 
-public interface LoanDocumentWorkflowPort {
+public interface LoanDocumentWorkflowSpi {
 
     LoanDocumentWorkflowSnapshot lock(UUID loanApplicationId);
 
-    default LoanDocumentWorkflowSnapshot find(UUID loanApplicationId) {
-        return lock(loanApplicationId);
-    }
+    LoanDocumentWorkflowSnapshot find(UUID loanApplicationId);
 
     record LoanDocumentWorkflowSnapshot(
             UUID loanApplicationId,

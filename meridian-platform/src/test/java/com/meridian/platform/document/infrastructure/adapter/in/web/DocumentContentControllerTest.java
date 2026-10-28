@@ -18,7 +18,7 @@ class DocumentContentControllerTest {
 
     @Test
     void customerEndpointRejectsStaffEvenWhenBothOwnAndReviewAuthoritiesArePresent() throws Exception {
-        var workflow = org.mockito.Mockito.mock(com.meridian.platform.document.application.port.out.LoanDocumentWorkflowPort.class);
+        var workflow = org.mockito.Mockito.mock(com.meridian.platform.document.application.spi.loan.LoanDocumentWorkflowSpi.class);
         var checklists = org.mockito.Mockito.mock(com.meridian.platform.document.application.port.out.DocumentChecklistRepository.class);
         var documents = org.mockito.Mockito.mock(com.meridian.platform.document.application.port.out.DocumentRepository.class);
         var storage = org.mockito.Mockito.mock(com.meridian.platform.document.application.port.out.DocumentStoragePort.class);

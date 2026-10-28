@@ -1,5 +1,6 @@
 package com.meridian.platform.loan.application.service;
 
+import com.meridian.platform.loan.application.port.in.RequestPreReviewDocumentCorrectionUseCase;
 import com.meridian.platform.loan.domain.model.LoanCorrectionReasonCode;
 import com.meridian.platform.loan.domain.model.LoanDocumentType;
 import com.meridian.platform.loan.application.port.out.LoanApplicationRepository;
@@ -31,7 +32,7 @@ import java.util.UUID;
 import java.util.Set;
 
 @Service
-public class PreReviewDocumentCorrectionService {
+public class PreReviewDocumentCorrectionService implements RequestPreReviewDocumentCorrectionUseCase {
     private static final Set<LoanDocumentType> UCL_DOCUMENT_TYPES = Set.of(
             LoanDocumentType.INCOME_PROOF,
             LoanDocumentType.BANK_STATEMENT,
@@ -58,6 +59,7 @@ public class PreReviewDocumentCorrectionService {
         this.auditPublisher = auditPublisher;
     }
 
+    @Override
     public void requestReplacement(
             UUID loanApplicationId,
             UUID checklistItemId,
