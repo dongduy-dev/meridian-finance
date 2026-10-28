@@ -27,6 +27,7 @@ import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
+import tools.jackson.databind.json.JsonMapper;
 
 import java.time.Clock;
 import java.time.Instant;
@@ -249,12 +250,18 @@ class ConfirmManualDisbursementPostgreSqlIntegrationTest {
         String payload = support.value(
                 "select payload::text from audit_events where entity_id = ? "
                         + "and action = 'MANUAL_DISBURSEMENT_CONFIRMED'", fixture.applicationId());
-        assertTrue(payload.contains(result.loanAccountId().toString()));
-        assertTrue(payload.contains(result.manualDisbursementId().toString()));
-        assertTrue(payload.contains(result.repaymentScheduleId().toString()));
-        assertTrue(payload.contains("SALARY_ADVANCE"));
-        assertFalse(payload.contains("TRANSFER-" + fixture.token()));
-        assertFalse(payload.contains("7890"));
+        var json = JsonMapper.builder().build();
+        var expectedPayload = json.createObjectNode()
+                .put("loanApplicationId", fixture.applicationId().toString())
+                .put("loanContractId", fixture.contractId().toString())
+                .put("loanAccountId", result.loanAccountId().toString())
+                .put("manualDisbursementId", result.manualDisbursementId().toString())
+                .put("repaymentScheduleId", result.repaymentScheduleId().toString())
+                .put("productCode", "SALARY_ADVANCE")
+                .put("previousApplicationStatus", "DISBURSEMENT_PENDING")
+                .put("finalApplicationStatus", "DISBURSED")
+                .put("loanAccountStatus", "ACTIVE");
+        assertEquals(expectedPayload, json.readTree(payload));
         assertEquals("LOAN_APPLICATION", support.value(
                 "select entity_type from audit_events where entity_id = ? "
                         + "and action = 'MANUAL_DISBURSEMENT_CONFIRMED'", fixture.applicationId()));
