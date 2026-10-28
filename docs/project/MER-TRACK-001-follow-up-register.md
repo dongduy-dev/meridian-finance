@@ -947,14 +947,14 @@ Type: Architecture conformance / hardening
 
 Priority: P2
 
-Status: Open
+Status: Done
 
 Blocking: No current documentation checkpoint or production workflow blocker.
 
 Problem:
 The aligned architecture requires narrow cross-context collaboration through explicitly published application contracts and boundary adapters. This item covers the foreign private-port bindings and gaps in executable public-contract, persistence, adapter, and feature-cycle enforcement. Spring Modulith dependency metadata alone is not proof of those boundaries.
 
-Partial completion:
+Completed implementation:
 S1 replaces the Customer identity content output-port result exposed by the input contract and web adapter with the application-owned `CustomerIdentityContent`. Customer application code maps the evidence result without consuming or closing its stream. Focused service, HTTP/security, PostgreSQL, and architecture regressions pass, including exact content and headers, authorization before evidence access, historical evidence-version reads, and signature-leak rejection. `ArchitectureRulesTest` rejects direct output-port dependencies from inbound web adapters and application input ports across the backend.
 
 S2 replaces the three direct implementations of Loan output ports in Document with Document-owned checklist, paper intake evidence, and signed action evidence input contracts and Loan outbound adapters. Document retains evidence, checklist, validation, audit, and persistence ownership. Loan owns the checklist document and requirement representations; the published Document inputs expose only purpose-limited application facts. Focused regressions cover all adapter operations, mappings, evidence lock/read separation, error propagation, and unique production wiring. Architecture checks reject Document application dependencies on Loan output ports, internal-type leaks in the three published inputs, and illegal adapter dependencies.
@@ -982,13 +982,12 @@ Notification -> none
 
 It matches the accepted twelve-edge target. All eight strongly connected components are singletons. Published contracts, event schemas, nested/generic/array signatures, inheritance, and direct class references contribute edges; `shared` is checked independently.
 
-Focused runtime regressions pass for evidence authorization/version identity, upload security/scanning/storage, correction validation, assisted intake/action workflows, Staff history, and the retained S1–S4 guarantees. PostgreSQL tests prove non-locking workflow reads, advisory-before-row locking held by the caller transaction, caller-uncommitted visibility, late-failure rollback, Staff-only directory filtering, and full Document/Loan/history/audit rollback after either a late Document audit failure or a late Loan correction-audit failure. Standard local Java 25 backend `verify` with PostgreSQL and ClamAV, deployment helper/Compose contract tests, and the application-container build pass. Hosted CI for the eventual S5 commit and independent final review remain required; MER-FU-042 stays Open.
+Focused runtime regressions pass for evidence authorization/version identity, upload security/scanning/storage, correction validation, assisted intake/action workflows, Staff history, and the retained S1–S4 guarantees. PostgreSQL tests prove non-locking workflow reads, advisory-before-row locking held by the caller transaction, caller-uncommitted visibility, late-failure rollback, Staff-only directory filtering, and full Document/Loan/history/audit rollback after either a late Document audit failure or a late Loan correction-audit failure. Standard local Java 25 backend `verify` with PostgreSQL and ClamAV, deployment helper/Compose contract tests, and the application-container build pass.
 
-Recommendation:
-Run hosted CI against the exact authorized S5 commit and independently review final conformance and runtime preservation. Once those gates pass, close this item with a surgical register update. No additional architecture implementation phase is planned; named-interface adoption and broader package-visibility tightening are optional future decisions.
+S1–S5 are merged through PRs #189–#193. [PR #193](https://github.com/dongduy-dev/meridian-finance/pull/193) merged on October 28, 2026 as `3cce15ba47ba4e29a9f7abb169e1e048382f60e6`, with a tree identical to final head `155b73b6c573467525acf94ffb2cfaa64c36d371`. Hosted [Backend CI](https://github.com/dongduy-dev/meridian-finance/actions/runs/40639868983) passed against that head; [Frontend CI](https://github.com/dongduy-dev/meridian-finance/actions/runs/40639868955) and [OCR CI](https://github.com/dongduy-dev/meridian-finance/actions/runs/40639868981) aggregate gates passed with unchanged-app verification skipped. CP4 final acceptance reconciled the merged source, architecture documents, and regression evidence with the approved plan and found no unresolved architecture-conformance blocker.
 
-Suggested future branch name:
-`refactor/architecture-module-boundary-conformance`
+Outcome:
+S1–S5 and final acceptance are complete. No additional architecture-conformance slice is planned; named-interface adoption and broader package-visibility tightening remain optional future decisions.
 
 ### MER-FU-043 - Normalize executable API error identifier semantics
 
