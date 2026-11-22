@@ -4,7 +4,7 @@ import { NetworkError, toApiError } from './errors'
 export type ApiRequestOptions = Omit<RequestInit, 'body'> & {
   body?: unknown
   requestId?: string
-  responseType?: 'json' | 'blob'
+  responseType?: 'json' | 'blob' | 'empty'
 }
 
 export type ApiBinaryResponse = {
@@ -42,7 +42,7 @@ export async function apiRequest<T>(path: string, options: ApiRequestOptions = {
   }
 
   if (!response.ok) throw await toApiError(response)
-  if (response.status === 204) return undefined as T
+  if (response.status === 204 || options.responseType === 'empty') return undefined as T
   if (options.responseType === 'blob') {
     const rawLength = response.headers.get('Content-Length')
     return {
