@@ -53,4 +53,21 @@ describe('api client', () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('socket detail')))
     await expect(apiRequest('/health')).rejects.toBeInstanceOf(NetworkError)
   })
+
+  it('accepts an explicitly empty success without weakening ordinary JSON reads', async () => {
+    const fetchMock = vi.fn().mockImplementation(async () => new Response(null, { status: 200 }))
+    vi.stubGlobal('fetch', fetchMock)
+    await expect(apiRequest('/setup', { method: 'POST', responseType: 'empty' })).resolves.toBeUndefined()
+    await expect(apiRequest('/ordinary-json')).rejects.toBeInstanceOf(NetworkError)
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('still rejects error responses for an explicitly empty success contract', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      timestamp: '2026-09-01T00:00:00Z', status: 409, errorCode: 'INTERNAL_USER_NOT_ACTIVE',
+      message: 'Not eligible', path: '/setup',
+    }), { status: 409 })))
+    await expect(apiRequest('/setup', { method: 'POST', responseType: 'empty' }))
+      .rejects.toMatchObject({ status: 409, errorCode: 'INTERNAL_USER_NOT_ACTIVE' })
+  })
 })

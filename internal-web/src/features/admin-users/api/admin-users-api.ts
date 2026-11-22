@@ -32,7 +32,7 @@ export async function createInternalUser(
 
 export async function sendInternalUserPasswordSetup(manager: AuthSessionManager, userId: string): Promise<void> {
   await manager.protectedRequest<void>(
-    `/admin/internal-users/${encodeURIComponent(userId)}/password-setup`, { method: 'POST' },
+    `/admin/internal-users/${encodeURIComponent(userId)}/password-setup`, { method: 'POST', responseType: 'empty' },
   )
 }
 

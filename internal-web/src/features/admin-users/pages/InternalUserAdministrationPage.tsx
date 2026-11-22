@@ -5,7 +5,7 @@ import { Spinner } from '@/components/ui/spinner'
 import { hasPermission } from '@/features/auth/model/access-control'
 import { useAuth } from '@/features/auth/model/auth-context'
 import { assignableInternalRolesQuery, internalUsersQuery } from '../api/queries'
-import { InternalUserCard } from '../components/InternalUserCard'
+import { InternalUserDirectory } from '../components/InternalUserDirectory'
 import { CreateInternalUserForm } from '../components/CreateInternalUserForm'
 import { UserAdministrationQueryErrorPanel } from '../components/UserAdministrationQueryErrorPanel'
 
@@ -35,10 +35,8 @@ export function InternalUserAdministrationPage() {
     </div>
     {creating && roles.data ? <CreateInternalUserForm manager={manager} roles={roles.data} onClose={() => setCreating(false)} /> : null}
     {pending ? <div className="flex items-center gap-2 text-sm text-muted-foreground"><Spinner /> Loading Internal Users…</div> : null}
-    {error && (!users.data || !roles.data) ? <UserAdministrationQueryErrorPanel error={error} onRetry={refresh} /> : null}
-    {!users.isError && users.data?.length === 0 && roles.data ? <p className="rounded-md border p-5 text-sm text-muted-foreground">No internal Staff Users are available.</p> : null}
-    {users.data?.length && roles.data ? <div className="grid gap-5">{users.data.map((user) =>
-      <InternalUserCard key={user.userId} user={user} roles={roles.data} manager={manager} />
-    )}</div> : null}
+    {error ? <UserAdministrationQueryErrorPanel error={error} onRetry={refresh} /> : null}
+    {users.data && roles.data ? <InternalUserDirectory users={users.data} roles={roles.data} manager={manager}
+      refreshing={users.isFetching || roles.isFetching} unavailable={users.isError || roles.isError} /> : null}
   </section>
 }

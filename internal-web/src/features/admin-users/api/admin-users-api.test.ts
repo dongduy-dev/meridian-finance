@@ -1,6 +1,9 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AuthSessionManager } from '@/features/auth/model/auth-session'
+import { apiRequest, type ApiRequestOptions } from '@/lib/api/client'
 import { createInternalUser, getInternalUsers, sendInternalUserPasswordSetup } from './admin-users-api'
+
+afterEach(() => vi.unstubAllGlobals())
 
 describe('Internal User administration API', () => {
   it('accepts deterministic Meridian user IDs from the list response', async () => {
@@ -32,6 +35,15 @@ describe('Internal User administration API', () => {
       method: 'POST', body: { email: 'staff@meridian.local', displayName: 'Staff', roleCodes: ['APPROVER'] },
     })
     expect(protectedRequest).toHaveBeenNthCalledWith(2,
-      `/admin/internal-users/${userId}/password-setup`, { method: 'POST' })
+      `/admin/internal-users/${userId}/password-setup`, { method: 'POST', responseType: 'empty' })
+  })
+
+  it('accepts the controller’s empty HTTP 200 response without reporting uncertainty or resending', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 200 }))
+    vi.stubGlobal('fetch', fetchMock)
+    const protectedRequest = (path: string, options?: ApiRequestOptions) => apiRequest(path, options)
+    await expect(sendInternalUserPasswordSetup({ protectedRequest } as unknown as AuthSessionManager,
+      '00000000-0000-0000-0000-000000000304')).resolves.toBeUndefined()
+    expect(fetchMock).toHaveBeenCalledTimes(1)
   })
 })
