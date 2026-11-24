@@ -2,6 +2,9 @@ package com.meridian.platform.identity.infrastructure.security;
 
 import com.meridian.platform.partner.application.dto.PartnerCompanyDto;
 import com.meridian.platform.partner.application.dto.PartnerEmployeeImportResultDto;
+import com.meridian.platform.partner.application.dto.PartnerEmployeeImportBatchDetailDto;
+import com.meridian.platform.partner.application.dto.PartnerEmployeeDto;
+import com.meridian.platform.shared.domain.exception.EntityNotFoundException;
 import com.meridian.platform.partner.application.port.in.ImportPartnerEmployeesUseCase;
 import com.meridian.platform.partner.application.port.in.ManagePartnerCompanyUseCase;
 import com.meridian.platform.partner.application.port.in.QueryPartnerCompanyUseCase;
@@ -27,6 +30,8 @@ import java.util.UUID;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -110,6 +115,55 @@ class PartnerAdministrationSecurityTest {
                     .andExpect(status().isForbidden());
         }
         mockMvc.perform(get(path, COMPANY_ID)).andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void historicalDetailRequiresExactReadAndExposesOnlySafeBatchEvidence() throws Exception {
+        UUID batchId = UUID.randomUUID();
+        var employee = new PartnerEmployeeDto(UUID.randomUUID(), COMPANY_ID, batchId, "EMP-HISTORICAL",
+                "****1234", BigDecimal.TEN, BigDecimal.ONE, "ACTIVE", true);
+        when(queryPartnerEmployeeImportBatchUseCase.getImportBatch(COMPANY_ID, batchId)).thenReturn(
+                new PartnerEmployeeImportBatchDetailDto(batchId, COMPANY_ID, "2026-08", "COMPLETED",
+                        1, 0, List.of(employee), List.of()));
+        String path = "/api/v1/partner-companies/{companyId}/employee-import-batches/{batchId}";
+        mockMvc.perform(get(path, COMPANY_ID, batchId).with(authority("partner:read")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(batchId.toString()))
+                .andExpect(jsonPath("$.employees[0].maskedIdentityReference").value("****1234"))
+                .andExpect(jsonPath("$.employees[0].identityReference").doesNotExist())
+                .andExpect(jsonPath("$.requestId").doesNotExist())
+                .andExpect(jsonPath("$.requestFingerprint").doesNotExist());
+        for (String denied : List.of("partner:manage", "partner:read:all", "partner:*", "BACK_OFFICE_ADMIN")) {
+            mockMvc.perform(get(path, COMPANY_ID, batchId).with(authority(denied)))
+                    .andExpect(status().isForbidden());
+        }
+        mockMvc.perform(get(path, COMPANY_ID, batchId)).andExpect(status().isUnauthorized());
+        verifyNoInteractions(importPartnerEmployeesUseCase, managePartnerCompanyUseCase);
+    }
+
+    @Test
+    void historicalFailureAndNotFoundKeepTheirRecordedReadSemantics() throws Exception {
+        UUID batchId = UUID.randomUUID();
+        String path = "/api/v1/partner-companies/{companyId}/employee-import-batches/{batchId}";
+        when(queryPartnerEmployeeImportBatchUseCase.getImportBatch(COMPANY_ID, batchId)).thenReturn(
+                new PartnerEmployeeImportBatchDetailDto(batchId, COMPANY_ID, "2026-08", "FAILED", 1, 1,
+                        List.of(), List.of(new PartnerEmployeeImportResultDto.RowRejection(
+                                2, "INVALID_EMPLOYEE_CODE", "Employee code is required."))));
+        mockMvc.perform(get(path, COMPANY_ID, batchId).with(authority("partner:read")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.employees").isEmpty())
+                .andExpect(jsonPath("$.validRowCount").value(1))
+                .andExpect(jsonPath("$.rejections[0].rowIndex").value(2));
+        when(queryPartnerEmployeeImportBatchUseCase.getImportBatch(COMPANY_ID, batchId))
+                .thenThrow(new EntityNotFoundException("PARTNER_EMPLOYEE_IMPORT_BATCH_NOT_FOUND",
+                        "Partner employee import batch was not found."));
+        mockMvc.perform(get(path, COMPANY_ID, batchId).with(authority("partner:read")))
+                .andExpect(status().isNotFound());
+        doThrow(new EntityNotFoundException("PARTNER_COMPANY_NOT_FOUND", "Partner company was not found."))
+                .when(queryPartnerEmployeeImportBatchUseCase).getImportBatch(COMPANY_ID, batchId);
+        mockMvc.perform(get(path, COMPANY_ID, batchId).with(authority("partner:read")))
+                .andExpect(status().isNotFound());
+        verifyNoInteractions(importPartnerEmployeesUseCase, managePartnerCompanyUseCase);
     }
 
     private static String companyRequest() {

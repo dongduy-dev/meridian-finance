@@ -8,6 +8,8 @@ import java.util.UUID;
 
 public interface PartnerEmployeeImportBatchRepository {
 
+    Optional<PartnerEmployeeImportBatch> findByPartnerCompanyIdAndId(UUID partnerCompanyId, UUID batchId);
+
     List<PartnerEmployeeImportBatch> findByPartnerCompanyId(UUID partnerCompanyId);
 
     Optional<PartnerEmployeeImportBatch> findLatestCompletedByPartnerCompanyId(UUID partnerCompanyId);

@@ -12,6 +12,8 @@ import java.util.UUID;
 public interface JpaPartnerEmployeeImportBatchRepository
         extends JpaRepository<PartnerEmployeeImportBatchJpaEntity, UUID> {
 
+    Optional<PartnerEmployeeImportBatchJpaEntity> findByPartnerCompanyIdAndId(UUID partnerCompanyId, UUID batchId);
+
     List<PartnerEmployeeImportBatchJpaEntity> findByPartnerCompanyIdOrderByEffectiveMonthDesc(UUID partnerCompanyId);
 
     Optional<PartnerEmployeeImportBatchJpaEntity> findFirstByPartnerCompanyIdAndStatusOrderByEffectiveMonthDescCreatedAtDescIdDesc(
