@@ -5,6 +5,15 @@ export const productOptions = [
   ['COLLATERAL_LOAN', 'Collateral Loan'],
 ] as const
 
+export const originationChannelOptions = [
+  ['CUSTOMER_DIGITAL', 'Customer digital'],
+  ['STAFF_ASSISTED', 'Staff assisted'],
+] as const
+
+export function originationChannelLabel(value: string): string {
+  return originationChannelOptions.find(([code]) => code === value)?.[1] ?? 'Channel unavailable'
+}
+
 export const applicationStatusOptions = [
   'DRAFT',
   'SUBMITTED',
