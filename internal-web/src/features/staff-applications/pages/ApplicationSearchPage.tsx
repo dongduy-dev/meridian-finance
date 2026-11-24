@@ -88,6 +88,7 @@ export function ApplicationSearchPage() {
   const data = canRead && !invalidFilters ? query.data : undefined
   const filtered = Boolean(productCode || status || applicationNumber || originationChannel || submittedFrom || submittedTo)
   const outOfRange = data && data.page > 0 && data.page >= data.totalPages
+  const showApplicationNumberHelp = searchError || draft.value !== applicationNumber
 
   return (
     <section className="mx-auto max-w-[90rem] space-y-6">
@@ -114,15 +115,14 @@ export function ApplicationSearchPage() {
           <div className="flex flex-col gap-2 sm:max-w-xl sm:flex-row">
             <Input id="application-number-search" value={draft.value} maxLength={APPLICATION_NUMBER_MAX_LENGTH}
               autoComplete="off" spellCheck={false} placeholder="e.g. UCL-20260902-000001"
-              aria-invalid={searchError} aria-describedby="application-number-help"
+              aria-invalid={searchError} aria-describedby={showApplicationNumberHelp ? 'application-number-help' : undefined}
               onChange={(event) => { setDraft({ source: applicationNumber, value: event.target.value }); setSearchError(false) }} />
             <Button type="submit"><Search aria-hidden="true" /> Search</Button>
           </div>
-          <p id="application-number-help" role={searchError ? 'alert' : undefined} className="text-sm text-muted-foreground">
+          {showApplicationNumberHelp ? <p id="application-number-help" role={searchError ? 'alert' : undefined} className="text-sm text-muted-foreground">
             {searchError ? 'Enter a complete SA, UCL, or CL application number, such as UCL-20260902-000001.'
-              : draft.value !== applicationNumber ? 'Select Search or press Enter to apply this number. Results still use the applied filters.'
-                : 'Use the full business reference. Leave blank to search all application numbers.'}
-          </p>
+              : 'Select Search or press Enter to apply this number. Results still use the applied filters.'}
+          </p> : null}
         </form>
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
           <label className="grid gap-2 text-sm font-semibold">
@@ -160,17 +160,16 @@ export function ApplicationSearchPage() {
           <label className="grid gap-2 text-sm font-semibold">
             Submitted from
             <Input type="date" min={submissionDateMin} max={submissionDateMax} value={submittedFrom}
-              aria-invalid={!validDateRange} aria-describedby="submission-date-help"
+              aria-invalid={!validDateRange} aria-describedby={!validDateRange ? 'application-filter-error' : undefined}
               onChange={(event) => updateFilter('submittedFrom', event.target.value)} />
           </label>
           <label className="grid gap-2 text-sm font-semibold">
             Submitted to
             <Input type="date" min={submissionDateMin} max={submissionDateMax} value={submittedTo}
-              aria-invalid={!validDateRange} aria-describedby="submission-date-help"
+              aria-invalid={!validDateRange} aria-describedby={!validDateRange ? 'application-filter-error' : undefined}
               onChange={(event) => updateFilter('submittedTo', event.target.value)} />
           </label>
         </div>
-        <p id="submission-date-help" className="mt-2 text-sm text-muted-foreground">Both dates include the whole day in Vietnam time (Asia/Ho_Chi_Minh).</p>
         <Button className="mt-4" variant="outline" onClick={reset} disabled={!invalidFilters && !filtered && page === 0 && !draft.value}>
           <FilterX aria-hidden="true" /> Reset filters
         </Button>
@@ -180,7 +179,7 @@ export function ApplicationSearchPage() {
         <Alert variant="warning">
           <Search aria-hidden="true" />
           <AlertTitle>Invalid application filters</AlertTitle>
-          <AlertDescription>
+          <AlertDescription id="application-filter-error">
             Use a complete application number, supported product, status and channel, valid dates with Submitted from on or before Submitted to, and a valid page. Correct the filters or reset them to search again.
             <Button className="mt-3" variant="outline" onClick={reset}>Reset filters</Button>
           </AlertDescription>
