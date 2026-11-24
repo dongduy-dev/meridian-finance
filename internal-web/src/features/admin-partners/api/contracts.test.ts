@@ -5,6 +5,7 @@ import {
   partnerCompanySchema,
   partnerEligibilityReviewPageSchema,
   partnerEmployeeSchema,
+  partnerImportBatchDetailSchema,
 } from './contracts'
 
 describe('Partner administration contracts', () => {
@@ -77,5 +78,25 @@ describe('Partner administration contracts', () => {
     const row = { employeeCode: 'EMP-1', identityReference: 'ID-1', salaryAmount: 1, salaryAdvanceLimit: 1, employmentStatus: 'ACTIVE', active: true }
     expect(importPartnerEmployeesInputSchema.safeParse({ effectiveMonth: '2026-99', rows: [row] }).success).toBe(false)
     expect(importPartnerEmployeesInputSchema.safeParse({ effectiveMonth: '2026-09', rows: [{ ...row, salaryAmount: -1 }] }).success).toBe(false)
+  })
+
+  it('validates historical roster ownership, terminal status and masked-only values', () => {
+    const batchId = '33333333-3333-4333-8333-333333333333'
+    const employee = { id: '44444444-4444-4444-8444-444444444444', partnerCompanyId: partnerCompany.id,
+      importBatchId: batchId, employeeCode: 'EMP-HISTORY', maskedIdentityReference: '****1234',
+      salaryAmount: 1, salaryAdvanceLimit: 1, employmentStatus: 'ACTIVE', active: true }
+    const detail = { id: batchId, partnerCompanyId: partnerCompany.id, effectiveMonth: '2026-09',
+      status: 'COMPLETED', validRowCount: 1, invalidRowCount: 0, employees: [employee], rejections: [] }
+    expect(partnerImportBatchDetailSchema.parse(detail).employees).toHaveLength(1)
+    expect(partnerImportBatchDetailSchema.safeParse({ ...detail, employees: [{ ...employee, importBatchId: employee.id }] }).success).toBe(false)
+    expect(partnerImportBatchDetailSchema.safeParse({ ...detail, employees: [{ ...employee, partnerCompanyId: employee.id }] }).success).toBe(false)
+    expect(partnerImportBatchDetailSchema.safeParse({ ...detail, employees: [{ ...employee, maskedIdentityReference: 'RAW-IDENTITY' }] }).success).toBe(false)
+    for (const status of ['FAILED', 'PENDING', 'PROCESSING', 'UNKNOWN']) {
+      expect(partnerImportBatchDetailSchema.safeParse({ ...detail, status }).success).toBe(false)
+      expect(partnerImportBatchDetailSchema.safeParse({ ...detail, status, employees: [] }).success).toBe(true)
+    }
+    const parsed = partnerImportBatchDetailSchema.parse({ ...detail, requestId: 'PRIVATE', requestFingerprint: 'PRIVATE',
+      employees: [{ ...employee, identityReference: 'PRIVATE' }] })
+    expect(JSON.stringify(parsed)).not.toContain('PRIVATE')
   })
 })

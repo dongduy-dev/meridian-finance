@@ -9,6 +9,7 @@ import * as authApi from '@/features/auth/api/auth-api'
 import { AuthProvider } from '@/features/auth/model/auth-context'
 import * as api from '@/lib/api'
 import { ApiError, NetworkError } from '@/lib/api'
+import { partnerAdminKeys } from '../api/queries'
 import { createQueryClient } from '@/lib/query/query-client'
 
 vi.mock('@/features/auth/api/auth-api', async () => {
@@ -39,7 +40,9 @@ const actor = (permissions: string[]): AuthResponse => ({
 
 function renderPath(path: string) {
   const router = createTestRouter([path])
-  render(<QueryClientProvider client={createQueryClient()}><AuthProvider><RouterProvider router={router} /></AuthProvider></QueryClientProvider>)
+  const client = createQueryClient()
+  const rendered = render(<QueryClientProvider client={client}><AuthProvider><RouterProvider router={router} /></AuthProvider></QueryClientProvider>)
+  return { router, client, ...rendered }
 }
 
 function storedBrowserText() {
@@ -66,6 +69,157 @@ describe('Partner administration pages', () => {
     sessionStorage.clear()
     localStorage.clear()
     mockReads()
+  })
+
+  const historicalId = '44444444-4444-4444-8444-444444444444'
+  const historicalBatch = { id: historicalId, partnerCompanyId: companyId, effectiveMonth: '2026-09', status: 'COMPLETED', validRowCount: 1, invalidRowCount: 0 }
+  const historicalDetail = { ...historicalBatch, employees: [{ ...employee, importBatchId: historicalId, employeeCode: 'EMP-HISTORICAL' }], rejections: [] }
+  const currentBatch = { ...historicalBatch, id: employee.importBatchId }
+  const currentDetail = { ...currentBatch, employees: [employee], rejections: [] }
+  function historyReads(detailRead: (id: string) => unknown = (id) => id === historicalId ? historicalDetail : currentDetail) {
+    vi.mocked(api.apiRequest).mockImplementation(async (path) => {
+      if (String(path).endsWith('/employees/current')) return snapshot
+      if (String(path).endsWith('/employee-import-batches')) return [historicalBatch, currentBatch]
+      if (String(path) === `/partner-companies/${companyId}`) return company
+      if (String(path).includes('/employee-import-batches/')) return detailRead(String(path).split('/').at(-1) ?? '')
+      throw new Error('Unexpected read')
+    })
+  }
+  function historyActions() {
+    return within(screen.getByRole('table', { name: 'Employee import history' })).getAllByRole('button', { name: /View details/ })
+  }
+
+  it('loads only the selected historical roster for a reader and returns keyboard focus on close', async () => {
+    vi.mocked(authApi.refresh).mockResolvedValue(actor(['partner:read']))
+    historyReads()
+    const user = userEvent.setup()
+    const { router, client } = renderPath(`/admin/partners/${companyId}`)
+    await screen.findByRole('table', { name: 'Employee import history' })
+    expect(vi.mocked(api.apiRequest).mock.calls.filter(([path]) => String(path).includes('/employee-import-batches/'))).toHaveLength(0)
+    const trigger = historyActions()[0]!
+    trigger.focus()
+    await user.keyboard('{Enter}')
+    const dialog = await screen.findByRole('dialog', { name: 'Employee import details' })
+    expect(await within(dialog).findByText('EMP-HISTORICAL')).toBeVisible()
+    expect(within(dialog).getByText('Historical')).toBeVisible()
+    expect(within(dialog).getByText('****CRET')).toBeVisible()
+    expect(within(dialog).queryByRole('button', { name: /Import employees|Save details/ })).not.toBeInTheDocument()
+    expect(screen.getByRole('table', { name: 'Current Partner employees', hidden: true })).not.toHaveTextContent('EMP-HISTORICAL')
+    expect(router.state.location.pathname).toBe(`/admin/partners/${companyId}`)
+    expect(router.state.location.search).toBe('')
+    expect(storedBrowserText()).not.toContain('EMP-HISTORICAL')
+    expect(storedBrowserText()).not.toContain('CRET')
+    expect(JSON.stringify(client.getQueryCache().getAll().map((query) => query.queryKey))).not.toContain('EMP-HISTORICAL')
+    await user.keyboard('{Escape}')
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    expect(trigger).toHaveFocus()
+    await waitFor(() => expect(client.getQueryData(partnerAdminKeys.importBatch(companyId, historicalId))).toBeUndefined())
+  })
+
+  it('isolates sequential selection and marks Current only from the separate snapshot', async () => {
+    vi.mocked(authApi.refresh).mockResolvedValue(actor(['partner:read']))
+    historyReads()
+    const user = userEvent.setup()
+    renderPath(`/admin/partners/${companyId}`)
+    await screen.findByRole('table', { name: 'Employee import history' })
+    await user.click(historyActions()[0]!)
+    await screen.findByText('EMP-HISTORICAL')
+    await user.click(screen.getByRole('button', { name: 'Close details' }))
+    await user.click(historyActions()[1]!)
+    const dialog = await screen.findByRole('dialog')
+    expect(await within(dialog).findByText('EMP-001')).toBeVisible()
+    expect(within(dialog).getByText('Current')).toBeVisible()
+    expect(within(dialog).queryByText('EMP-HISTORICAL')).not.toBeInTheDocument()
+    const paths = vi.mocked(api.apiRequest).mock.calls.map(([path]) => String(path))
+    expect(paths).toContain(`/partner-companies/${companyId}/employee-import-batches/${historicalId}`)
+    expect(paths).toContain(`/partner-companies/${companyId}/employee-import-batches/${employee.importBatchId}`)
+    expect(paths.every((path) => !path.includes('EMP-') && !path.includes('CRET'))).toBe(true)
+  })
+
+  it.each(['FAILED', 'PENDING', 'PROCESSING', 'FUTURE_STATE'])('does not imply a successful roster for %s', async (status) => {
+    vi.mocked(authApi.refresh).mockResolvedValue(actor(['partner:read']))
+    historyReads(() => ({ ...historicalBatch, status, validRowCount: 1, invalidRowCount: 1, employees: [],
+      rejections: status === 'FAILED' ? [{ rowIndex: 2, errorCode: 'INVALID_SALARY_AMOUNT', reason: 'Safe rejection.' }] : [] }))
+    const user = userEvent.setup()
+    renderPath(`/admin/partners/${companyId}`)
+    await screen.findByRole('table', { name: 'Employee import history' })
+    await user.click(historyActions()[0]!)
+    const dialog = await screen.findByRole('dialog')
+    expect(await within(dialog).findByText(status === 'FAILED' ? /No employee rows were imported/ : /This import is not completed/)).toBeVisible()
+    expect(within(dialog).queryByRole('table')).not.toBeInTheDocument()
+    if (status === 'FAILED') expect(within(dialog).getByText(/Row 2:/)).toBeVisible()
+  })
+
+  it('handles loading, a safe error and explicit retry without retaining the previous roster', async () => {
+    vi.mocked(authApi.refresh).mockResolvedValue(actor(['partner:read']))
+    let rejectRead: (error: Error) => void = () => {}
+    let attempts = 0
+    historyReads(() => {
+      attempts += 1
+      if (attempts === 1) return new Promise((_resolve, reject) => { rejectRead = reject })
+      return { ...historicalDetail, employees: [] }
+    })
+    const user = userEvent.setup()
+    renderPath(`/admin/partners/${companyId}`)
+    await screen.findByRole('table', { name: 'Employee import history' })
+    await user.click(historyActions()[0]!)
+    expect(await screen.findByText('Loading import details…')).toBeVisible()
+    rejectRead(new ApiError(400, 'VALIDATION_ERROR', 'Safe error', '/safe', '2026-09-01T00:00:00Z'))
+    expect(await screen.findByText('Partner data unavailable')).toBeVisible()
+    await user.click(screen.getByRole('button', { name: 'Try again' }))
+    expect(await screen.findByText('This completed import has no employee rows.')).toBeVisible()
+    expect(attempts).toBe(2)
+  })
+
+  it('conceals a missing batch and handles a selection removed from refreshed history', async () => {
+    vi.mocked(authApi.refresh).mockResolvedValue(actor(['partner:read']))
+    historyReads(() => { throw new ApiError(404, 'PARTNER_EMPLOYEE_IMPORT_BATCH_NOT_FOUND', 'Missing', '/safe', '2026-09-01T00:00:00Z') })
+    const user = userEvent.setup()
+    const { client } = renderPath(`/admin/partners/${companyId}`)
+    await screen.findByRole('table', { name: 'Employee import history' })
+    await user.click(historyActions()[0]!)
+    expect(await screen.findByText(/The selected import is unavailable for this Partner Company/)).toBeVisible()
+    client.setQueryData(partnerAdminKeys.importBatches(companyId), [])
+    expect(await screen.findByText(/The selected import is no longer available in this history/)).toBeVisible()
+    await user.click(screen.getByRole('button', { name: 'Close details' }))
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Employee import history' })).toHaveFocus())
+  })
+
+  it('keeps selected evidence available without guessing authority when the snapshot read fails', async () => {
+    vi.mocked(authApi.refresh).mockResolvedValue(actor(['partner:read']))
+    historyReads()
+    const read = vi.mocked(api.apiRequest).getMockImplementation()!
+    vi.mocked(api.apiRequest).mockImplementation(async (path, options) => {
+      if (String(path).endsWith('/employees/current')) throw new ApiError(400, 'VALIDATION_ERROR', 'Safe error', '/safe', '2026-09-01T00:00:00Z')
+      return read(path, options)
+    })
+    const user = userEvent.setup()
+    renderPath(`/admin/partners/${companyId}`)
+    await screen.findByRole('table', { name: 'Employee import history' })
+    await user.click(historyActions()[0]!)
+    const dialog = await screen.findByRole('dialog')
+    expect(await within(dialog).findByText('EMP-HISTORICAL')).toBeVisible()
+    expect(within(dialog).getByText('Current authority unavailable')).toBeVisible()
+    expect(within(dialog).queryByText('Historical')).not.toBeInTheDocument()
+    expect(within(dialog).queryByText('Current')).not.toBeInTheDocument()
+  })
+
+  it('copies the exact import ID with success and failure feedback without prominent UUIDs', async () => {
+    vi.mocked(authApi.refresh).mockResolvedValue(actor(['partner:read']))
+    historyReads()
+    const user = userEvent.setup()
+    const clipboard = vi.spyOn(navigator.clipboard, 'writeText').mockResolvedValue(undefined)
+    renderPath(`/admin/partners/${companyId}`)
+    const history = await screen.findByRole('table', { name: 'Employee import history' })
+    const buttons = within(history).getAllByRole('button', { name: 'Copy import ID' })
+    expect(history).not.toHaveTextContent(historicalId)
+    await user.click(buttons[0]!)
+    expect(clipboard).toHaveBeenCalledWith(historicalId)
+    expect(await within(history).findByText('Import ID copied.')).toBeVisible()
+    clipboard.mockRejectedValueOnce(new Error('Clipboard denied'))
+    await user.click(buttons[0]!)
+    expect(await within(history).findByText('Could not copy import ID. Try again.')).toBeVisible()
+    clipboard.mockRestore()
   })
 
   it('shows masked employee identity on the authorized detail route without raw references or storage', async () => {
@@ -106,12 +260,12 @@ describe('Partner administration pages', () => {
     expect(table).toHaveTextContent('EMP-001')
     expect(table.querySelectorAll('tbody tr')).toHaveLength(1)
     expect(screen.getByText('2026-09', { selector: 'dd' })).toBeVisible()
-    expect(screen.getByText(employee.importBatchId, { selector: 'dd' })).toBeVisible()
+    expect(screen.queryByText(employee.importBatchId)).not.toBeInTheDocument()
     const history = screen.getByRole('table', { name: 'Employee import history' })
-    expect(within(history).getByText(employee.importBatchId).closest('tr')).toHaveTextContent('Current')
-    for (const id of [olderId, failedId, pendingId]) {
-      expect(within(history).getByText(id).closest('tr')).not.toHaveTextContent('Current')
-    }
+    const rows = within(history).getAllByRole('row').slice(1)
+    expect(rows[1]).toHaveTextContent('Current')
+    for (const index of [0, 2, 3]) expect(rows[index]).toHaveTextContent('Historical')
+    expect(within(history).getAllByRole('button', { name: /View details/ })).toHaveLength(4)
   })
 
   it('shows no current snapshot without displaying historical employees and retains history', async () => {
@@ -127,7 +281,8 @@ describe('Partner administration pages', () => {
     expect(await screen.findByText(/No completed employee import is available for 2026-09/)).toBeVisible()
     expect(screen.queryByRole('table', { name: 'Current Partner employees' })).not.toBeInTheDocument()
     const history = screen.getByRole('table', { name: 'Employee import history' })
-    expect(history).toHaveTextContent(employee.importBatchId)
+    expect(history).toHaveTextContent('2026-08')
+    expect(history).toHaveTextContent('Historical')
     expect(history).not.toHaveTextContent('Current')
   })
 
@@ -323,7 +478,7 @@ describe('Partner administration pages', () => {
     })
     expect(screen.getByRole('table', { name: 'Current Partner employees' })).toHaveTextContent('EMP-001')
     expect(screen.getByRole('table', { name: 'Current Partner employees' })).not.toHaveTextContent('EMP-NEW')
-    expect(within(screen.getByRole('table', { name: 'Employee import history' })).getByText(newBatchId).closest('tr')).not.toHaveTextContent('Current')
+    expect(screen.getByRole('table', { name: 'Employee import history' })).toHaveTextContent('Historical')
   })
 
   it('treats an idempotency conflict as definitive and does not offer exact retry', async () => {

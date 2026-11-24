@@ -54,6 +54,17 @@ export const partnerImportResultSchema = z.object({
   })),
 })
 
+export const partnerImportBatchDetailSchema = partnerImportBatchSchema.extend({
+  employees: partnerEmployeeSchema.array(),
+  rejections: partnerImportResultSchema.shape.rejections,
+}).superRefine((detail, context) => {
+  if (detail.employees.some((employee) => employee.partnerCompanyId !== detail.partnerCompanyId
+    || employee.importBatchId !== detail.id)
+    || (detail.status !== 'COMPLETED' && detail.employees.length > 0)) {
+    context.addIssue({ code: 'custom', message: 'Import roster does not match the selected batch.' })
+  }
+})
+
 export const createPartnerCompanyInputSchema = z.object({
   companyCode: z.string().trim().min(1).max(50),
   name: z.string().trim().min(1).max(200),
@@ -159,6 +170,7 @@ export type PartnerCompany = z.infer<typeof partnerCompanySchema>
 export type PartnerEmployee = z.infer<typeof partnerEmployeeSchema>
 export type CurrentPartnerEmployeeSnapshot = z.infer<typeof currentPartnerEmployeeSnapshotSchema>
 export type PartnerImportBatch = z.infer<typeof partnerImportBatchSchema>
+export type PartnerImportBatchDetail = z.infer<typeof partnerImportBatchDetailSchema>
 export type PartnerImportResult = z.infer<typeof partnerImportResultSchema>
 export type CreatePartnerCompanyInput = z.infer<typeof createPartnerCompanyInputSchema>
 export type UpdatePartnerCompanyInput = z.infer<typeof updatePartnerCompanyInputSchema>
