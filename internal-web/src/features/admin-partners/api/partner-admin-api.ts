@@ -4,6 +4,7 @@ import {
   partnerEmployeeSchema,
   currentPartnerEmployeeSnapshotSchema,
   partnerImportBatchSchema,
+  partnerImportBatchDetailSchema,
   partnerImportResultSchema,
   partnerEligibilityReviewSchema,
   partnerEligibilityReviewPageSchema,
@@ -13,6 +14,7 @@ import {
   type PartnerEmployee,
   type CurrentPartnerEmployeeSnapshot,
   type PartnerImportBatch,
+  type PartnerImportBatchDetail,
   type PartnerImportResult,
   type UpdatePartnerCompanyInput,
   type PartnerEligibilityReview,
@@ -38,6 +40,16 @@ export async function getCurrentPartnerEmployeeSnapshot(manager: AuthSessionMana
 
 export async function getPartnerImportBatches(manager: AuthSessionManager, id: string): Promise<PartnerImportBatch[]> {
   return partnerImportBatchSchema.array().parse(await manager.protectedRequest<unknown>(`/partner-companies/${id}/employee-import-batches`))
+}
+
+export async function getPartnerImportBatch(manager: AuthSessionManager, id: string, batchId: string): Promise<PartnerImportBatchDetail> {
+  const detail = partnerImportBatchDetailSchema.parse(await manager.protectedRequest<unknown>(
+    `/partner-companies/${id}/employee-import-batches/${batchId}`,
+  ))
+  if (detail.partnerCompanyId.toLowerCase() !== id.toLowerCase() || detail.id.toLowerCase() !== batchId.toLowerCase()) {
+    throw new Error('Import detail identity mismatch.')
+  }
+  return detail
 }
 
 export async function createPartnerCompany(manager: AuthSessionManager, input: CreatePartnerCompanyInput): Promise<PartnerCompany> {

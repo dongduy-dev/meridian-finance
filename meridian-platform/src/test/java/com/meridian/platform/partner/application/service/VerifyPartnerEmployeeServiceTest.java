@@ -571,6 +571,12 @@ class VerifyPartnerEmployeeServiceTest {
         }
 
         @Override
+        public Optional<PartnerEmployeeImportBatch> findByPartnerCompanyIdAndId(UUID partnerCompanyId, UUID batchId) {
+            return latestCompletedBatch.filter(batch -> batch.partnerCompanyId().equals(partnerCompanyId)
+                    && batch.id().equals(batchId));
+        }
+
+        @Override
         public List<PartnerEmployeeImportBatch> findByPartnerCompanyId(UUID partnerCompanyId) {
             return latestCompletedBatch.stream().toList();
         }

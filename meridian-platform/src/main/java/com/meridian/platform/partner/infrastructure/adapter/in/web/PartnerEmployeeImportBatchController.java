@@ -1,6 +1,7 @@
 package com.meridian.platform.partner.infrastructure.adapter.in.web;
 
 import com.meridian.platform.partner.application.dto.PartnerEmployeeImportBatchDto;
+import com.meridian.platform.partner.application.dto.PartnerEmployeeImportBatchDetailDto;
 import com.meridian.platform.partner.application.dto.ImportPartnerEmployeesRequest;
 import com.meridian.platform.partner.application.dto.PartnerEmployeeImportResultDto;
 import com.meridian.platform.partner.application.port.in.ImportPartnerEmployeesUseCase;
@@ -40,6 +41,15 @@ public class PartnerEmployeeImportBatchController {
             @PathVariable UUID partnerCompanyId
     ) {
         return queryImportBatchUseCase.getImportBatchesByPartnerCompanyId(partnerCompanyId);
+    }
+
+    @GetMapping("/{batchId}")
+    @PreAuthorize("hasAuthority('partner:read')")
+    public PartnerEmployeeImportBatchDetailDto getImportBatch(
+            @PathVariable UUID partnerCompanyId,
+            @PathVariable UUID batchId
+    ) {
+        return queryImportBatchUseCase.getImportBatch(partnerCompanyId, batchId);
     }
 
     @PostMapping

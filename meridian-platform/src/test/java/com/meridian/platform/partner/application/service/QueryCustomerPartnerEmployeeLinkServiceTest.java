@@ -383,6 +383,12 @@ class QueryCustomerPartnerEmployeeLinkServiceTest {
         }
 
         @Override
+        public Optional<PartnerEmployeeImportBatch> findByPartnerCompanyIdAndId(UUID partnerCompanyId, UUID batchId) {
+            return authoritativeBatch.filter(batch -> batch.partnerCompanyId().equals(partnerCompanyId)
+                    && batch.id().equals(batchId));
+        }
+
+        @Override
         public List<PartnerEmployeeImportBatch> findByPartnerCompanyId(UUID partnerCompanyId) {
             return authoritativeBatch.stream().toList();
         }

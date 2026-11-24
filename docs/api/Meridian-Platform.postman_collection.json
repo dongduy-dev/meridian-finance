@@ -5764,6 +5764,65 @@
                                                                    }
                                                     }
                                                 ]
+                                  },
+                                  {
+                                      "name": "GET /api/v1/partner-companies/{partnerCompanyId}/employee-import-batches/{batchId}",
+                                      "request": {
+                                          "method": "GET",
+                                          "header": [],
+                                          "url": {
+                                              "raw": "{{baseUrl}}/api/v1/partner-companies/{{partnerAdminManagedCompanyId}}/employee-import-batches/{{partnerImportBatchId}}",
+                                              "host": [
+                                                  "{{baseUrl}}"
+                                              ],
+                                              "path": [
+                                                  "api",
+                                                  "v1",
+                                                  "partner-companies",
+                                                  "{{partnerAdminManagedCompanyId}}",
+                                                  "employee-import-batches",
+                                                  "{{partnerImportBatchId}}"
+                                              ]
+                                          },
+                                          "auth": {
+                                              "type": "bearer",
+                                              "bearer": [
+                                                  {
+                                                      "key": "token",
+                                                      "value": "{{backOfficeAccessToken}}",
+                                                      "type": "string"
+                                                  }
+                                              ]
+                                          },
+                                          "description": "Requires exact partner:read. Inspect one company-owned historical import without changing current authority. Uses IDs captured by the Partner Admin import example, which records FAILED, or privately supplied matching company/batch IDs. Unknown or foreign-company batches return 404. Raw identity, submitted rows, request IDs/fingerprints and audit internals are excluded."
+                                      },
+                                      "response": [],
+                                      "event": [
+                                          {
+                                              "listen": "test",
+                                              "script": {
+                                                  "type": "text/javascript",
+                                                  "exec": [
+                                                      "pm.test(\"Selected batch evidence is scoped and masked\", function () {",
+                                                      "    pm.response.to.have.status(200);",
+                                                      "    const json = pm.response.json();",
+                                                      "    pm.expect(json.id).to.eql(pm.variables.get(\"partnerImportBatchId\"));",
+                                                      "    pm.expect(json.partnerCompanyId).to.eql(pm.variables.get(\"partnerAdminManagedCompanyId\"));",
+                                                      "    [\"identityReference\", \"rows\", \"requestId\", \"requestFingerprint\", \"audit\"].forEach(function (key) { pm.expect(json).not.to.have.property(key); });",
+                                                      "    pm.expect(json.rejections).to.be.an(\"array\");",
+                                                      "    pm.expect(json.employees).to.be.an(\"array\");",
+                                                      "    if (json.status !== \"COMPLETED\") pm.expect(json.employees).to.eql([]);",
+                                                      "    json.employees.forEach(function (employee) {",
+                                                      "        pm.expect(employee.partnerCompanyId).to.eql(json.partnerCompanyId);",
+                                                      "        pm.expect(employee.importBatchId).to.eql(json.id);",
+                                                      "        pm.expect(employee.maskedIdentityReference).to.match(/^\\*{4}.{0,4}$/);",
+                                                      "        pm.expect(employee).not.to.have.property(\"identityReference\");",
+                                                      "    });",
+                                                      "});"
+                                                  ]
+                                              }
+                                          }
+                                      ]
                                   }
                               ]
                  },

@@ -1,5 +1,6 @@
 import { queryOptions } from '@tanstack/react-query'
 import type { AuthSessionManager } from '@/features/auth/model/auth-session'
+import { meridianUuidSchema } from '@/lib/validation/meridian-uuid'
 import {
   getPartnerCompanies,
   getPartnerCompany,
@@ -8,6 +9,7 @@ import {
   getPartnerEmployees,
   getCurrentPartnerEmployeeSnapshot,
   getPartnerImportBatches,
+  getPartnerImportBatch,
 } from './partner-admin-api'
 
 export const partnerAdminKeys = {
@@ -17,6 +19,7 @@ export const partnerAdminKeys = {
   employees: (id: string) => [...partnerAdminKeys.all, 'employees', id] as const,
   currentEmployees: (id: string) => [...partnerAdminKeys.all, 'current-employees', id] as const,
   importBatches: (id: string) => [...partnerAdminKeys.all, 'import-batches', id] as const,
+  importBatch: (id: string, batchId: string) => [...partnerAdminKeys.all, 'import-batch', id, batchId] as const,
   eligibilityReviews: (page: number, size: number) => [...partnerAdminKeys.all, 'eligibility-reviews', page, size] as const,
   eligibilityReview: (reviewId: string) => [...partnerAdminKeys.all, 'eligibility-review', reviewId] as const,
 }
@@ -41,6 +44,13 @@ export const currentPartnerEmployeeSnapshotQuery = (manager: AuthSessionManager,
 
 export const partnerImportBatchesQuery = (manager: AuthSessionManager, id: string, enabled: boolean) => queryOptions({
   queryKey: partnerAdminKeys.importBatches(id), queryFn: () => getPartnerImportBatches(manager, id), enabled,
+})
+
+export const partnerImportBatchQuery = (manager: AuthSessionManager, id: string, batchId: string, enabled: boolean) => queryOptions({
+  queryKey: partnerAdminKeys.importBatch(id, batchId),
+  queryFn: () => getPartnerImportBatch(manager, id, batchId),
+  enabled: enabled && meridianUuidSchema.safeParse(id).success && meridianUuidSchema.safeParse(batchId).success,
+  staleTime: 0, gcTime: 0, refetchOnWindowFocus: true,
 })
 
 export const partnerEligibilityReviewsQuery = (

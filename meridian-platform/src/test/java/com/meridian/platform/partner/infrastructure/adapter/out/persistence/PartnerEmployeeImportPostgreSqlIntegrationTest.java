@@ -8,6 +8,8 @@ import com.meridian.platform.partner.application.dto.PartnerEmployeeImportRowReq
 import com.meridian.platform.partner.application.port.in.ImportPartnerEmployeesUseCase;
 import com.meridian.platform.partner.application.port.in.QueryCustomerPartnerEmployeeLinkUseCase;
 import com.meridian.platform.partner.application.port.in.QueryPartnerEmployeeUseCase;
+import com.meridian.platform.partner.application.port.in.QueryPartnerEmployeeImportBatchUseCase;
+import com.meridian.platform.shared.domain.exception.EntityNotFoundException;
 import com.meridian.platform.partner.application.dto.CustomerPartnerEmployeeEligibilityDto;
 import com.meridian.platform.shared.application.audit.BusinessAuditPublisher;
 import com.meridian.platform.shared.application.security.AuthenticatedUser;
@@ -57,6 +59,9 @@ class PartnerEmployeeImportPostgreSqlIntegrationTest {
 
     @Autowired
     private QueryPartnerEmployeeUseCase employeeQueries;
+
+    @Autowired
+    private QueryPartnerEmployeeImportBatchUseCase batchQueries;
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
@@ -192,6 +197,51 @@ class PartnerEmployeeImportPostgreSqlIntegrationTest {
         assertEquals(3, employeeQueries.getPartnerEmployeesByCompanyId(companyId, false).size());
         assertEquals(1, employeeQueries.getPartnerEmployeesByCompanyId(companyId, false).stream()
                 .filter(row -> row.importBatchId().equals(older.importBatchId())).count());
+    }
+
+    @Test
+    void historicalDetailsRetainOriginalRostersAndFailuresWithoutChangingCurrentAuthority() {
+        UUID companyId = createCompany("ACTIVE");
+        UUID otherCompanyId = createCompany("ACTIVE");
+        when(currentUserProvider.currentUser()).thenReturn(actor());
+        var first = imports.importEmployees(companyId,
+                request(UUID.randomUUID(), currentMonth(), "EMP-FIRST", "FICTIONAL-FIRST-1234", true));
+        var second = imports.importEmployees(companyId,
+                request(UUID.randomUUID(), currentMonth(), "EMP-SECOND", "FICTIONAL-SECOND-5678", true));
+        jdbcTemplate.update("UPDATE partner_employee_import_batches SET created_at = ? WHERE id = ?",
+                LocalDateTime.of(2026, 1, 1, 0, 0), first.importBatchId());
+        jdbcTemplate.update("UPDATE partner_employee_import_batches SET created_at = ? WHERE id = ?",
+                LocalDateTime.of(2026, 1, 2, 0, 0), second.importBatchId());
+        var validRow = request(UUID.randomUUID(), currentMonth(), "VALID-NOT-IMPORTED", "FICTIONAL-VALID", true)
+                .rows().getFirst();
+        var failed = imports.importEmployees(companyId, new ImportPartnerEmployeesRequest(
+                UUID.randomUUID(), currentMonth(), List.of(validRow, new PartnerEmployeeImportRowRequest(
+                        "INVALID", "FICTIONAL-INVALID", new BigDecimal("-1"), BigDecimal.ONE, "ACTIVE", true))));
+        var before = employeeQueries.getCurrentPartnerEmployeeSnapshot(companyId);
+
+        assertEquals("EMP-FIRST", batchQueries.getImportBatch(companyId, first.importBatchId())
+                .employees().getFirst().employeeCode());
+        assertEquals("****1234", batchQueries.getImportBatch(companyId, first.importBatchId())
+                .employees().getFirst().maskedIdentityReference());
+        assertEquals("EMP-SECOND", batchQueries.getImportBatch(companyId, second.importBatchId())
+                .employees().getFirst().employeeCode());
+        var failure = batchQueries.getImportBatch(companyId, failed.importBatchId());
+        assertEquals("FAILED", failure.status());
+        assertEquals(1, failure.validRowCount());
+        assertEquals(1, failure.invalidRowCount());
+        assertEquals(List.of(), failure.employees());
+        assertEquals("INVALID_SALARY_AMOUNT", failure.rejections().getFirst().errorCode());
+        assertEquals(0, count("partner_employees", "import_batch_id", failed.importBatchId()));
+        assertThrows(EntityNotFoundException.class,
+                () -> batchQueries.getImportBatch(otherCompanyId, first.importBatchId()));
+        assertThrows(EntityNotFoundException.class,
+                () -> batchQueries.getImportBatch(companyId, UUID.randomUUID()));
+        assertThrows(EntityNotFoundException.class,
+                () -> batchQueries.getImportBatch(UUID.randomUUID(), first.importBatchId()));
+        assertEquals(second.importBatchId(), before.authoritativeBatchId());
+        assertEquals(before, employeeQueries.getCurrentPartnerEmployeeSnapshot(companyId));
+        assertEquals(3, batchQueries.getImportBatchesByPartnerCompanyId(companyId).size());
+        verify(auditPublisher, times(3)).publish(any());
     }
 
     private void insertBatch(UUID companyId, String month, String status) {

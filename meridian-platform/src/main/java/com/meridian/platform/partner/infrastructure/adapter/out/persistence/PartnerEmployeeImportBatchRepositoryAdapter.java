@@ -31,6 +31,11 @@ public class PartnerEmployeeImportBatchRepositoryAdapter implements PartnerEmplo
     }
 
     @Override
+    public Optional<PartnerEmployeeImportBatch> findByPartnerCompanyIdAndId(UUID partnerCompanyId, UUID batchId) {
+        return jpaRepository.findByPartnerCompanyIdAndId(partnerCompanyId, batchId).map(this::toDomain);
+    }
+
+    @Override
     public List<PartnerEmployeeImportBatch> findByPartnerCompanyId(UUID partnerCompanyId) {
         return jpaRepository.findByPartnerCompanyIdOrderByEffectiveMonthDesc(partnerCompanyId)
                 .stream()
