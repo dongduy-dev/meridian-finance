@@ -274,7 +274,7 @@ Discovery uses server-owned queue membership and purpose-specific case reads. Sp
 |---|---|---|
 | Document review | Dedicated queue | Show honest pagination limits and direct case linking |
 | Staff correction tasks | Dedicated queue | Show proof and maker-checker constraints |
-| Cross-product application discovery | Server-filtered application index | Exact product/status filters, deterministic paging, safe rows, and direct case links |
+| Cross-product application discovery | Server-filtered application index | Exact product/status/channel filters, inclusive submission-date bounds, deterministic paging, safe rows, and direct case links |
 | Applications awaiting verification | Status-filtered application discovery | Discover by durable status; the verification workspace supplies authoritative current/history evidence |
 | Applications awaiting Loan Officer review | Status-filtered application discovery | Review projection owns readiness, current-cycle evidence, durable assignment, and current-actor start availability |
 | Applications awaiting recommendation | Status-filtered discovery plus case projection | Recommendation projection owns current-cycle assignment, recorded provenance, and current-actor availability |
@@ -283,7 +283,13 @@ Discovery uses server-owned queue membership and purpose-specific case reads. Sp
 | Disbursements awaiting transfer confirmation | Dedicated queue | Server-owned `DISBURSEMENT_PENDING` membership with exact ready-contract and masked-destination evidence |
 | Active or overdue LoanAccounts | Purpose-specific queue | Staff servicing index owns `ACTIVE` / `OVERDUE` membership, server paging, product/status filters, and PII-minimized balances |
 | Accounts eligible for settlement or closure | Purpose-specific queues | Loan owns eligible state, reconciliation, product filtering, deterministic paging, and PII-minimized rows |
-| Direct application-number lookup | Outside the accepted discovery surface | Application discovery provides supported product/status filters, not free-text or application-number search |
+| Direct application-number lookup | Server-filtered application index | Submit the complete business reference for exact lookup, composed with the other selected filters |
+
+The Applications filter panel keeps the applied application number, product, status, origination channel, submission-date bounds, and zero-based page in the URL. Application-number drafts apply only through Search or Enter; typing does not request rows. The client trims and normalizes the complete reference to uppercase, validates its supported format and 50-character limit, and distinguishes unapplied drafts from the filters used by the results. Reset filters clears both draft and applied state, and browser back/forward restores the applied reference.
+
+Submitted from and Submitted to use native date-only inputs; either bound may stand alone. Both days are inclusive in the same Vietnam time zone used by the Submitted column. Malformed URL values, repeated known parameters, invalid page bounds, and reversed date ranges block the query until corrected or reset. Every applied server filter belongs in the query key, and changing a filter starts at page zero. An incompatible product/channel combination retains the operator's selections and displays the server's empty result. The index uses 20 rows per page and offers first-page recovery when a valid page is beyond the available results.
+
+The results table presents Application, Product, Channel, Requested amount, Term, Status, Submitted, and Open case. Channel uses Customer digital or Staff assisted wording; unavailable values receive an explicit fallback. The desktop table retains keyboard-accessible horizontal scrolling at narrow widths. Index rows contain no Customer names or contact details; case contact remains separately permission-gated. The compatible backend query capability must be released and verified before the dependent Internal Web release.
 
 First review start establishes durable Loan Officer stewardship; later review cycles retain it. Only the assigned officer may restart review or recommend where backend policy requires it. Intake, verification, document, and correction work does not establish assignment. Queue membership remains capability-based pending work: there is no generic claim, reassignment, workload-balancing, or SLA workspace. “My work” or “Assigned to me” queue labels must not imply those absent capabilities.
 
@@ -1374,7 +1380,7 @@ The routes below are registered Internal Web surfaces. Exact route permission an
 | `/staff/customer-access` | Enable an existing Customer’s digital access | `customer:intake:manage`; exact Customer search/read retains its own authority |
 | `/staff/customer-identity-verifications` | Identity verification queue | `customer:identity:verify` |
 | `/staff/customer-identity-verifications/:verificationId` | Identity evidence and decision | `customer:identity:verify`; no stored-reference reveal |
-| `/staff/applications` | Product/status-filtered application discovery | `loan:read`; no free-text search |
+| `/staff/applications` | Exact application-number lookup and product/status/channel/submission-date discovery | `loan:read`; no free-text search |
 | `/staff/applications/:loanApplicationId` | Case overview and lifecycle history | `loan:read`; contact and identity reveal are separately gated |
 | `/staff/work/documents` | Document-review queue | `document:review` |
 | `/staff/work/corrections` | Staff-correction queue | `loan:correction:staff` |

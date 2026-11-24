@@ -259,7 +259,7 @@ For commands without a business UUID, use the endpoint's authoritative case/read
 | GET | `/api/v1/loan-applications` | Customer with `loan:read:own` | List the authenticated Customer's applications with authoritative lifecycle/action summaries. |
 | GET | `/api/v1/loan-applications/{loanApplicationId}` | Customer `loan:read:own` or Staff `loan:read` | Return a safe durable LoanApplication status projection. |
 | GET | `/api/v1/loan-applications/{loanApplicationId}/collateral` | Customer with `loan:read:own` | Return only the immutable submitted facts for the Customer's own Collateral Loan application; Section 4.2.1.1. |
-| GET | `/api/v1/staff/loan-applications?productCode={productCode}&status={status}&page=0&size=20` | Staff with `loan:read` | Discover applications across products through a safe, deterministic page. |
+| GET | `/api/v1/staff/loan-applications?applicationNumber={applicationNumber}&productCode={productCode}&status={status}&originationChannel={originationChannel}&submittedFrom={submittedFrom}&submittedTo={submittedTo}&page=0&size=20` | Staff with `loan:read` | Discover applications by exact business reference and composing optional filters through a safe, deterministic page. |
 | GET | `/api/v1/staff/loan-applications/{loanApplicationId}` | Staff with `loan:read`; Customer contact additionally requires `customer:read` | Return the purpose-limited Staff case header, Customer readiness, optional current Customer contact and authorized Loan Officer identity mask, Loan-owned Collateral context, and ordered lifecycle evidence. |
 | POST | `/api/v1/staff/loan-applications/{loanApplicationId}/customer-identity-reference/reveal` | Staff Loan Officer with `loan:read`, `customer:read`, and `customer:identity:reveal` | Explicit audited temporary Identity Reference access; Section 4.2.2.1. |
 | GET | `/api/v1/staff/loan-applications/{loanApplicationId}/documents` | Staff with exact `document:review` or `approval:decide` | Return the submission checklist and immutable version-specific review provenance, including authorized restricted Document notes. |
@@ -1045,13 +1045,26 @@ Both `CUSTOMER_DIGITAL` and `STAFF_ASSISTED` applications are readable by their 
 #### 4.2.2 Staff application discovery and case read
 
 ```text
-GET /api/v1/staff/loan-applications?productCode={productCode}&status={status}&page=0&size=20
+GET /api/v1/staff/loan-applications?applicationNumber={applicationNumber}&productCode={productCode}&status={status}&originationChannel={originationChannel}&submittedFrom={submittedFrom}&submittedTo={submittedTo}&page=0&size=20
 GET /api/v1/staff/loan-applications/{loanApplicationId}
 ```
 
 Both routes require an authenticated Staff actor with the exact `loan:read` permission. `loan:read:own`, another lending or document permission, a role name, or a permission prefix does not authorize these routes. Normal authentication and authorization failures return `401` and `403`; a missing case returns `404 LOAN_APPLICATION_NOT_FOUND`.
 
-The Staff index accepts optional exact `productCode` and `status` filters. `page` defaults to `0`, `size` defaults to `20`, and `size` is limited to `1` through `100`; invalid enum, page, or size input returns `400 VALIDATION_FAILED`. Results are ordered by `submittedAt DESC`, then LoanApplication ID `DESC`, and use this page envelope:
+The Staff index accepts these optional filters, composed before pagination and counting:
+
+| Parameter | Matching and validation |
+|---|---|
+| `applicationNumber` | Exact equality against the persisted business reference after trimming and uppercase normalization. Blank means no reference filter. Nonblank input must match `SA-YYYYMMDD-NNNNNN`, `UCL-YYYYMMDD-NNNNNN`, or `CL-YYYYMMDD-NNNNNN`, with at least six sequence digits and at most 50 characters for the parameter. UUIDs, partial references, wildcards, and Customer identity searches are unsupported. |
+| `productCode` | Exact supported Loan Product code. |
+| `status` | Exact LoanApplication status. |
+| `originationChannel` | Exact `CUSTOMER_DIGITAL` or `STAFF_ASSISTED` value stored on the application; no inference from product or Customer identity. |
+| `submittedFrom` | Date-only `YYYY-MM-DD`, inclusive start of the displayed calendar day. May be supplied alone. |
+| `submittedTo` | Date-only `YYYY-MM-DD`, inclusive end of the displayed calendar day. May be supplied alone. |
+
+Submission dates use the Staff display zone `Asia/Ho_Chi_Minh`. Loan converts the start of `submittedFrom` and the start of the day after `submittedTo` to the UTC local-timestamp representation written by submission services, then compares `submittedAt >= start` and `submittedAt < end`. Calendar dates must be valid, use years `0001` through `9999`, and satisfy `submittedFrom <= submittedTo` when both are present. Absent bounds add no date predicate. Invalid reference syntax, dates, reversed bounds, enums, page, or size return `400 VALIDATION_FAILED` without echoing the submitted values. An unmatched reference or incompatible product/channel combination returns an empty page, not an authorization error.
+
+`page` defaults to `0` and must be nonnegative; `size` defaults to `20` and is limited to `1` through `100`. Omitted optional filters preserve the unfiltered contract for existing clients. Results are ordered by `submittedAt DESC`, then LoanApplication ID `DESC`, and use this page envelope:
 
 ```json
 {
@@ -1065,6 +1078,7 @@ The Staff index accepts optional exact `productCode` and `status` filters. `page
       "applicationNumber": "UCL-20260902-000001",
       "productCode": "UNSECURED_CONSUMER_LOAN",
       "productType": "UNSECURED",
+      "originationChannel": "CUSTOMER_DIGITAL",
       "requestedAmount": 12000000.00,
       "requestedTermMonths": 6,
       "status": "UNDER_REVIEW",
@@ -1074,9 +1088,9 @@ The Staff index accepts optional exact `productCode` and `status` filters. `page
 }
 ```
 
-Each index item is limited to those eight durable application facts. The endpoint does not return Customer identity or contact data, bank data, Partner salary facts, restricted notes, document content, external references, operation or audit identifiers, actor identifiers, or inferred next actions.
+Each index item is limited to those nine durable application facts, including the Loan-owned origination channel. The endpoint does not return Customer identity or contact data, bank data, Partner salary facts, restricted notes, document content, external references, operation or audit identifiers, actor identifiers, or inferred next actions.
 
-The consolidated Staff case response contains the same eight index facts plus `originationChannel`, `formalReviewRecorded`, nullable `assignedLoanOfficer`, `customerReadiness`, nullable `customerContext`, nullable `collateralContext`, and `lifecycleHistory`. `formalReviewRecorded` distinguishes an application with no review cycle (`Unassigned`) from a historical cycle whose Staff display identity cannot be resolved (`Assignment unavailable`); it is not action availability. A Staff actor summary contains only `userId`, `displayName`, and `email`; it contains no role, permission, session, Customer association, or credential data. `customerReadiness` contains only `active`, `profileComplete`, `hasPrimaryActiveBankAccount`, and `verificationStatus`.
+The consolidated Staff case response contains the same nine index facts plus `formalReviewRecorded`, nullable `assignedLoanOfficer`, `customerReadiness`, nullable `customerContext`, nullable `collateralContext`, and `lifecycleHistory`. `formalReviewRecorded` distinguishes an application with no review cycle (`Unassigned`) from a historical cycle whose Staff display identity cannot be resolved (`Assignment unavailable`); it is not action availability. A Staff actor summary contains only `userId`, `displayName`, and `email`; it contains no role, permission, session, Customer association, or credential data. `customerReadiness` contains only `active`, `profileComplete`, `hasPrimaryActiveBankAccount`, and `verificationStatus`.
 
 `customerContext` in this general Staff LoanApplication case is populated only for a Staff actor with both `loan:read` and `customer:read`. Otherwise it is `null` and Loan does not query the Customer contact provider. When populated, it contains only `customerNumber`, nullable `fullName`, nullable `phoneNumber`, and nullable `maskedIdentityReference` from the current mutable Customer record. The identity field is a final display mask such as `****8901`, built from protected `lastFour` without decryption; it is non-null only for a Loan Officer with `customer:identity:reveal`. Other roles and generic Customer read or identity-verification authority do not grant the mask. Full Identity Reference, ciphertext, fingerprint, and separate last-four facts never appear in this read. It is operational contact context, not immutable application-submission evidence. Missing Customer source state for an entitled actor returns `409 SYSTEM_STATE_CONFLICT`. Loan obtains the contact through a separate narrow Customer application contract; the broader Staff Customer profile DTO is not included. Approver and Accounting actors can still use this general case read with `loan:read` and no Customer contact when they lack `customer:read`. The Accounting contract and disbursement case reads in Sections 6.5 and 7.1 use the separate Customer contact context defined in Section 6.5.
 

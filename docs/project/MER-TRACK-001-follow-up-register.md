@@ -800,7 +800,7 @@ Resolved scope:
 - Customer-owned compact LoanAccount index using authoritative repayment balances.
 - Customer-owned submission-checklist, current-version, and readiness projection.
 - Frontend product-policy presentation and Customer-safe Partner verification selection supporting the lending reads.
-- Staff application paging and exact product/status filtering with deterministic ordering.
+- Staff application paging, exact application-number lookup, and composing product/status/channel/inclusive submission-date filters with deterministic ordering.
 - Staff case header, purpose-limited Customer readiness, and immutable ordered LoanApplication transition history.
 - Staff submission-checklist, current-version, immutable version-history, and safe review-history projection for document operations.
 - Staff correction case projection with mixed task composition, backend-derived proof state, resubmission readiness, and current-actor maker-checker evidence.
@@ -827,7 +827,7 @@ Resolved scope:
 
 Still deferred:
 
-- Specialized Staff work queues beyond the executable document-review, Staff-correction, Approver, contract, disbursement, ordinary-repayment servicing, settlement, and closure queues, including verification/review queues and direct application-number lookup.
+- Specialized Staff work queues beyond the executable document-review, Staff-correction, Approver, contract, disbursement, ordinary-repayment servicing, settlement, and closure queues, including verification/review queues.
 - Broader action histories beyond the executable specialized review/recommendation/decision, verification, Document, correction, signed Customer-action, contract/readiness, disbursement/activation, repayment-servicing, and settlement/closure projections. A generic cross-lifecycle timeline remains outside the Phase 3 provenance boundary.
 - Broader Dashboard aggregation beyond the narrow Customer indexes and action facts.
 - Additional workflow command suggestions beyond the proven Customer action categories.
