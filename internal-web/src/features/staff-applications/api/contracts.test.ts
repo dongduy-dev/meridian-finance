@@ -16,6 +16,12 @@ const item = {
 }
 
 describe('Staff application response schemas', () => {
+  it('does not infer a digital channel when the fact is missing and preserves unknown channels for safe fallback', () => {
+    const page = (row: object) => ({ page: 0, size: 20, totalElements: 1, totalPages: 1, items: [row] })
+    expect(staffLoanApplicationPageSchema.parse(page(item)).items[0]?.originationChannel).toBe('UNAVAILABLE')
+    expect(staffLoanApplicationPageSchema.parse(page({ ...item, originationChannel: 'FUTURE_CHANNEL' })).items[0]?.originationChannel).toBe('FUTURE_CHANNEL')
+    expect(staffLoanApplicationPageSchema.parse(page({ ...item, customerName: 'Hidden', phone: 'Hidden' })).items[0]).not.toHaveProperty('customerName')
+  })
   it('accepts seeded Identity users in assigned and lifecycle actor summaries, while retaining strict application IDs', () => {
     const seededActor = {
       userId: '00000000-0000-0000-0000-000000000302',

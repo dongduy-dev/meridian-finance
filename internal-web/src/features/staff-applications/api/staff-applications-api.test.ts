@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { AuthSessionManager } from '@/features/auth/model/auth-session'
+import { staffApplicationKeys } from './queries'
 import {
   getStaffLoanApplicationCase,
   getStaffLoanApplications,
@@ -18,6 +19,20 @@ const item = {
 }
 
 describe('Staff application API', () => {
+  it('sends every discovery filter and separates independently filtered query caches', async () => {
+    const protectedRequest = vi.fn().mockResolvedValue({ page: 0, size: 20, totalElements: 0, totalPages: 0, items: [] })
+    const filters = { productCode: 'UNSECURED_CONSUMER_LOAN', status: 'UNDER_REVIEW',
+      applicationNumber: 'UCL-20260902-000001', originationChannel: 'STAFF_ASSISTED',
+      submittedFrom: '2026-09-01', submittedTo: '2026-09-02', page: 0, size: 20 }
+    await getStaffLoanApplications({ protectedRequest } as unknown as AuthSessionManager, filters)
+    expect(protectedRequest).toHaveBeenCalledWith('/staff/loan-applications?page=0&size=20&productCode=UNSECURED_CONSUMER_LOAN&status=UNDER_REVIEW&applicationNumber=UCL-20260902-000001&originationChannel=STAFF_ASSISTED&submittedFrom=2026-09-01&submittedTo=2026-09-02')
+    for (const name of ['productCode', 'status', 'applicationNumber', 'originationChannel', 'submittedFrom', 'submittedTo'] as const) {
+      expect(staffApplicationKeys.index({ ...filters, [name]: undefined })).not.toEqual(staffApplicationKeys.index(filters))
+    }
+    expect(staffApplicationKeys.index({ ...filters, page: 1 })).not.toEqual(staffApplicationKeys.index(filters))
+    expect(staffApplicationKeys.index({ ...filters, size: 10 })).not.toEqual(staffApplicationKeys.index(filters))
+  })
+
   it('uses a direct non-replayed POST and validates the minimal protected reveal shape', async () => {
     const protectedRequest = vi.fn().mockResolvedValue({ loanApplicationId: item.loanApplicationId, identityReference: 'FICTIONAL-ID-8901' })
     const manager = { protectedRequest } as unknown as AuthSessionManager

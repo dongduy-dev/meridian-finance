@@ -191,7 +191,7 @@ Loan owns structured Collateral facts. Document owns ownership evidence and chec
 
 Staff application discovery and case reads use a dedicated Staff input port and query service. Controller and service authorization require an authenticated Staff actor with exact `loan:read`; Customer ownership reads remain separate.
 
-The index applies product/status predicates, `submittedAt DESC, id DESC` ordering, and page bounds in persistence. The case read is side-effect-free and composes the application header, the existing purpose-limited Customer readiness snapshot, and transitions loaded in authoritative sequence order. It neither reaches Customer persistence directly nor copies audit events into Loan's HTTP model. Exact fields, exclusions, and error behavior are defined in `MER-API-001`.
+The index composes exact application-number, product, status, origination-channel, and submission-date predicates before counting and paging in persistence, with `submittedAt DESC, id DESC` ordering. The case read is side-effect-free and composes the application header, the existing purpose-limited Customer readiness snapshot, and transitions loaded in authoritative sequence order. It neither reaches Customer persistence directly nor copies audit events into Loan's HTTP model. Exact fields, date-bound semantics, exclusions, and error behavior are defined in `MER-API-001`.
 
 ### Staff Document Checklist and History Query
 

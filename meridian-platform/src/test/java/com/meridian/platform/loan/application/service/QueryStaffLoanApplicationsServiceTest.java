@@ -1,5 +1,6 @@
 package com.meridian.platform.loan.application.service;
 
+import com.meridian.platform.loan.application.dto.StaffLoanApplicationFilters;
 import com.meridian.platform.loan.application.port.out.CustomerReadinessPort;
 import com.meridian.platform.loan.application.port.out.CustomerReadinessSnapshot;
 import com.meridian.platform.loan.application.port.out.CustomerLoanCaseContactPort;
@@ -16,6 +17,7 @@ import com.meridian.platform.loan.domain.model.LoanApplicationStatus;
 import com.meridian.platform.loan.domain.model.LoanApplicationStatusTransition;
 import com.meridian.platform.loan.domain.model.LoanApplicationTransitionAction;
 import com.meridian.platform.loan.domain.model.ProductCode;
+import com.meridian.platform.loan.domain.model.OriginationChannel;
 import com.meridian.platform.loan.domain.model.ProductType;
 import com.meridian.platform.loan.domain.model.collateral.Collateral;
 import com.meridian.platform.loan.domain.model.collateral.CollateralType;
@@ -32,6 +34,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
@@ -90,8 +93,8 @@ class QueryStaffLoanApplicationsServiceTest {
     void returnsPagedSafeApplicationFactsWithRequestedFilters() {
         when(currentUserProvider.currentUser()).thenReturn(staff(Set.of("loan:read")));
         when(applications.findStaffPage(
-                ProductCode.UNSECURED_CONSUMER_LOAN,
-                LoanApplicationStatus.UNDER_REVIEW,
+                new StaffLoanApplicationFilters(ProductCode.UNSECURED_CONSUMER_LOAN,
+                        LoanApplicationStatus.UNDER_REVIEW, null, null, null, null),
                 2,
                 20
         )).thenReturn(new LoanApplicationRepository.StaffPage(
@@ -114,6 +117,57 @@ class QueryStaffLoanApplicationsServiceTest {
     }
 
     @Test
+    void forwardsNormalizedReferenceChannelAndInclusiveDisplayDatesWithoutOtherContextReads() {
+        when(currentUserProvider.currentUser()).thenReturn(staff(Set.of("loan:read")));
+        var filters = new StaffLoanApplicationFilters(ProductCode.UNSECURED_CONSUMER_LOAN,
+                LoanApplicationStatus.UNDER_REVIEW, " ucl-20260902-000001 ",
+                OriginationChannel.STAFF_ASSISTED, LocalDate.of(2026, 9, 2), LocalDate.of(2026, 9, 2));
+        assertEquals("UCL-20260902-000001", filters.applicationNumber());
+        assertEquals(LocalDateTime.of(2026, 9, 1, 17, 0), filters.submittedFromInclusive());
+        assertEquals(LocalDateTime.of(2026, 9, 2, 17, 0), filters.submittedToExclusive());
+        when(applications.findStaffPage(filters, 0, 20))
+                .thenReturn(new LoanApplicationRepository.StaffPage(0, 20, 0, 0, List.of()));
+        assertEquals(0, service.queryApplications(filters, 0, 20).totalElements());
+        verify(applications).findStaffPage(filters, 0, 20);
+        org.mockito.Mockito.verifyNoMoreInteractions(applications);
+        verifyNoInteractions(customerContacts, customerReadiness, collaterals, transitions, reviewCycles);
+    }
+
+    @Test
+    void rejectsInvalidReferencesAndDateRangesAndAllowsBlankAndOpenBounds() {
+        for (String invalid : List.of("UCL", "UCL-20260902-000001%", APPLICATION_ID.toString(),
+                "customer@meridian.local", "SA-20260902-" + "1".repeat(40))) {
+            assertThrows(IllegalArgumentException.class,
+                    () -> new StaffLoanApplicationFilters(null, null, invalid, null, null, null));
+        }
+        assertThrows(IllegalArgumentException.class, () -> new StaffLoanApplicationFilters(null, null,
+                null, null, LocalDate.of(2026, 9, 3), LocalDate.of(2026, 9, 2)));
+        assertThrows(IllegalArgumentException.class, () -> new StaffLoanApplicationFilters(null, null,
+                null, null, LocalDate.of(0, 1, 1), null));
+        assertThrows(IllegalArgumentException.class, () -> new StaffLoanApplicationFilters(null, null,
+                null, null, null, LocalDate.of(10000, 1, 1)));
+        var from = new StaffLoanApplicationFilters(null, null, "  ", null, LocalDate.of(2026, 9, 2), null);
+        assertNull(from.applicationNumber());
+        assertNull(from.submittedToExclusive());
+        var to = new StaffLoanApplicationFilters(null, null, null, null, null, LocalDate.of(9999, 12, 31));
+        assertNull(to.submittedFromInclusive());
+        assertEquals(LocalDateTime.of(9999, 12, 31, 17, 0), to.submittedToExclusive());
+        verifyNoInteractions(applications);
+    }
+
+    @Test
+    void exactLoanReadDoesNotAuthorizeCustomerOrCustomerAssociatedStaff() {
+        var filters = new StaffLoanApplicationFilters(null, null, "SA-20260902-000001",
+                OriginationChannel.CUSTOMER_DIGITAL, null, null);
+        when(currentUserProvider.currentUser()).thenReturn(customer(Set.of("loan:read")));
+        assertThrows(AuthorizationException.class, () -> service.queryApplications(filters, 0, 20));
+        when(currentUserProvider.currentUser()).thenReturn(new AuthenticatedUser(UUID.randomUUID(),
+                "staff@meridian.local", "STAFF", CUSTOMER_ID, Set.of("LOAN_OFFICER"), Set.of("loan:read")));
+        assertThrows(AuthorizationException.class, () -> service.queryApplications(filters, 0, 20));
+        verifyNoInteractions(applications, customerContacts, customerReadiness);
+    }
+
+    @Test
     void rejectsInvalidPageArgumentsBeforeRepositoryAccess() {
         when(currentUserProvider.currentUser()).thenReturn(staff(Set.of("loan:read")));
 
@@ -126,7 +180,7 @@ class QueryStaffLoanApplicationsServiceTest {
                 () -> service.queryApplications(null, null, 0, 101)
         );
 
-        verify(applications, never()).findStaffPage(null, null, -1, 20);
+        verifyNoInteractions(applications);
     }
 
     @Test

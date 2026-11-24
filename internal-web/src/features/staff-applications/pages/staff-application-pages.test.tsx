@@ -1,5 +1,5 @@
 import { QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { RouterProvider } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -39,6 +39,7 @@ const item = {
   applicationNumber: 'UCL-20260902-000001',
   productCode: 'UNSECURED_CONSUMER_LOAN',
   productType: 'UNSECURED',
+  originationChannel: 'CUSTOMER_DIGITAL',
   requestedAmount: 12_000_000,
   requestedTermMonths: 6,
   status: 'UNDER_REVIEW',
@@ -78,10 +79,10 @@ const caseFixture = {
   ],
 }
 
-function renderRoute(path: string) {
+function renderRoute(path: string, client = createQueryClient()) {
   const router = createTestRouter([path])
   render(
-    <QueryClientProvider client={createQueryClient()}>
+    <QueryClientProvider client={client}>
       <AuthProvider><RouterProvider router={router} /></AuthProvider>
     </QueryClientProvider>,
   )
@@ -92,6 +93,176 @@ describe('Staff application pages', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     vi.mocked(authApi.refresh).mockResolvedValue(staff())
+  })
+
+  it('submits a pasted exact reference only on Enter, composes filters and restores URL state on back/forward', async () => {
+    vi.mocked(api.apiRequest).mockResolvedValue(page())
+    const router = renderRoute('/staff/applications?page=1')
+    const user = userEvent.setup()
+    const input = await screen.findByLabelText('Search application number')
+    await screen.findByText(item.applicationNumber)
+    expect(input).not.toHaveAttribute('aria-describedby')
+    expect(document.getElementById('application-number-help')).not.toBeInTheDocument()
+    const before = vi.mocked(api.apiRequest).mock.calls.length
+    await user.click(input)
+    await user.paste(' ucl-20260902-000001 ')
+    expect(api.apiRequest).toHaveBeenCalledTimes(before)
+    expect(screen.getByText(/Results still use the applied filters/)).toBeVisible()
+    expect(input).toHaveAccessibleDescription(/Results still use the applied filters/)
+    await user.keyboard('{Enter}')
+    await waitFor(() => expect(router.state.location.search).toContain('applicationNumber=UCL-20260902-000001'))
+    expect(router.state.location.search).toContain('page=0')
+    expect(input).toHaveValue(item.applicationNumber)
+    expect(input).not.toHaveAttribute('aria-describedby')
+    await user.selectOptions(screen.getByLabelText('Origination channel'), 'STAFF_ASSISTED')
+    fireEvent.change(screen.getByLabelText('Submitted from'), { target: { value: '2026-09-01' } })
+    fireEvent.change(screen.getByLabelText('Submitted to'), { target: { value: '2026-09-02' } })
+    await user.selectOptions(screen.getByLabelText('Product'), 'UNSECURED_CONSUMER_LOAN')
+    await user.selectOptions(screen.getByLabelText('Application status'), 'UNDER_REVIEW')
+    await waitFor(() => expect(api.apiRequest).toHaveBeenCalledWith(
+      expect.stringContaining('applicationNumber=UCL-20260902-000001&originationChannel=STAFF_ASSISTED&submittedFrom=2026-09-01&submittedTo=2026-09-02'), expect.any(Object)))
+    expect(screen.getByRole('columnheader', { name: 'Channel' })).toBeVisible()
+    expect(within(screen.getByRole('table')).getByText('Customer digital')).toBeVisible()
+    const scroller = screen.getByLabelText('Staff application results')
+    expect(scroller).toHaveAttribute('tabindex', '0')
+    expect(scroller).toHaveClass('overflow-x-auto')
+    await user.clear(input)
+    await user.type(input, 'SA-20260902-000002')
+    await user.click(screen.getByRole('button', { name: 'Search' }))
+    await waitFor(() => expect(router.state.location.search).toContain('applicationNumber=SA-20260902-000002'))
+    await act(() => router.navigate(-1))
+    expect(input).toHaveValue(item.applicationNumber)
+    expect(screen.getByLabelText('Submitted from')).toHaveValue('2026-09-01')
+    await act(() => router.navigate(1))
+    expect(input).toHaveValue('SA-20260902-000002')
+    await user.type(input, '9')
+    await user.click(screen.getByRole('button', { name: 'Reset filters' }))
+    await waitFor(() => expect(router.state.location.search).toBe(''))
+    expect(input).toHaveValue('')
+    expect(screen.getByLabelText('Submitted to')).toHaveValue('')
+    expect(screen.getByRole('button', { name: 'Reset filters' })).toBeDisabled()
+  })
+
+  it('rejects partial and private-identity search drafts without changing applied results or requesting data', async () => {
+    vi.mocked(api.apiRequest).mockResolvedValue(page())
+    const router = renderRoute('/staff/applications')
+    const user = userEvent.setup()
+    const input = await screen.findByLabelText('Search application number')
+    await screen.findByText(item.applicationNumber)
+    const before = vi.mocked(api.apiRequest).mock.calls.length
+    await user.type(input, 'customer@meridian.local{Enter}')
+    expect(await screen.findByRole('alert')).toHaveTextContent('Enter a complete SA, UCL, or CL application number')
+    expect(input).toHaveAccessibleDescription(/Enter a complete SA, UCL, or CL application number/)
+    expect(api.apiRequest).toHaveBeenCalledTimes(before)
+    expect(router.state.location.search).toBe('')
+    expect(screen.getByText(item.applicationNumber)).toBeVisible()
+    await user.click(screen.getByRole('button', { name: 'Reset filters' }))
+    expect(input).toHaveValue('')
+    expect(input).not.toHaveAttribute('aria-describedby')
+    expect(document.getElementById('application-number-help')).not.toBeInTheDocument()
+  })
+
+  it.each([
+    'applicationNumber=UCL', 'applicationNumber=eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee',
+    'applicationNumber=SA-20260902-' + '1'.repeat(40),
+    'originationChannel=BRANCH', 'submittedFrom=2026-02-30', 'submittedTo=09%2F02%2F2026',
+    'submittedFrom=0000-01-01', 'submittedTo=10000-01-01',
+    'submittedFrom=2026-09-03&submittedTo=2026-09-02', 'page=2147483648',
+    'originationChannel=CUSTOMER_DIGITAL&originationChannel=STAFF_ASSISTED',
+  ])('blocks invalid URL filters before requesting rows: %s', async (search) => {
+    renderRoute(`/staff/applications?${search}`)
+    expect(await screen.findByRole('heading', { name: 'Invalid application filters' })).toBeVisible()
+    expect(api.apiRequest).not.toHaveBeenCalled()
+  })
+
+  it('supports either date bound, independently clears bounds, and blocks reversed ranges until corrected', async () => {
+    vi.mocked(api.apiRequest).mockResolvedValue(page())
+    const router = renderRoute('/staff/applications?submittedFrom=2026-09-02&page=2')
+    await screen.findByText(item.applicationNumber)
+    const from = screen.getByLabelText('Submitted from')
+    const to = screen.getByLabelText('Submitted to')
+    expect(from).not.toHaveAttribute('aria-describedby')
+    expect(to).not.toHaveAttribute('aria-describedby')
+    expect(document.getElementById('submission-date-help')).not.toBeInTheDocument()
+    fireEvent.change(to, { target: { value: '2026-09-01' } })
+    expect(await screen.findByRole('heading', { name: 'Invalid application filters' })).toBeVisible()
+    expect(from).toHaveAccessibleDescription(/Submitted from on or before Submitted to/)
+    expect(to).toHaveAccessibleDescription(/Submitted from on or before Submitted to/)
+    expect(router.state.location.search).toContain('page=0')
+    expect(screen.queryByText(item.applicationNumber)).not.toBeInTheDocument()
+    fireEvent.change(from, { target: { value: '' } })
+    await waitFor(() => expect(api.apiRequest).toHaveBeenCalledWith('/staff/loan-applications?page=0&size=20&submittedTo=2026-09-01', expect.any(Object)))
+    expect(router.state.location.search).not.toContain('submittedFrom')
+    expect(from).not.toHaveAttribute('aria-describedby')
+    expect(to).not.toHaveAttribute('aria-describedby')
+    fireEvent.change(to, { target: { value: '' } })
+    await waitFor(() => expect(api.apiRequest).toHaveBeenCalledWith('/staff/loan-applications?page=0&size=20', expect.any(Object)))
+  })
+
+  it('keeps incompatible channel/product filters and presents an honest no-match reference result', async () => {
+    vi.mocked(api.apiRequest).mockResolvedValue(page({ items: [], totalPages: 0, totalElements: 0 }))
+    const router = renderRoute('/staff/applications?applicationNumber=SA-20260902-000001&productCode=SALARY_ADVANCE&originationChannel=STAFF_ASSISTED')
+    expect(await screen.findByRole('heading', { name: 'No applications match these filters' })).toBeVisible()
+    expect(router.state.location.search).toContain('originationChannel=STAFF_ASSISTED')
+    expect(screen.getByText(/Check the exact application number/)).toBeVisible()
+    expect(screen.queryByRole('heading', { name: 'Application access changed' })).not.toBeInTheDocument()
+  })
+
+  it('offers a first-page recovery for a valid URL beyond current result boundaries', async () => {
+    vi.mocked(api.apiRequest).mockResolvedValue(page({ page: 4, items: [], totalPages: 1, totalElements: 1 }))
+    const router = renderRoute('/staff/applications?originationChannel=STAFF_ASSISTED&page=4')
+    const user = userEvent.setup()
+    expect(await screen.findByRole('heading', { name: 'Application page unavailable' })).toBeVisible()
+    await user.click(screen.getByRole('button', { name: 'First application page' }))
+    await waitFor(() => expect(router.state.location.search).toBe('?originationChannel=STAFF_ASSISTED&page=0'))
+  })
+
+  it('does not render expanded Customer facts and labels missing or unknown channels safely', async () => {
+    vi.mocked(api.apiRequest).mockResolvedValue(page({ items: [{ ...item, originationChannel: 'FUTURE_CHANNEL',
+      customerName: 'Hidden Customer', phoneNumber: 'Hidden phone', email: 'hidden@meridian.local' }] }))
+    renderRoute('/staff/applications')
+    expect(await screen.findByText('Channel unavailable')).toBeVisible()
+    expect(screen.queryByText(/Hidden Customer|Hidden phone|hidden@meridian.local/)).not.toBeInTheDocument()
+    expect(screen.queryByText('FUTURE_CHANNEL')).not.toBeInTheDocument()
+  })
+
+  it('gates discovery requests before route authorization even with valid filter parameters', async () => {
+    vi.mocked(authApi.refresh).mockResolvedValue(staff(['approval:decide']))
+    renderRoute('/staff/applications?applicationNumber=UCL-20260902-000001&submittedFrom=2026-09-02')
+    expect(await screen.findByRole('heading', { name: 'No operational access' })).toBeVisible()
+    expect(api.apiRequest).not.toHaveBeenCalled()
+  })
+
+  it('keeps rejected identity-like URL input out of query keys as well as requests', async () => {
+    const client = createQueryClient()
+    renderRoute('/staff/applications?applicationNumber=private%40meridian.local', client)
+    expect(await screen.findByRole('heading', { name: 'Invalid application filters' })).toBeVisible()
+    expect(api.apiRequest).not.toHaveBeenCalled()
+    expect(JSON.stringify(client.getQueryCache().getAll().map((query) => query.queryKey))).not.toContain('PRIVATE@MERIDIAN.LOCAL')
+  })
+
+  it('retains the last confirmed rows with a stale warning after a failed background read', async () => {
+    const client = createQueryClient()
+    vi.mocked(api.apiRequest).mockResolvedValueOnce(page()).mockRejectedValue(new Error('unsafe transport detail'))
+    renderRoute('/staff/applications?submittedTo=2026-09-02', client)
+    await screen.findByText(item.applicationNumber)
+    await act(() => client.invalidateQueries({ queryKey: ['staff-applications', 'index'] }))
+    expect(await screen.findByRole('heading', { name: 'Refresh incomplete' })).toBeVisible()
+    expect(screen.getByText(item.applicationNumber)).toBeVisible()
+    expect(screen.queryByText('unsafe transport detail')).not.toBeInTheDocument()
+  })
+
+  it('shows loading, a safe initial read failure, and explicit retry without stale rows', async () => {
+    let rejectRead: (error: Error) => void = () => undefined
+    vi.mocked(api.apiRequest).mockImplementationOnce(() => new Promise((_resolve, reject) => { rejectRead = reject }))
+    renderRoute('/staff/applications')
+    expect(await screen.findByText('Loading applications…')).toBeVisible()
+    await act(async () => rejectRead(new Error('unsafe database details')))
+    expect(await screen.findByRole('heading', { name: 'Work queue unavailable' })).toBeVisible()
+    expect(screen.queryByText('unsafe database details')).not.toBeInTheDocument()
+    vi.mocked(api.apiRequest).mockResolvedValue(page({ totalElements: 0, totalPages: 0, items: [] }))
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Try again' }))
+    expect(await screen.findByRole('heading', { name: 'No applications are available' })).toBeVisible()
   })
 
   it('renders explicit Customer, Staff, System, unavailable and unknown actors without guessing', async () => {

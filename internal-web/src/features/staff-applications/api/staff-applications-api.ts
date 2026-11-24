@@ -10,6 +10,10 @@ import {
 export type StaffApplicationFilters = {
   productCode?: string
   status?: string
+  applicationNumber?: string
+  originationChannel?: string
+  submittedFrom?: string
+  submittedTo?: string
   page: number
   size: number
 }
@@ -33,6 +37,10 @@ export async function getStaffLoanApplications(
   const search = new URLSearchParams({ page: String(filters.page), size: String(filters.size) })
   if (filters.productCode) search.set('productCode', filters.productCode)
   if (filters.status) search.set('status', filters.status)
+  if (filters.applicationNumber) search.set('applicationNumber', filters.applicationNumber)
+  if (filters.originationChannel) search.set('originationChannel', filters.originationChannel)
+  if (filters.submittedFrom) search.set('submittedFrom', filters.submittedFrom)
+  if (filters.submittedTo) search.set('submittedTo', filters.submittedTo)
   const payload = await manager.protectedRequest<unknown>(`/staff/loan-applications?${search}`)
   return staffLoanApplicationPageSchema.parse(payload)
 }

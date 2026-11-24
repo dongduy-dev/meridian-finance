@@ -2,6 +2,7 @@ package com.meridian.platform.loan.application.service;
 
 import com.meridian.platform.loan.application.dto.StaffLoanApplicationCaseDto;
 import com.meridian.platform.loan.application.dto.StaffLoanApplicationPageDto;
+import com.meridian.platform.loan.application.dto.StaffLoanApplicationFilters;
 import com.meridian.platform.loan.application.dto.CollateralAssessmentSnapshotDto;
 import com.meridian.platform.loan.application.port.in.QueryStaffLoanApplicationsUseCase;
 import com.meridian.platform.loan.application.port.out.CustomerReadinessPort;
@@ -75,8 +76,15 @@ public class QueryStaffLoanApplicationsService implements QueryStaffLoanApplicat
     @Override
     @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
     public StaffLoanApplicationPageDto queryApplications(
-            ProductCode productCode,
-            LoanApplicationStatus status,
+            ProductCode productCode, LoanApplicationStatus status, int page, int size
+    ) {
+        return queryApplications(new StaffLoanApplicationFilters(productCode, status, null, null, null, null), page, size);
+    }
+
+    @Override
+    @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
+    public StaffLoanApplicationPageDto queryApplications(
+            StaffLoanApplicationFilters filters,
             int page,
             int size
     ) {
@@ -84,8 +92,7 @@ public class QueryStaffLoanApplicationsService implements QueryStaffLoanApplicat
         requireValidPage(page, size);
 
         LoanApplicationRepository.StaffPage selected = applications.findStaffPage(
-                productCode,
-                status,
+                filters,
                 page,
                 size
         );
