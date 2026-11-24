@@ -20,7 +20,6 @@ import java.util.UUID;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
-import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -48,7 +47,7 @@ class StaffLoanApplicationSecurityTest {
 
     @BeforeEach
     void setUp() {
-        when(useCase.queryApplications(isNull(), isNull(), anyInt(), anyInt()))
+        when(useCase.queryApplications(any(), anyInt(), anyInt()))
                 .thenReturn(new StaffLoanApplicationPageDto(0, 20, 0, 0, List.of()));
         when(useCase.queryCase(any())).thenReturn(new StaffLoanApplicationCaseDto(
                 APPLICATION_ID,
@@ -104,6 +103,19 @@ class StaffLoanApplicationSecurityTest {
                             APPLICATION_ID
                     ).with(authority(denied)))
                     .andExpect(status().isForbidden());
+        }
+    }
+
+    @Test
+    void discoveryFiltersRetainExactPermissionBoundary() throws Exception {
+        for (String permission : List.of("loan:read", "loan:read:own", "loan:review", "approval:decide", "customer:read")) {
+            mockMvc.perform(get("/api/v1/staff/loan-applications")
+                            .queryParam("applicationNumber", "UCL-20260902-000001")
+                            .queryParam("originationChannel", "STAFF_ASSISTED")
+                            .queryParam("submittedFrom", "2026-09-01")
+                            .queryParam("submittedTo", "2026-09-02")
+                            .with(authority(permission)))
+                    .andExpect(permission.equals("loan:read") ? status().isOk() : status().isForbidden());
         }
     }
 

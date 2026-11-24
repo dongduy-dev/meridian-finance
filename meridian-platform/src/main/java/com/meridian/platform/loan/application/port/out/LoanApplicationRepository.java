@@ -1,6 +1,7 @@
 package com.meridian.platform.loan.application.port.out;
 
 import com.meridian.platform.loan.domain.model.LoanApplication;
+import com.meridian.platform.loan.application.dto.StaffLoanApplicationFilters;
 import com.meridian.platform.loan.domain.model.LoanApplicationStatus;
 import com.meridian.platform.loan.domain.model.ProductCode;
 
@@ -34,6 +35,12 @@ public interface LoanApplicationRepository {
 
     default List<LoanApplication> findByCustomerIdOrderBySubmittedAtDesc(UUID customerId) {
         return List.of();
+    }
+
+    default StaffPage findStaffPage(
+            StaffLoanApplicationFilters filters, int page, int size
+    ) {
+        throw new UnsupportedOperationException("Staff application discovery filters are not implemented.");
     }
 
     default StaffPage findStaffPage(

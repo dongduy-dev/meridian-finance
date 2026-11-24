@@ -1,5 +1,6 @@
 package com.meridian.platform.loan.infrastructure.adapter.out.persistence;
 
+import com.meridian.platform.loan.application.dto.StaffLoanApplicationFilters;
 import com.meridian.platform.loan.application.port.out.LoanApplicationRepository;
 import com.meridian.platform.loan.domain.model.LoanApplication;
 import com.meridian.platform.loan.domain.model.LoanApplicationStatus;
@@ -110,10 +111,19 @@ public class LoanApplicationRepositoryAdapter implements LoanApplicationReposito
             int page,
             int size
     ) {
+        return findStaffPage(new StaffLoanApplicationFilters(productCode, status, null, null, null, null), page, size);
+    }
+
+    @Override
+    public StaffPage findStaffPage(StaffLoanApplicationFilters filters, int page, int size) {
         org.springframework.data.domain.Page<LoanApplicationJpaEntity> selected =
                 jpaLoanApplicationRepository.findStaffPage(
-                        productCode,
-                        status,
+                        filters.productCode(),
+                        filters.status(),
+                        filters.applicationNumber(),
+                        filters.originationChannel(),
+                        filters.submittedFromInclusive(),
+                        filters.submittedToExclusive(),
                         PageRequest.of(page, size)
                 );
         return new StaffPage(

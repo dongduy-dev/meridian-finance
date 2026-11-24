@@ -1,6 +1,7 @@
 package com.meridian.platform.loan.infrastructure.adapter.out.persistence;
 
 import com.meridian.platform.loan.domain.model.LoanApplicationStatus;
+import com.meridian.platform.loan.domain.model.OriginationChannel;
 import com.meridian.platform.loan.domain.model.ProductCode;
 import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -10,6 +11,7 @@ import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
@@ -24,11 +26,19 @@ public interface JpaLoanApplicationRepository extends JpaRepository<LoanApplicat
             from LoanApplicationJpaEntity loanApplication
             where (:productCode is null or loanApplication.productCode = :productCode)
               and (:status is null or loanApplication.status = :status)
+              and (:applicationNumber is null or loanApplication.applicationNumber = :applicationNumber)
+              and (:originationChannel is null or loanApplication.originationChannel = :originationChannel)
+              and (cast(:submittedFrom as timestamp) is null or loanApplication.submittedAt >= :submittedFrom)
+              and (cast(:submittedTo as timestamp) is null or loanApplication.submittedAt < :submittedTo)
             order by loanApplication.submittedAt desc, loanApplication.id desc
             """)
     Page<LoanApplicationJpaEntity> findStaffPage(
             @Param("productCode") ProductCode productCode,
             @Param("status") LoanApplicationStatus status,
+            @Param("applicationNumber") String applicationNumber,
+            @Param("originationChannel") OriginationChannel originationChannel,
+            @Param("submittedFrom") LocalDateTime submittedFrom,
+            @Param("submittedTo") LocalDateTime submittedTo,
             Pageable pageable
     );
 

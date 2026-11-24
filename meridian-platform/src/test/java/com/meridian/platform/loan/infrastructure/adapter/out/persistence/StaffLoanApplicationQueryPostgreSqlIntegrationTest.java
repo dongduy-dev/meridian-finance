@@ -1,6 +1,8 @@
 package com.meridian.platform.loan.infrastructure.adapter.out.persistence;
 
 import com.meridian.platform.loan.application.port.out.LoanApplicationRepository;
+import com.meridian.platform.loan.application.dto.StaffLoanApplicationFilters;
+import com.meridian.platform.loan.domain.model.OriginationChannel;
 import com.meridian.platform.loan.application.port.out.LoanApplicationStatusTransitionRepository;
 import com.meridian.platform.loan.domain.model.LoanApplicationStatus;
 import com.meridian.platform.loan.domain.model.ProductCode;
@@ -13,12 +15,16 @@ import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 @SpringBootTest(properties = {
         "meridian.loan.offer-expiry.enabled=false",
@@ -65,28 +71,28 @@ class StaffLoanApplicationQueryPostgreSqlIntegrationTest {
     void insertApplications() {
         insertApplication(
                 FIRST_ID,
-                "SA-CP2-000001",
+                "SA-20260902-000001",
                 "SALARY_ADVANCE",
                 "REJECTED",
                 SHARED_SUBMISSION_TIME
         );
         insertApplication(
                 SECOND_ID,
-                "UCL-CP2-000002",
+                "UCL-20260902-000002",
                 "UNSECURED_CONSUMER_LOAN",
                 "REJECTED",
                 SHARED_SUBMISSION_TIME
         );
         insertApplication(
                 THIRD_ID,
-                "CL-CP2-000003",
+                "CL-20260902-000003",
                 "COLLATERAL_LOAN",
                 "REJECTED",
                 SHARED_SUBMISSION_TIME
         );
         insertApplication(
                 UUID.fromString("00000000-0000-4000-8000-000000000004"),
-                "UCL-CP2-000004",
+                "UCL-20260901-000004",
                 "UNSECURED_CONSUMER_LOAN",
                 "EXPIRED",
                 SHARED_SUBMISSION_TIME.minusDays(1)
@@ -152,6 +158,82 @@ class StaffLoanApplicationQueryPostgreSqlIntegrationTest {
         assertEquals(0, empty.totalElements());
         assertEquals(0, empty.totalPages());
         assertEquals(0, empty.applications().size());
+    }
+
+    @Test
+    void exactReferenceAndAllPredicatesComposeBeforePagingWithoutWrites() {
+        staffReader();
+        long auditBefore = jdbc.queryForObject("select count(*) from " + SCHEMA + ".audit_events", Long.class);
+        var rowsBefore = jdbc.queryForList("select * from " + SCHEMA + ".loan_applications order by id");
+        var transitionsBefore = jdbc.queryForList("select * from " + SCHEMA + ".loan_application_status_transitions order by id");
+        var filters = new StaffLoanApplicationFilters(ProductCode.UNSECURED_CONSUMER_LOAN,
+                LoanApplicationStatus.REJECTED, " ucl-20260902-000002 ", OriginationChannel.CUSTOMER_DIGITAL,
+                LocalDate.of(2026, 9, 2), LocalDate.of(2026, 9, 2));
+        var result = cases.queryApplications(filters, 0, 1);
+        assertEquals(1, result.totalElements());
+        assertEquals(1, result.totalPages());
+        assertEquals(SECOND_ID, result.items().getFirst().loanApplicationId());
+        assertEquals("CUSTOMER_DIGITAL", result.items().getFirst().originationChannel());
+        var beyond = cases.queryApplications(filters, 1, 1);
+        assertEquals(1, beyond.totalElements());
+        assertEquals(0, beyond.items().size());
+        assertEquals(0, cases.queryApplications(new StaffLoanApplicationFilters(null, null,
+                "UCL-20260902-999999", null, null, null), 0, 20).totalElements());
+        assertEquals(0, cases.queryApplications(new StaffLoanApplicationFilters(ProductCode.SALARY_ADVANCE,
+                null, "UCL-20260902-000002", null, null, null), 0, 20).totalElements());
+        assertEquals(4, cases.queryApplications(new StaffLoanApplicationFilters(null, null, " ", null, null, null), 0, 20).totalElements());
+        assertEquals(rowsBefore, jdbc.queryForList("select * from " + SCHEMA + ".loan_applications order by id"));
+        assertEquals(transitionsBefore, jdbc.queryForList("select * from " + SCHEMA + ".loan_application_status_transitions order by id"));
+        assertEquals(auditBefore, jdbc.queryForObject("select count(*) from " + SCHEMA + ".audit_events", Long.class));
+    }
+
+    @Test
+    void channelValuesFilterPersistedFactsIncludingIncompatibleSalaryAdvance() {
+        UUID assistedId = UUID.randomUUID();
+        insertApplication(assistedId, "UCL-20260902-000005", "UNSECURED_CONSUMER_LOAN", "REJECTED",
+                SHARED_SUBMISSION_TIME, "STAFF_ASSISTED");
+        var assisted = applications.findStaffPage(new StaffLoanApplicationFilters(null, null, null,
+                OriginationChannel.STAFF_ASSISTED, null, null), 0, 20);
+        assertEquals(1, assisted.totalElements());
+        assertEquals(assistedId, assisted.applications().getFirst().id());
+        assertEquals(4, applications.findStaffPage(new StaffLoanApplicationFilters(null, null, null,
+                OriginationChannel.CUSTOMER_DIGITAL, null, null), 0, 20).totalElements());
+        assertEquals(0, applications.findStaffPage(new StaffLoanApplicationFilters(ProductCode.SALARY_ADVANCE,
+                null, null, OriginationChannel.STAFF_ASSISTED, null, null), 0, 20).totalElements());
+    }
+
+    @Test
+    void displayDayBoundsAreInclusiveOpenEndedAndPreserveStableCountsAndOrder() {
+        LocalDate day = LocalDate.of(2026, 9, 2);
+        LocalDateTime start = LocalDateTime.of(2026, 9, 1, 17, 0);
+        LocalDateTime end = LocalDateTime.of(2026, 9, 2, 17, 0);
+        UUID atStart = UUID.randomUUID();
+        UUID lastMicrosecond = UUID.randomUUID();
+        insertApplication(UUID.randomUUID(), "CL-20260901-000010", "COLLATERAL_LOAN", "REJECTED", start.minusNanos(1000));
+        insertApplication(atStart, "CL-20260901-000011", "COLLATERAL_LOAN", "REJECTED", start);
+        insertApplication(lastMicrosecond, "CL-20260902-000012", "COLLATERAL_LOAN", "REJECTED", end.minusNanos(1000));
+        insertApplication(UUID.randomUUID(), "CL-20260902-000013", "COLLATERAL_LOAN", "REJECTED", end);
+        var filters = new StaffLoanApplicationFilters(null, null, null, null, day, day);
+        var first = applications.findStaffPage(filters, 0, 2);
+        var second = applications.findStaffPage(filters, 1, 2);
+        var third = applications.findStaffPage(filters, 2, 2);
+        assertEquals(5, first.totalElements());
+        assertEquals(3, first.totalPages());
+        assertEquals(List.of(lastMicrosecond, THIRD_ID), first.applications().stream().map(a -> a.id()).toList());
+        assertEquals(List.of(SECOND_ID, FIRST_ID), second.applications().stream().map(a -> a.id()).toList());
+        assertEquals(atStart, third.applications().getFirst().id());
+        assertEquals(6, applications.findStaffPage(new StaffLoanApplicationFilters(null, null, null, null, day, null), 0, 20).totalElements());
+        assertEquals(7, applications.findStaffPage(new StaffLoanApplicationFilters(null, null, null, null, null, day), 0, 20).totalElements());
+        assertEquals(8, applications.findStaffPage(null, null, 0, 20).totalElements());
+        staffReader();
+        assertThrows(IllegalArgumentException.class, () -> cases.queryApplications(
+                new StaffLoanApplicationFilters(null, null, null, null, day.plusDays(1), day), 0, 20));
+    }
+
+    private void staffReader() {
+        org.mockito.Mockito.when(currentUsers.currentUser()).thenReturn(
+                new com.meridian.platform.shared.application.security.AuthenticatedUser(UUID.randomUUID(),
+                        "staff@meridian.local", "STAFF", null, Set.of("LOAN_OFFICER"), Set.of("loan:read")));
     }
 
     @Test
@@ -236,6 +318,11 @@ class StaffLoanApplicationQueryPostgreSqlIntegrationTest {
             String status,
             LocalDateTime submittedAt
     ) {
+        insertApplication(applicationId, applicationNumber, productCode, status, submittedAt, "CUSTOMER_DIGITAL");
+    }
+
+    private void insertApplication(UUID applicationId, String applicationNumber, String productCode,
+            String status, LocalDateTime submittedAt, String originationChannel) {
         Map<String, Object> product = jdbc.queryForMap(
                 "select id, product_type from " + SCHEMA
                         + ".loan_products where product_code = ?",
@@ -248,8 +335,8 @@ class StaffLoanApplicationQueryPostgreSqlIntegrationTest {
         jdbc.update(
                 "insert into " + SCHEMA + ".loan_applications "
                         + "(id,customer_id,loan_product_id,application_number,product_code,"
-                        + "product_type,status,requested_amount,requested_term_months,submitted_at) "
-                        + "values (?,?,?,?,?,?,?,?,?,?)",
+                        + "product_type,status,requested_amount,requested_term_months,submitted_at,origination_channel) "
+                        + "values (?,?,?,?,?,?,?,?,?,?,?)",
                 applicationId,
                 customerId,
                 product.get("id"),
@@ -259,7 +346,8 @@ class StaffLoanApplicationQueryPostgreSqlIntegrationTest {
                 status,
                 3_000_000,
                 3,
-                submittedAt
+                submittedAt,
+                originationChannel
         );
     }
 }
